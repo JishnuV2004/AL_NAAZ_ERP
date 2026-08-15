@@ -75,7 +75,7 @@ const Categories = () => {
         </div>
         <button 
           onClick={openAddModal}
-          className="flex items-center justify-center space-x-1.5 rounded-lg bg-[#1E5E45] px-4 py-2 text-sm font-semibold text-white hover:bg-[#164a35] transition-colors shadow-sm cursor-pointer"
+          className="flex items-center justify-center space-x-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover transition-colors shadow-sm cursor-pointer"
         >
           <IoAddOutline className="h-4 w-4" />
           <span>Add category</span>
@@ -180,7 +180,7 @@ const Categories = () => {
             <button 
               type="submit" 
               disabled={isSubmitting} 
-              className="px-5 py-2.5 rounded-xl bg-[#1E5E45] text-sm font-bold text-white hover:bg-[#164a35] shadow-sm cursor-pointer disabled:opacity-50 transition-colors flex justify-center min-w-[120px]"
+              className="px-5 py-2.5 rounded-xl bg-brand-gold text-sm font-bold text-brand-brown hover:bg-brand-gold-hover shadow-sm cursor-pointer disabled:opacity-50 transition-colors flex justify-center min-w-[120px]"
             >
               {isSubmitting ? <ButtonLoader /> : (editingCategory ? 'Update' : 'Add')}
             </button>

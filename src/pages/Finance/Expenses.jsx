@@ -164,7 +164,7 @@ const Expenses = () => {
           
           <button 
             onClick={openAddModal}
-            className="flex items-center justify-center space-x-1.5 rounded-lg bg-[#1E5E45] px-4 py-2 text-sm font-semibold text-white hover:bg-[#164a35] transition-colors shadow-sm shrink-0"
+            className="flex items-center justify-center space-x-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover transition-colors shadow-sm shrink-0"
           >
             <IoAddOutline className="h-4 w-4" />
             <span>Add expense</span>

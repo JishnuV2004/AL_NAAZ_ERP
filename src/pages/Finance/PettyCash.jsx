@@ -98,7 +98,7 @@ const PettyCash = () => {
         </div>
         <button 
           onClick={() => setIsAddCashOpen(true)}
-          className="flex items-center justify-center space-x-1.5 rounded-lg bg-[#1E5E45] px-4 py-2 text-sm font-semibold text-white hover:bg-[#164a35] transition-colors shadow-sm cursor-pointer"
+          className="flex items-center justify-center space-x-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover transition-colors shadow-sm cursor-pointer"
         >
           <IoAddOutline className="h-4 w-4" />
           <span>Add cash</span>
@@ -346,7 +346,7 @@ const PettyCash = () => {
             <button 
               type="submit" 
               disabled={isSubmitting} 
-              className="w-full rounded-xl bg-[#1E5E45] px-5 py-3 text-sm font-bold text-white hover:bg-[#164a35] shadow-md cursor-pointer disabled:opacity-50 transition-colors flex justify-center"
+              className="w-full rounded-xl bg-brand-gold px-5 py-3 text-sm font-bold text-brand-brown hover:bg-brand-gold-hover shadow-md cursor-pointer disabled:opacity-50 transition-colors flex justify-center"
             >
               {isSubmitting ? <ButtonLoader /> : 'Confirm Add Cash'}
             </button>

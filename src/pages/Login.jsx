@@ -2,13 +2,19 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { ButtonLoader } from '../components/common/Loader';
-import { IoLockClosedOutline, IoPersonOutline } from 'react-icons/io5';
+import { 
+  IoPersonOutline, 
+  IoLockClosedOutline,
+  IoEyeOutline,
+  IoEyeOffOutline
+} from 'react-icons/io5';
 
 const Login = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ username: '', password: '' });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const validateForm = () => {
     const newErrors = {};
@@ -115,7 +121,7 @@ const Login = () => {
                   <input
                     id="password"
                     name="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     required
                     value={formData.password}
@@ -123,8 +129,19 @@ const Login = () => {
                     disabled={isLoading}
                     placeholder="Enter your password"
                     className={`block w-full rounded-xl border ${errors.password ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200 focus:border-[#1E5E45] focus:ring-1 focus:ring-[#1E5E45]'
-                      } bg-white py-3.5 pl-11 pr-4 font-sans text-sm text-gray-900 placeholder-brand-text-muted/65 outline-hidden transition-all`}
+                      } bg-white py-3.5 pl-11 pr-12 font-sans text-sm text-gray-900 placeholder-brand-text-muted/65 outline-hidden transition-all`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-500 hover:text-[#1E5E45] focus:outline-hidden cursor-pointer"
+                  >
+                    {showPassword ? (
+                      <IoEyeOffOutline className="h-5 w-5" />
+                    ) : (
+                      <IoEyeOutline className="h-5 w-5" />
+                    )}
+                  </button>
                 </div>
                 {errors.password && (
                   <p className="mt-1 text-xs font-semibold text-red-500">{errors.password}</p>
@@ -137,7 +154,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center py-4 px-4 border border-transparent text-sm font-bold rounded-xl text-white bg-[#1E5E45] hover:bg-[#1E5E45]-hover shadow-lg hover:shadow-sm focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-[#1E5E45] transition-all duration-200 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+              className="w-full flex justify-center py-4 px-4 border border-transparent text-sm font-bold rounded-xl text-brand-brown bg-brand-gold hover:bg-brand-gold-hover shadow-lg hover:shadow-sm focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-brand-gold transition-all duration-200 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
             >
               {isLoading ? <ButtonLoader /> : 'Sign In'}
             </button>
