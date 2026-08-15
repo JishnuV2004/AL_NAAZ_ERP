@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import "tailwindcss";
+
+
+@theme {
+  --color-brand-brown: #2E1E12;
+  --color-brand-brown-light: #3D2919;
+  --color-brand-cream: #FDFBF7;
+  --color-brand-cream-dark: #F5EFEB;
+  --color-brand-gold: #C5A23C;
+  --color-brand-gold-hover: #B49132;
+  --color-brand-gold-light: #F4EAD4;
+  --color-brand-gold-lightest: #FAF5E9;
+  --color-brand-text: #4E3629;
+  --color-brand-text-muted: #8D7363;
+  --color-brand-border: #E8DFD5;
+  
+  --font-serif: 'Playfair Display', serif;
+  --font-sans: 'Outfit', sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-brand-cream);
+  color: var(--color-brand-text);
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+}
+
+/* Custom scrollbar matching styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-brand-cream-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-brand-gold-light);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-gold);
+}
