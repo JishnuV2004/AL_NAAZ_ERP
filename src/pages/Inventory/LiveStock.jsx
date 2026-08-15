@@ -8,9 +8,14 @@ const LiveStock = () => {
   const liveStock = useInventoryStore(state => state.liveStock);
   const loading = useInventoryStore(state => state.loading);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
-    inventoryService.fetchLiveStock();
+    const loadData = async () => {
+      await inventoryService.fetchLiveStock();
+      setIsInitialLoad(false);
+    };
+    loadData();
   }, []);
 
   const safeLiveStock = Array.isArray(liveStock) ? liveStock : [];
@@ -45,7 +50,7 @@ const LiveStock = () => {
 
       {/* Table */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
+        {isInitialLoad || loading ? (
           <PageLoader />
         ) : filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-gray-500">

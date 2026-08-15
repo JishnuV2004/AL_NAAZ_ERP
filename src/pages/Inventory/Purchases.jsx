@@ -285,7 +285,7 @@ const Purchases = () => {
             <button
               type="submit"
               disabled={isSubmitting || formData.items.length === 0}
-              className="rounded-xl bg-[#5946D5] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[#4a39b3] shadow-md disabled:opacity-50 transition-all cursor-pointer"
+              className="rounded-xl bg-brand-gold px-6 py-2.5 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover shadow-md disabled:opacity-50 transition-all cursor-pointer"
             >
               {isSubmitting ? <ButtonLoader /> : 'Save Purchase'}
             </button>

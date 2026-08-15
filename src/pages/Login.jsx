@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { ButtonLoader } from '../components/common/Loader';
-import { 
-  IoPersonOutline, 
+import {
+  IoPersonOutline,
   IoLockClosedOutline,
   IoEyeOutline,
   IoEyeOffOutline
@@ -60,9 +60,9 @@ const Login = () => {
           alt="Al Naaz Mandi Logo"
           className="w-64 h-auto object-contain mb-4 drop-shadow-lg"
         />
-        <h1 className="font-serif text-4xl font-bold tracking-widest text-[#1E5E45] uppercase">
+        {/* <h1 className="font-serif text-4xl font-bold tracking-widest text-[#1E5E45] uppercase">
           AL NAAZ
-        </h1>
+        </h1> */}
       </div>
 
       {/* Right Portion (Login Form) */}

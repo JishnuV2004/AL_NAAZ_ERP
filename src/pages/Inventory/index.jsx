@@ -169,7 +169,7 @@ const Inventory = () => {
                 onClick={() => setActiveTab(card.id)}
                 className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === card.id
-                    ? 'bg-[#5946D5] text-white border-[#5946D5]'
+                    ? 'bg-brand-gold text-brand-brown border-brand-gold font-bold'
                     : 'border-brand-border bg-white text-brand-text hover:bg-brand-cream/50'
                 }`}
               >

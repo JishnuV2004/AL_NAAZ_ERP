@@ -11,6 +11,7 @@ const StockUsage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [page, setPage] = useState(1);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrev, setHasPrev] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
@@ -24,6 +25,7 @@ const StockUsage = () => {
       setTotalPages(Math.ceil((response.count || 0) / 5) || 1);
       setTotalItems(response.count || 0);
     }
+    setIsInitialLoad(false);
   };
 
   useEffect(() => {
@@ -166,7 +168,7 @@ const StockUsage = () => {
           <h2 className="font-serif text-lg font-bold text-gray-900">Recent usage</h2>
         </div>
         
-        {loading && usages.length === 0 ? (
+        {isInitialLoad || (loading && usages.length === 0) ? (
           <PageLoader />
         ) : usages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-gray-500">

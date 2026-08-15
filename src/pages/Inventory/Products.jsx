@@ -13,8 +13,14 @@ const Products = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   React.useEffect(() => {
-    inventoryService.fetchProducts();
+    const loadData = async () => {
+      await inventoryService.fetchProducts();
+      setIsInitialLoad(false);
+    };
+    loadData();
   }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -110,7 +116,7 @@ const Products = () => {
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
+        {isInitialLoad || loading ? (
           <PageLoader />
         ) : (
           <div className="overflow-x-auto">
@@ -236,7 +242,7 @@ const Products = () => {
             </div>
           </div>
           <div className="flex justify-end pt-4">
-            <button type="submit" disabled={isSubmitting} className="rounded-xl bg-[#5946D5] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#4a39b3] shadow-md cursor-pointer disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={isSubmitting} className="rounded-xl bg-brand-gold px-5 py-2.5 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover shadow-md cursor-pointer disabled:opacity-50 transition-colors">
               {isSubmitting ? <ButtonLoader /> : (editingId ? 'Update Product' : 'Save Product')}
             </button>
           </div>

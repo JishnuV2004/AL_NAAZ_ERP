@@ -120,7 +120,7 @@ const Suppliers = () => {
           setEditingId(null);
           setFormData(defaultForm);
           setIsModalOpen(true);
-        }} className="flex items-center justify-center space-x-2 rounded-xl bg-[#5946D5] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#4a39b3] transition-colors shadow-md cursor-pointer">
+        }} className="flex items-center justify-center space-x-2 rounded-xl bg-brand-gold px-5 py-2.5 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover transition-colors shadow-md cursor-pointer">
           <IoAddOutline className="h-5 w-5" />
           <span>Add Supplier</span>
         </button>
@@ -243,7 +243,7 @@ const Suppliers = () => {
             </select>
           </div>
           <div className="flex justify-end pt-4">
-            <button type="submit" disabled={isSubmitting} className="rounded-xl bg-[#5946D5] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#4a39b3] shadow-md cursor-pointer disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={isSubmitting} className="rounded-xl bg-brand-gold px-5 py-2.5 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover shadow-md cursor-pointer disabled:opacity-50 transition-colors">
               {isSubmitting ? <ButtonLoader /> : (editingId ? 'Update Supplier' : 'Save Supplier')}
             </button>
           </div>
