@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { useNotificationStore } from '../../store/notificationStore';
 import { authService } from '../../services/authService';
 import { 
   IoBasketOutline, 
@@ -8,19 +9,41 @@ import {
   IoCalendarOutline, 
   IoCashOutline, 
   IoWalletOutline,
+  IoNotificationsOutline,
   IoLogOutOutline 
 } from 'react-icons/io5';
 
 const Sidebar = () => {
   const user = useAuthStore((state) => state.user);
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const fetchStats = useNotificationStore((state) => state.fetchStats);
 
-  const menuItems = [
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const isAdmin = (user?.role || '').toUpperCase() !== 'STAFF';
+
+  const baseMenuItems = [
     { name: 'Inventory', path: '/inventory', icon: IoBasketOutline },
     { name: 'Finance', path: '/finance', icon: IoReceiptOutline },
     { name: 'Attendance', path: '/attendance', icon: IoCalendarOutline },
     { name: 'Salary', path: '/salary', icon: IoCashOutline },
     { name: 'Advance', path: '/advance', icon: IoWalletOutline },
   ];
+
+  // Admin-only Notifications module
+  const menuItems = isAdmin
+    ? [
+        ...baseMenuItems,
+        {
+          name: 'Notifications',
+          path: '/notifications',
+          icon: IoNotificationsOutline,
+          unread: unreadCount
+        }
+      ]
+    : baseMenuItems;
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -66,7 +89,7 @@ const Sidebar = () => {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center space-x-4 rounded-xl p-3 font-sans text-sm font-semibold tracking-wide border transition-all duration-200 ${
+                  `relative flex items-center space-x-4 rounded-xl p-3 font-sans text-sm font-semibold tracking-wide border transition-all duration-200 ${
                     isActive
                       ? 'border-brand-gold bg-brand-gold/10 text-brand-gold shadow-xs'
                       : 'border-transparent text-brand-text-muted hover:bg-white/5 hover:text-white'
@@ -74,10 +97,21 @@ const Sidebar = () => {
                 }
                 title={item.name}
               >
-                <Icon className="h-6 w-6 shrink-0" />
-                <span className="whitespace-nowrap transition-opacity duration-300 opacity-0 group-hover:opacity-100 overflow-hidden w-0 group-hover:w-auto">
-                  {item.name}
-                </span>
+                <div className="relative shrink-0">
+                  <Icon className="h-6 w-6" />
+                  {/* Collapsed dot badge */}
+                  {item.unread > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full bg-brand-gold group-hover:hidden ring-2 ring-brand-brown" />
+                  )}
+                </div>
+                <div className="flex items-center justify-between flex-1 whitespace-nowrap transition-opacity duration-300 opacity-0 group-hover:opacity-100 overflow-hidden w-0 group-hover:w-auto">
+                  <span>{item.name}</span>
+                  {item.unread > 0 && (
+                    <span className="ml-2 rounded-full bg-brand-gold px-2 py-0.5 font-sans text-[10px] font-extrabold text-brand-brown">
+                      {item.unread > 99 ? '99+' : item.unread}
+                    </span>
+                  )}
+                </div>
               </NavLink>
             );
           })}

@@ -24,7 +24,7 @@ const FinanceLayout = () => {
   ];
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAF9] -mx-8 -my-10 px-8 py-10 min-h-screen">
+    <div className="flex flex-col h-full bg-white -mx-8 -my-10 px-8 py-10 min-h-screen">
       <div className="flex justify-between items-start mb-6">
         <div className="flex flex-col">
           <h1 className="text-3xl font-serif font-extrabold text-gray-900 tracking-tight">Expenses</h1>

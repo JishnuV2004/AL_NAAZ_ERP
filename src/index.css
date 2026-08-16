@@ -3,10 +3,10 @@
 
 
 @theme {
-  --color-brand-brown: #2E1E12;
-  --color-brand-brown-light: #3D2919;
-  --color-brand-cream: #FDFBF7;
-  --color-brand-cream-dark: #F5EFEB;
+  --color-brand-brown: #18110B;
+  --color-brand-brown-light: #241A12;
+  --color-brand-cream: #FFFFFF;
+  --color-brand-cream-dark: #F9FAFB;
   --color-brand-gold: #C5A23C;
   --color-brand-gold-hover: #B49132;
   --color-brand-gold-light: #F4EAD4;
@@ -21,7 +21,7 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--color-brand-cream);
+  background-color: #FFFFFF;
   color: var(--color-brand-text);
   -webkit-font-smoothing: antialiased;
   margin: 0;

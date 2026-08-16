@@ -66,7 +66,7 @@ const Login = () => {
       </div>
 
       {/* Right Portion (Login Form) */}
-      <div className="flex w-full items-center justify-center bg-[#FAFAF9] md:w-1/2 px-6 py-12 lg:px-16">
+      <div className="flex w-full items-center justify-center bg-white md:w-1/2 px-6 py-12 lg:px-16">
         <div className="w-full max-w-md space-y-8">
 
           <div className="text-center md:text-left">

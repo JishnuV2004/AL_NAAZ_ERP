@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import Sidebar from './components/layout/Sidebar';
 import Navbar from './components/layout/Navbar';
 import ProtectedRoute from './components/routes/ProtectedRoute';
+import AdminRoute from './components/routes/AdminRoute';
 import PublicRoute from './components/routes/PublicRoute';
 
 // Pages
@@ -15,17 +16,18 @@ import Finance from './pages/Finance';
 import Attendance from './pages/Attendance';
 import Salary from './pages/Salary';
 import Advance from './pages/Advance';
+import Notifications from './pages/Notifications';
 import NotFound from './pages/NotFound';
 
 // Layout wrapper for protected pages
 const Layout = ({ children }) => {
   return (
-    <div className="flex min-h-screen bg-brand-cream overflow-hidden">
+    <div className="flex min-h-screen bg-white overflow-hidden">
       {/* Sidebar navigation */}
       <Sidebar />
 
       {/* Main content page area */}
-      <main className="flex-1 min-w-0 h-screen overflow-y-auto px-8 py-10 md:px-12 transition-all duration-300">
+      <main className="flex-1 min-w-0 h-screen overflow-y-auto px-8 py-10 md:px-12 transition-all duration-300 bg-white">
         <Navbar />
         {children}
       </main>
@@ -81,6 +83,11 @@ function App() {
           <Route path="/attendance" element={<Layout><Attendance /></Layout>} />
           <Route path="/salary" element={<Layout><Salary /></Layout>} />
           <Route path="/advance" element={<Layout><Advance /></Layout>} />
+          
+          {/* Admin-only Notifications Route */}
+          <Route element={<AdminRoute />}>
+            <Route path="/notifications" element={<Layout><Notifications /></Layout>} />
+          </Route>
         </Route>
 
         {/* Wildcard 404 path */}
