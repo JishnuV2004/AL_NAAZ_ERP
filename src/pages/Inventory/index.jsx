@@ -131,7 +131,7 @@ const Inventory = () => {
   );
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAF9] -mx-8 -my-10 px-8 py-10 min-h-screen">
+    <div className="flex flex-col h-full bg-white -mx-8 -my-10 px-8 py-10 min-h-screen">
       <div className="space-y-6 pb-12">
       {/* Dynamic Header */}
       <div className="flex flex-col space-y-2">
