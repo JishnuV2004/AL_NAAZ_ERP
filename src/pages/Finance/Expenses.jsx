@@ -9,15 +9,12 @@ import Modal from '../../components/common/Modal';
 const Expenses = () => {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [totalItems, setTotalItems] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
   const categories = useFinanceStore(state => state.expenseCategories);
-  
+
   // Pagination State
   const [page, setPage] = useState(1);
-  const [hasNext, setHasNext] = useState(false);
-  const [hasPrev, setHasPrev] = useState(false);
-  const [totalPages, setTotalPages] = useState(1);
-  
+
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
@@ -27,40 +24,66 @@ const Expenses = () => {
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const defaultForm = { category: '', amount: '', expense_date: new Date().toISOString().split('T')[0], description: '' };
   const [formData, setFormData] = useState(defaultForm);
   const [editingId, setEditingId] = useState(null);
-  
+
   // Detail Modal
   const [selectedExpense, setSelectedExpense] = useState(null);
 
-  const fetchExpenses = async () => {
-    setLoading(true);
-    const filters = {};
-    if (searchTerm) filters.search = searchTerm;
-    if (categoryFilter !== 'ALL') filters.category = categoryFilter;
-    if (startDate) filters.start_date = startDate;
-    if (endDate) filters.end_date = endDate;
+  // Fetch ALL data once and on refresh
+  useEffect(() => {
+    let ignore = false;
 
-    const response = await financeService.fetchExpenses(page, 10, filters);
-    if (response) {
-      setExpenses(response.results || response.data || []);
-      setTotalItems(response.count || 0);
-      setTotalPages(Math.ceil((response.count || 0) / 10) || 1);
-      setHasNext(!!response.next);
-      setHasPrev(!!response.previous);
+    const loadData = async () => {
+      setLoading(true);
+      const data = await financeService.fetchExpenses();
+      if (!ignore) {
+        setExpenses(data);
+        setLoading(false);
+      }
+    };
+
+    loadData();
+    return () => { ignore = true; };
+  }, [refreshKey]);
+
+  // Local filtering and pagination
+  const filteredExpenses = expenses.filter(e => {
+    let matches = true;
+    if (searchTerm) {
+      matches = matches && (
+        e.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.category_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     }
-    setLoading(false);
-  };
+    if (categoryFilter !== 'ALL') {
+      matches = matches && (e.category?.toString() === categoryFilter.toString());
+    }
+    if (startDate) {
+      const eDate = new Date(e.expense_date || e.created_at);
+      matches = matches && (eDate >= new Date(startDate));
+    }
+    if (endDate) {
+      const eDate = new Date(e.expense_date || e.created_at);
+      matches = matches && (eDate <= new Date(endDate));
+    }
+    return matches;
+  });
 
+  const totalItems = filteredExpenses.length;
+  const totalPages = Math.ceil(totalItems / 10) || 1;
+  const currentExpenses = filteredExpenses.slice((page - 1) * 10, page * 10);
+  const hasNext = page < totalPages;
+  const hasPrev = page > 1;
+
+
+
+  // Load categories once
   useEffect(() => {
     financeService.fetchExpenseCategories();
   }, []);
-
-  useEffect(() => {
-    fetchExpenses();
-  }, [page, searchTerm, categoryFilter, startDate, endDate]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -70,7 +93,7 @@ const Expenses = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.amount || Number(formData.amount) <= 0) return;
-    
+
     setIsSubmitting(true);
     try {
       if (editingId) {
@@ -81,7 +104,7 @@ const Expenses = () => {
       setIsModalOpen(false);
       setFormData(defaultForm);
       setEditingId(null);
-      fetchExpenses();
+      setRefreshKey(r => r + 1);
     } finally {
       setIsSubmitting(false);
     }
@@ -114,16 +137,16 @@ const Expenses = () => {
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
               <IoSearchOutline className="h-4 w-4" />
             </div>
-            <input 
-              type="text" 
-              placeholder="Search description or category" 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)} 
-              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-[#1E5E45] focus:ring-1 focus:ring-[#1E5E45]" 
+            <input
+              type="text"
+              placeholder="Search description or category"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-[#1E5E45] focus:ring-1 focus:ring-[#1E5E45]"
             />
           </div>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-3 items-center w-full sm:w-auto">
             <select
@@ -133,26 +156,26 @@ const Expenses = () => {
             >
               <option value="ALL">All categories</option>
               {categories.map(c => (
-                <option key={c.id || c.name} value={c.name}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
 
             <div className="flex items-center gap-2">
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45]" 
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45]"
               />
               <span className="text-gray-400 text-sm">to</span>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45]" 
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45]"
               />
               {(searchTerm || categoryFilter !== 'ALL' || startDate || endDate) && (
-                <button 
+                <button
                   onClick={() => { setSearchTerm(''); setCategoryFilter('ALL'); setStartDate(''); setEndDate(''); }}
                   className="text-sm text-[#1E5E45] font-medium hover:underline ml-2"
                 >
@@ -161,8 +184,8 @@ const Expenses = () => {
               )}
             </div>
           </div>
-          
-          <button 
+
+          <button
             onClick={openAddModal}
             className="flex items-center justify-center space-x-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover transition-colors shadow-sm shrink-0"
           >
@@ -176,7 +199,7 @@ const Expenses = () => {
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
         {loading ? (
           <PageLoader />
-        ) : expenses.length === 0 ? (
+        ) : filteredExpenses.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
             <span className="text-4xl mb-2">🧾</span>
             <p className="font-medium text-sm">No expenses found for this period.</p>
@@ -197,9 +220,9 @@ const Expenses = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {expenses.map(expense => (
-                  <tr 
-                    key={expense.id} 
+                {currentExpenses.map(expense => (
+                  <tr
+                    key={expense.id}
                     onClick={() => setSelectedExpense(expense)}
                     className="hover:bg-gray-50 transition-colors cursor-pointer group"
                   >
@@ -227,13 +250,26 @@ const Expenses = () => {
                       {new Date(expense.created_at || expense.expense_date).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit' })}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <button 
-                        onClick={(e) => openEditModal(expense, e)} 
+                      <button
+                        onClick={(e) => openEditModal(expense, e)}
                         className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
                       >
                         View
                       </button>
                     </td>
+                  </tr>
+                ))}
+                {/* Add dummy rows to maintain table height if less than 10 rows */}
+                {currentExpenses.length > 0 && currentExpenses.length < 10 && Array.from({ length: 10 - currentExpenses.length }).map((_, i) => (
+                  <tr key={`empty-${i}`} className="h-[73px]">
+                    <td className="px-6 py-4"></td>
+                    <td className="px-6 py-4"></td>
+                    <td className="px-6 py-4"></td>
+                    <td className="px-6 py-4"></td>
+                    <td className="px-6 py-4"></td>
+                    <td className="px-6 py-4"></td>
+                    <td className="px-6 py-4"></td>
+                    <td className="px-6 py-4"></td>
                   </tr>
                 ))}
               </tbody>
@@ -242,36 +278,35 @@ const Expenses = () => {
         )}
 
         {/* Pagination */}
-        {!loading && expenses.length > 0 && (
+        {!loading && filteredExpenses.length > 0 && (
           <div className="border-t border-brand-border/60 p-4 flex flex-col sm:flex-row items-center justify-between bg-brand-cream/10 gap-4">
             <span className="text-sm font-medium text-brand-text-muted">
               Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, totalItems)} of {totalItems} entries (Page {page} of {totalPages})
             </span>
             <div className="flex items-center space-x-1">
-              <button 
-                disabled={!hasPrev || loading} 
+              <button
+                disabled={!hasPrev || loading}
                 onClick={() => setPage(p => p - 1)}
                 className="px-3 py-1.5 text-sm font-medium text-brand-text bg-white border border-brand-border rounded-lg hover:bg-brand-cream disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Prev
               </button>
-              
+
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
                 <button
                   key={pageNum}
                   onClick={() => setPage(pageNum)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
-                    page === pageNum 
-                      ? 'bg-brand-gold border-brand-gold text-brand-brown font-bold' 
-                      : 'bg-white border-brand-border text-brand-text hover:bg-brand-cream'
-                  }`}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${page === pageNum
+                    ? 'bg-brand-gold border-brand-gold text-brand-brown font-bold'
+                    : 'bg-white border-brand-border text-brand-text hover:bg-brand-cream'
+                    }`}
                 >
                   {pageNum}
                 </button>
               ))}
 
-              <button 
-                disabled={!hasNext || loading} 
+              <button
+                disabled={!hasNext || loading}
                 onClick={() => setPage(p => p + 1)}
                 className="px-3 py-1.5 text-sm font-medium text-brand-text bg-white border border-brand-border rounded-lg hover:bg-brand-cream disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -302,48 +337,48 @@ const Expenses = () => {
             >
               <option value="">Select category...</option>
               {categories.map(c => (
-                <option key={c.id || c.name} value={c.name || c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
           <div>
             <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Amount (₹)</label>
-            <input 
-              type="number" 
-              required 
-              min="0.01" 
+            <input
+              type="number"
+              required
+              min="0.01"
               step="0.01"
-              value={formData.amount} 
-              onChange={e => setFormData({...formData, amount: e.target.value})} 
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden font-mono font-bold text-red-600" 
+              value={formData.amount}
+              onChange={e => setFormData({ ...formData, amount: e.target.value })}
+              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden font-mono font-bold text-red-600"
               placeholder="0.00"
             />
           </div>
           <div>
             <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Date</label>
-            <input 
-              type="date" 
-              required 
-              value={formData.expense_date} 
-              onChange={e => setFormData({...formData, expense_date: e.target.value})} 
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden" 
+            <input
+              type="date"
+              required
+              value={formData.expense_date}
+              onChange={e => setFormData({ ...formData, expense_date: e.target.value })}
+              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden"
             />
           </div>
           <div>
             <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Description</label>
-            <textarea 
+            <textarea
               rows="3"
               required
-              value={formData.description} 
-              onChange={e => setFormData({...formData, description: e.target.value})} 
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden resize-none" 
+              value={formData.description}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden resize-none"
               placeholder="Detailed description of the expense..."
             ></textarea>
           </div>
           <div className="flex justify-end pt-4">
-            <button 
-              type="submit" 
-              disabled={isSubmitting} 
+            <button
+              type="submit"
+              disabled={isSubmitting}
               className="w-full rounded-xl bg-brand-gold px-5 py-3 text-sm font-bold text-brand-brown hover:bg-brand-gold-hover shadow-md cursor-pointer disabled:opacity-50 transition-colors flex justify-center"
             >
               {isSubmitting ? <ButtonLoader /> : (editingId ? 'Update Expense' : 'Create Expense')}
@@ -381,7 +416,7 @@ const Expenses = () => {
                   {new Date(selectedExpense.expense_date || selectedExpense.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </p>
               </div>
-              
+
               <div>
                 <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Created By</p>
                 <p className="text-sm font-medium text-brand-text mt-1">
@@ -409,7 +444,7 @@ const Expenses = () => {
                 This expense reduced the petty cash balance by ₹{Number(selectedExpense.amount).toLocaleString()}.
               </p>
             </div>
-            
+
             <div className="flex justify-end pt-2">
               <button onClick={() => setSelectedExpense(null)} className="rounded-xl bg-brand-cream/50 px-5 py-2.5 text-sm font-semibold text-brand-text hover:bg-brand-cream shadow-sm cursor-pointer border border-brand-border">
                 Close

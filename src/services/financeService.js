@@ -1,37 +1,19 @@
 import { useFinanceStore } from '../store/financeStore';
 import toast from 'react-hot-toast';
+import axiosInstance from '../config/axios';
 
 export const financeService = {
   // === EXPENSES ===
-  fetchExpenses: async (page = 1, pageSize = 20, filters = {}) => {
+  fetchExpenses: async () => {
     const store = useFinanceStore.getState();
     store.setLoading(true);
     try {
-      // Simulate API delay
-      await new Promise(r => setTimeout(r, 500));
-      return {
-        count: 2,
-        next: null,
-        previous: null,
-        results: [
-          {
-            id: 1,
-            expense_date: new Date().toISOString(),
-            category: "Food",
-            description: "Team lunch",
-            amount: 1200,
-            created_by_name: "Admin"
-          },
-          {
-            id: 2,
-            expense_date: new Date().toISOString(),
-            category: "Transport",
-            description: "Fuel for delivery truck",
-            amount: 800,
-            created_by_name: "Staff"
-          }
-        ]
-      };
+      // Fetch a large page size to get all expenses for local filtering
+      const response = await axiosInstance.get(`/expenses/?page_size=10000`);
+      return response.data.results || response.data || [];
+    } catch (error) {
+      console.error("Error fetching expenses:", error);
+      return [];
     } finally {
       store.setLoading(false);
     }
@@ -52,35 +34,55 @@ export const financeService = {
   // === CATEGORIES ===
   fetchExpenseCategories: async () => {
     const store = useFinanceStore.getState();
-    const dummyCategories = [
-      { id: 1, name: 'Food' },
-      { id: 2, name: 'Transport' },
-      { id: 3, name: 'Medicine' },
-      { id: 4, name: 'Salary' }
-    ];
-    store.setExpenseCategories(dummyCategories);
-    return dummyCategories;
+    try {
+      const response = await axiosInstance.get('/categories/?page_size=100'); // Fetch enough for dropdowns
+      const data = response.data.results || response.data || [];
+      store.setExpenseCategories(data);
+      return data;
+    } catch (error) {
+      console.error("Error fetching expense categories:", error);
+      return [];
+    }
   },
 
-  fetchCategories: async () => {
-    await new Promise(r => setTimeout(r, 500));
-    return [
-      { id: 1, name: 'Medicine', is_active: true, created_at: '2026-01-02T10:00:00Z' },
-      { id: 2, name: 'Employee food', is_active: true, created_at: '2026-01-02T10:00:00Z' },
-      { id: 3, name: 'Maintenance', is_active: true, created_at: '2026-01-02T10:00:00Z' },
-      { id: 4, name: 'Others', is_active: true, created_at: '2026-01-02T10:00:00Z' },
-      { id: 5, name: 'Transport', is_active: false, created_at: '2026-03-14T10:00:00Z' }
-    ];
+  fetchCategories: async (page = 1, pageSize = 10) => {
+    try {
+      const response = await axiosInstance.get(`/categories/?page=${page}&page_size=${pageSize}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      return [];
+    }
   },
 
   createCategory: async (data) => {
-    await new Promise(r => setTimeout(r, 500));
-    return { id: Math.random(), ...data, created_at: new Date().toISOString() };
+    try {
+      const response = await axiosInstance.post('/categories/', data);
+      return response.data;
+    } catch (error) {
+      console.error("Error creating category:", error);
+      throw error;
+    }
   },
 
   updateCategory: async (id, data) => {
-    await new Promise(r => setTimeout(r, 500));
-    return { id, ...data };
+    try {
+      const response = await axiosInstance.put(`/categories/${id}/`, data);
+      return response.data;
+    } catch (error) {
+      console.error("Error updating category:", error);
+      throw error;
+    }
+  },
+
+  deleteCategory: async (id) => {
+    try {
+      await axiosInstance.delete(`/categories/${id}/`);
+      return true;
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      throw error;
+    }
   },
 
   // === PETTY CASH ===

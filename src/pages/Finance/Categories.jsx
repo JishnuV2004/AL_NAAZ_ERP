@@ -8,30 +8,39 @@ import toast from 'react-hot-toast';
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [formData, setFormData] = useState({ name: '', is_active: true });
 
-  const fetchCategories = async () => {
+  const fetchCategories = async (currentPage = page) => {
     setLoading(true);
-    const data = await financeService.fetchCategories();
-    if (data) {
+    const data = await financeService.fetchCategories(currentPage, 10);
+    if (data && data.results) {
+      setCategories(data.results);
+      setTotalPages(Math.ceil((data.count || 0) / 10) || 1);
+      setTotalItems(data.count || 0);
+    } else if (Array.isArray(data)) {
       setCategories(data);
+      setTotalPages(1);
+      setTotalItems(data.length);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchCategories();
-  }, []);
+    fetchCategories(page);
+  }, [page]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name) return;
-    
+
     setIsSubmitting(true);
     try {
       if (editingCategory) {
@@ -65,6 +74,19 @@ const Categories = () => {
     setIsModalOpen(true);
   };
 
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to delete this category?")) {
+      try {
+        await financeService.deleteCategory(id);
+        toast.success("Category deleted");
+        fetchCategories();
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to delete category");
+      }
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in-up pb-12">
       {/* Header section */}
@@ -73,7 +95,7 @@ const Categories = () => {
           <h2 className="text-2xl font-serif font-bold text-gray-900 mb-1">Categories</h2>
           <p className="text-sm text-gray-500">Categories are deactivated, not deleted, once used by an expense.</p>
         </div>
-        <button 
+        <button
           onClick={openAddModal}
           className="flex items-center justify-center space-x-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover transition-colors shadow-sm cursor-pointer"
         >
@@ -105,8 +127,8 @@ const Categories = () => {
               <tbody className="divide-y divide-gray-100">
                 {categories.map(cat => {
                   return (
-                    <tr 
-                      key={cat.id} 
+                    <tr
+                      key={cat.id}
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-6 py-4 font-bold text-gray-900">
@@ -126,19 +148,96 @@ const Categories = () => {
                       <td className="px-6 py-4 font-mono text-gray-900">
                         {new Date(cat.created_at || new Date()).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <button 
+                      <td className="px-6 py-4 text-center space-x-2 flex justify-center">
+                        <button
                           onClick={() => openEditModal(cat)}
-                          className="px-4 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                          className="px-4 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm cursor-pointer"
                         >
                           Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(cat.id)}
+                          className="px-4 py-1.5 bg-white border border-red-300 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors shadow-sm cursor-pointer"
+                        >
+                          Delete
                         </button>
                       </td>
                     </tr>
                   );
                 })}
+                {/* Pad empty rows to maintain table height */}
+                {categories.length > 0 && categories.length < 10 && (
+                  Array.from({ length: 10 - categories.length }).map((_, i) => (
+                    <tr key={`empty-${i}`} className="h-[73px]">
+                      <td className="px-6 py-4"></td>
+                      <td className="px-6 py-4"></td>
+                      <td className="px-6 py-4"></td>
+                      <td className="px-6 py-4"></td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {!loading && categories.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+            <div className="flex flex-1 justify-between sm:hidden">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{(page - 1) * 10 + 1}</span> to <span className="font-medium">{Math.min(page * 10, totalItems)}</span> of{' '}
+                  <span className="font-medium">{totalItems}</span> results
+                </p>
+              </div>
+              <div>
+                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 cursor-pointer"
+                  >
+                    <span className="sr-only">Previous</span>
+                    &larr;
+                  </button>
+                  {[...Array(totalPages)].map((_, i) => (
+                    <button
+                      key={i + 1}
+                      onClick={() => setPage(i + 1)}
+                      className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold focus:z-20 focus:outline-offset-0 cursor-pointer ${page === i + 1 ? 'z-10 bg-brand-gold text-brand-brown focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold' : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
+                        }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 cursor-pointer"
+                  >
+                    <span className="sr-only">Next</span>
+                    &rarr;
+                  </button>
+                </nav>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -148,38 +247,38 @@ const Categories = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Category Name</label>
-            <input 
-              type="text" 
-              required 
-              value={formData.name} 
-              onChange={e => setFormData({...formData, name: e.target.value})} 
-              className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-[#1E5E45] outline-none" 
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-[#1E5E45] outline-none"
               placeholder="e.g. Employee food"
             />
           </div>
-          
+
           <div className="flex items-center mt-2">
-            <input 
-              type="checkbox" 
-              id="isActive" 
-              checked={formData.is_active} 
-              onChange={e => setFormData({...formData, is_active: e.target.checked})} 
-              className="w-4 h-4 text-[#1E5E45] rounded border-gray-300 focus:ring-[#1E5E45]" 
+            <input
+              type="checkbox"
+              id="isActive"
+              checked={formData.is_active}
+              onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
+              className="w-4 h-4 text-[#1E5E45] rounded border-gray-300 focus:ring-[#1E5E45]"
             />
             <label htmlFor="isActive" className="ml-2 text-sm font-medium text-gray-700">Category is active</label>
           </div>
 
           <div className="flex justify-end pt-4 gap-3">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setIsModalOpen(false)}
               className="px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
             >
               Cancel
             </button>
-            <button 
-              type="submit" 
-              disabled={isSubmitting} 
+            <button
+              type="submit"
+              disabled={isSubmitting}
               className="px-5 py-2.5 rounded-xl bg-brand-gold text-sm font-bold text-brand-brown hover:bg-brand-gold-hover shadow-sm cursor-pointer disabled:opacity-50 transition-colors flex justify-center min-w-[120px]"
             >
               {isSubmitting ? <ButtonLoader /> : (editingCategory ? 'Update' : 'Add')}

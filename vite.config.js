@@ -5,17 +5,21 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiUrl = env.VITE_API_URL || '';
-  
-  let targetUrl = 'https://al-naaz.onrender.com';
+  const apiUrl = env.VITE_API_URL;
+
+  let targetUrl = 'http://localhost:8000'; // local fallback
   let apiPath = '/api';
 
   try {
-    const url = new URL(apiUrl);
-    targetUrl = `${url.protocol}//${url.host}`;
-    apiPath = url.pathname.endsWith('/') ? url.pathname.slice(0, -1) : url.pathname;
+    if (apiUrl) {
+      const url = new URL(apiUrl);
+      targetUrl = `${url.protocol}//${url.host}`;
+      apiPath = url.pathname.endsWith('/') ? url.pathname.slice(0, -1) : url.pathname;
+    } else {
+      console.warn("⚠️ VITE_API_URL is missing in .env file. Using local fallback.");
+    }
   } catch (e) {
-    // Fallback if URL is invalid
+    console.error("⚠️ Invalid VITE_API_URL in .env file:", apiUrl);
   }
 
   return {
