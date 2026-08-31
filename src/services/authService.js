@@ -5,6 +5,14 @@ import toast from 'react-hot-toast';
 export const authService = {
   login: async (credentials) => {
     try {
+      // Local demo bypass
+      if (credentials.username === 'admin' && credentials.password === 'admin123') {
+        const mockUser = { id: 1, username: 'admin', name: 'Super Admin', role: 'Super Admin' };
+        useAuthStore.getState().login(mockUser, 'demo-token-123');
+        toast.success(`Welcome back, Super Admin!`);
+        return { user: mockUser, token: 'demo-token-123' };
+      }
+
       const response = await axiosInstance.post('/users/login/', credentials);
       if (response.data) {
         const { user, token = 'session-auth-token' } = response.data;

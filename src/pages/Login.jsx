@@ -43,7 +43,7 @@ const Login = () => {
     setIsLoading(true);
     try {
       await authService.login(formData);
-      navigate('/inventory');
+      navigate('/');
     } catch (err) {
       console.error('[Login Screen Error]:', err);
     } finally {
