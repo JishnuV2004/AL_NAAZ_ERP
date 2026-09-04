@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Search, Plus, MoreVertical, MapPin, Store, CheckCircle, XCircle } from 'lucide-react';
+import { Building2, Search, Plus, MoreVertical, MapPin, Store, CheckCircle, XCircle, Edit, Trash2 } from 'lucide-react';
 import api from '../../config/axios';
 
 const Branches = () => {
@@ -7,6 +7,20 @@ const Branches = () => {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Add Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingBranchId, setEditingBranchId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newBranch, setNewBranch] = useState({
+    company: 1,
+    name: '',
+    code: '',
+    address: '',
+    phone: '',
+    email: '',
+    is_active: true
+  });
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -30,6 +44,60 @@ const Branches = () => {
     (branch.email && branch.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const handleSaveBranch = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      if (editingBranchId) {
+        const response = await api.patch(`https://al-naaz.onrender.com/api/branches/${editingBranchId}/`, newBranch);
+        setBranches(branches.map(b => b.id === editingBranchId ? response.data : b));
+      } else {
+        const response = await api.post('https://al-naaz.onrender.com/api/branches/', newBranch);
+        setBranches([...branches, response.data]);
+      }
+      setIsAddModalOpen(false);
+      setEditingBranchId(null);
+      setNewBranch({
+        company: 1,
+        name: '',
+        code: '',
+        address: '',
+        phone: '',
+        email: '',
+        is_active: true
+      });
+    } catch (err) {
+      alert(`Failed to ${editingBranchId ? 'update' : 'add'} branch: ` + (err.response?.data?.message || err.message));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (branch) => {
+    setEditingBranchId(branch.id);
+    setNewBranch({
+      company: branch.company || 1,
+      name: branch.name || '',
+      code: branch.code || '',
+      address: branch.address || '',
+      phone: branch.phone || '',
+      email: branch.email || '',
+      is_active: branch.is_active
+    });
+    setIsAddModalOpen(true);
+  };
+
+  const handleDeleteBranch = async (id) => {
+    if (window.confirm("Are you sure you want to delete this branch?")) {
+      try {
+        await api.delete(`https://al-naaz.onrender.com/api/branches/${id}/`);
+        setBranches(branches.filter(b => b.id !== id));
+      } catch (err) {
+        alert('Failed to delete branch: ' + (err.response?.data?.message || err.message));
+      }
+    }
+  };
+
   const totalBranches = branches.length;
   const activeBranches = branches.filter(b => b.is_active).length;
   const inactiveBranches = totalBranches - activeBranches;
@@ -42,7 +110,22 @@ const Branches = () => {
           <h1 className="text-3xl font-serif font-bold text-gray-900 tracking-tight">Branches</h1>
           <p className="text-sm text-gray-500 mt-1">Manage and monitor all your physical branch locations</p>
         </div>
-        <button className="px-4 py-2.5 rounded-xl font-medium text-white bg-gray-900 hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-sm">
+        <button 
+          onClick={() => {
+            setEditingBranchId(null);
+            setNewBranch({
+              company: 1,
+              name: '',
+              code: '',
+              address: '',
+              phone: '',
+              email: '',
+              is_active: true
+            });
+            setIsAddModalOpen(true);
+          }}
+          className="px-4 py-2.5 rounded-xl font-medium text-white bg-gray-900 hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-sm"
+        >
           <Plus size={18} /> Add New Branch
         </button>
       </div>
@@ -184,9 +267,22 @@ const Branches = () => {
                       </span>
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-900">
-                        <MoreVertical size={18} />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => handleEditClick(branch)}
+                          className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors text-blue-500"
+                          title="Edit"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteBranch(branch.id)}
+                          className="p-1.5 hover:bg-red-50 rounded-lg transition-colors text-red-500"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -214,6 +310,119 @@ const Branches = () => {
           </div>
         </div>
       </div>
+
+      {/* Add Branch Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">{editingBranchId ? 'Edit Branch' : 'Add New Branch'}</h2>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <XCircle size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveBranch} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <label className="text-sm font-semibold text-gray-700">Branch Name</label>
+                  <input 
+                    required 
+                    type="text" 
+                    value={newBranch.name} 
+                    onChange={e => setNewBranch({...newBranch, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 text-sm"
+                    placeholder="e.g. Al Naaz Kollam"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <label className="text-sm font-semibold text-gray-700">Branch Code</label>
+                  <input 
+                    required 
+                    type="text" 
+                    value={newBranch.code} 
+                    onChange={e => setNewBranch({...newBranch, code: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 text-sm"
+                    placeholder="e.g. KL2"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-gray-700">Address</label>
+                <input 
+                  required 
+                  type="text" 
+                  value={newBranch.address} 
+                  onChange={e => setNewBranch({...newBranch, address: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 text-sm"
+                  placeholder="e.g. Kollam, Kerala"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <label className="text-sm font-semibold text-gray-700">Phone</label>
+                  <input 
+                    required 
+                    type="tel" 
+                    value={newBranch.phone} 
+                    onChange={e => setNewBranch({...newBranch, phone: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 text-sm"
+                    placeholder="e.g. 0987654321"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <label className="text-sm font-semibold text-gray-700">Email</label>
+                  <input 
+                    required 
+                    type="email" 
+                    value={newBranch.email} 
+                    onChange={e => setNewBranch({...newBranch, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 text-sm"
+                    placeholder="e.g. alnaazkollam@gmail.com"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input 
+                  type="checkbox" 
+                  id="isActive" 
+                  checked={newBranch.is_active}
+                  onChange={e => setNewBranch({...newBranch, is_active: e.target.checked})}
+                  className="rounded border-gray-300 text-gray-900 focus:ring-gray-900 w-4 h-4"
+                />
+                <label htmlFor="isActive" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Branch is active
+                </label>
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Saving...
+                    </>
+                  ) : 'Save Branch'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

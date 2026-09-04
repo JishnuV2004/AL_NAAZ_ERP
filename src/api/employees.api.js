@@ -1,115 +1,62 @@
-import { employeesMock } from '../mocks/employees.mock';
-
-// In-memory state for the mock API to mutate
-let employees = [...employeesMock];
-
-// Set to true to simulate API failures
-export const __forceError = false;
-
-// Helper to simulate network latency
-const delay = () => {
-  const ms = Math.floor(Math.random() * 500) + 300; // 300-800ms
-  return new Promise(resolve => setTimeout(resolve, ms));
-};
+import api from '../config/axios';
 
 export const getEmployees = async ({ branchId, status, search } = {}) => {
-  await delay();
-  if (__forceError) throw new Error('Failed to fetch employees. Please try again.');
+  const response = await api.get('/employees/');
+  let employees = response.data;
+  
+  if (branchId || status || search) {
+    employees = employees.filter(emp => {
+      let matches = true;
 
-  return employees.filter(emp => {
-    let matches = true;
-
-    if (branchId && branchId !== 'All') {
-      matches = matches && emp.branch.id === parseInt(branchId, 10);
-    }
-    
-    if (status && status !== 'All') {
-      if (status === 'Active') matches = matches && emp.is_active === true;
-      if (status === 'Inactive') matches = matches && emp.is_active === false;
-    }
-    
-    if (search) {
-      const q = search.toLowerCase();
-      matches = matches && (
-        emp.name.toLowerCase().includes(q) ||
-        emp.phone.toLowerCase().includes(q) ||
-        emp.designation.toLowerCase().includes(q)
-      );
-    }
-    
-    return matches;
-  });
+      if (branchId && branchId !== 'All') {
+        // If branch is an object (mock) or an ID (real API)
+        const empBranchId = typeof emp.branch === 'object' ? emp.branch?.id : emp.branch;
+        matches = matches && empBranchId === parseInt(branchId, 10);
+      }
+      
+      if (status && status !== 'All') {
+        if (status === 'Active') matches = matches && emp.is_active === true;
+        if (status === 'Inactive') matches = matches && emp.is_active === false;
+      }
+      
+      if (search) {
+        const q = search.toLowerCase();
+        matches = matches && (
+          (emp.name && emp.name.toLowerCase().includes(q)) ||
+          (emp.phone && emp.phone.toLowerCase().includes(q)) ||
+          (emp.designation && emp.designation.toLowerCase().includes(q))
+        );
+      }
+      
+      return matches;
+    });
+  }
+  
+  return employees;
 };
 
 export const getEmployee = async (id) => {
-  await delay();
-  if (__forceError) throw new Error('Failed to fetch employee details.');
-  
-  const emp = employees.find(e => e.id === id);
-  if (!emp) throw new Error('Employee not found');
-  return emp;
+  const response = await api.get(`/employees/${id}/`);
+  return response.data;
 };
 
 export const createEmployee = async (payload) => {
-  await delay();
-  if (__forceError) throw new Error('Failed to create employee. Please try again.');
-
-  const newEmployee = {
-    ...payload,
-    id: Math.max(...employees.map(e => e.id), 0) + 1,
-    is_active: payload.is_active !== undefined ? payload.is_active : true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
-  
-  employees.unshift(newEmployee);
-  return newEmployee;
+  const response = await api.post('/employees/', payload);
+  return response.data;
 };
 
 export const updateEmployee = async (id, payload) => {
-  await delay();
-  if (__forceError) throw new Error('Failed to update employee.');
-
-  const index = employees.findIndex(e => e.id === id);
-  if (index === -1) throw new Error('Employee not found');
-
-  const updated = {
-    ...payload,
-    id, // ensure ID cannot be mutated
-    updated_at: new Date().toISOString()
-  };
-  
-  employees[index] = updated;
-  return updated;
+  const response = await api.put(`/employees/${id}/`, payload);
+  return response.data;
 };
 
 export const patchEmployee = async (id, partialPayload) => {
-  await delay();
-  if (__forceError) throw new Error('Failed to update employee.');
-
-  const index = employees.findIndex(e => e.id === id);
-  if (index === -1) throw new Error('Employee not found');
-
-  const updated = {
-    ...employees[index],
-    ...partialPayload,
-    updated_at: new Date().toISOString()
-  };
-  
-  employees[index] = updated;
-  return updated;
+  const response = await api.patch(`/employees/${id}/`, partialPayload);
+  return response.data;
 };
 
 export const deleteEmployee = async (id) => {
-  await delay();
-  if (__forceError) throw new Error('Failed to delete employee.');
-
-  const initialLength = employees.length;
-  employees = employees.filter(e => e.id !== id);
-  
-  if (employees.length === initialLength) {
-    throw new Error('Employee not found');
-  }
-  
-  return { success: true };
+  const response = await api.delete(`/employees/${id}/`);
+  return response.data;
 };
+

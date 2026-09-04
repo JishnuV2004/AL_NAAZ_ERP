@@ -63,7 +63,7 @@ const CompanyOverview = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-[28px] font-sans font-bold text-[#1e293b] leading-tight tracking-tight">Dashboard</h1>
+          <h1 style={{ fontFamily: "'Inter', sans-serif" }} className="text-[28px] font-sans font-bold text-[#1e293b] leading-tight tracking-tight">Dashboard</h1>
           <p className="text-[#64748b] text-[14px] mt-1 font-medium">Welcome back! Here's what's happening with your business today.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

@@ -37,7 +37,7 @@ const EmployeeFilters = ({ accessibleBranches, filters, onFilterChange }) => {
           >
             <option value="All">All Branches</option>
             {accessibleBranches.map(branch => (
-              <option key={branch.id} value={branch.id}>{branch.name}</option>
+              <option key={branch.id} value={branch.id}>{branch.code}</option>
             ))}
           </select>
         </div>

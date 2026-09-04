@@ -1,7 +1,7 @@
 import React from 'react';
 import { IoPencilOutline, IoEyeOutline, IoPowerOutline, IoBanOutline } from 'react-icons/io5';
 
-const EmployeeTable = ({ employees, isLoading, onRowClick, onAction }) => {
+const EmployeeTable = ({ employees, isLoading, emptyRowsCount = 0, onRowClick, onAction }) => {
   if (isLoading) {
     return (
       <div className="overflow-x-auto bg-white rounded-b-2xl">
@@ -12,6 +12,7 @@ const EmployeeTable = ({ employees, isLoading, onRowClick, onAction }) => {
               <th className="p-4">Phone</th>
               <th className="p-4">Designation</th>
               <th className="p-4">Branch</th>
+              <th className="p-4">Salary</th>
               <th className="p-4">Salary Type</th>
               <th className="p-4 text-center">Status</th>
               <th className="p-4 text-right pr-6">Actions</th>
@@ -24,6 +25,7 @@ const EmployeeTable = ({ employees, isLoading, onRowClick, onAction }) => {
                 <td className="p-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
                 <td className="p-4"><div className="h-4 bg-gray-200 rounded w-1/2"></div></td>
                 <td className="p-4"><div className="h-4 bg-gray-200 rounded w-2/3"></div></td>
+                <td className="p-4"><div className="h-4 bg-gray-200 rounded w-16"></div></td>
                 <td className="p-4"><div className="h-4 bg-gray-200 rounded w-16"></div></td>
                 <td className="p-4 flex justify-center"><div className="h-6 bg-gray-200 rounded-full w-16"></div></td>
                 <td className="p-4 pr-6"><div className="h-8 bg-gray-200 rounded w-20 ml-auto"></div></td>
@@ -44,6 +46,7 @@ const EmployeeTable = ({ employees, isLoading, onRowClick, onAction }) => {
             <th className="p-4">Phone</th>
             <th className="p-4">Designation</th>
             <th className="p-4">Branch</th>
+            <th className="p-4">Salary</th>
             <th className="p-4">Salary Type</th>
             <th className="p-4 text-center">Status</th>
             <th className="p-4 text-right pr-6">Actions</th>
@@ -62,7 +65,14 @@ const EmployeeTable = ({ employees, isLoading, onRowClick, onAction }) => {
               </td>
               <td className="p-4 text-sm text-[#1C1F2A]">{emp.phone}</td>
               <td className="p-4 text-sm text-[#1C1F2A]">{emp.designation}</td>
-              <td className="p-4 text-sm text-[#1C1F2A]">{emp.branch.name}</td>
+              <td className="p-4 text-sm text-[#1C1F2A]">
+                {typeof emp.branch === 'object' ? emp.branch?.name : `Branch ${emp.branch}`}
+              </td>
+              <td className="p-4 text-sm font-medium text-[#1C1F2A]">
+                {emp.salary_type === 'MONTHLY' ? emp.monthly_salary : 
+                 emp.salary_type === 'BIWEEKLY' ? emp.biweekly_salary : 
+                 emp.salary_type === 'DAILY' ? emp.daily_wage : '-'}
+              </td>
               <td className="p-4">
                 <span className="inline-flex px-2 py-1 text-[10px] font-bold rounded bg-gray-100 text-gray-600 tracking-wide uppercase">
                   {emp.salary_type}
@@ -109,6 +119,11 @@ const EmployeeTable = ({ employees, isLoading, onRowClick, onAction }) => {
                   </button>
                 </div>
               </td>
+            </tr>
+          ))}
+          {Array.from({ length: emptyRowsCount }).map((_, idx) => (
+            <tr key={`empty-${idx}`} className="h-[73px]">
+              <td colSpan="8"></td>
             </tr>
           ))}
         </tbody>

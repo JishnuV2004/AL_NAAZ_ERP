@@ -16,11 +16,15 @@ import Company from './pages/Organization/Company';
 import Branches from './pages/Organization/Branches';
 import BranchSettings from './pages/Organization/BranchSettings';
 import Users from './pages/Administration/Users';
+import AddUser from './pages/Administration/AddUser';
+import UserDetails from './pages/Administration/UserDetails';
+import EditUser from './pages/Administration/EditUser';
 import Roles from './pages/Administration/Roles';
 import Permissions from './pages/Administration/Permissions';
 import UserBranchAccess from './pages/Administration/UserBranchAccess';
 import Employees from './pages/HR/Employees';
 import Departments from './pages/HR/Departments';
+import DepartmentDetails from './pages/HR/DepartmentDetails';
 import Designations from './pages/HR/Designations';
 import EmployeeDocuments from './pages/HR/EmployeeDocuments';
 import LeaveVacation from './pages/HR/LeaveVacation';
@@ -119,11 +123,18 @@ function App() {
           <Route path="/organization/branches" element={<Layout><Branches /></Layout>} />
           <Route path="/organization/branchsettings" element={<Layout><BranchSettings /></Layout>} />
           <Route path="/administration/users" element={<Layout><Users /></Layout>} />
+          <Route path="/administration/users/new" element={<Layout><AddUser /></Layout>} />
+          <Route path="/administration/users/add" element={<Layout><AddUser /></Layout>} />
+          <Route path="/administration/users/invite" element={<Layout><AddUser /></Layout>} />
+          <Route path="/administration/users/:id" element={<Layout><UserDetails /></Layout>} />
+          <Route path="/administration/users/:id/edit" element={<Layout><EditUser /></Layout>} />
+          <Route path="/administration/users/edit/:id" element={<Layout><EditUser /></Layout>} />
           <Route path="/administration/roles" element={<Layout><Roles /></Layout>} />
           <Route path="/administration/permissions" element={<Layout><Permissions /></Layout>} />
           <Route path="/administration/userbranchaccess" element={<Layout><UserBranchAccess /></Layout>} />
           <Route path="/hr/employees" element={<Layout><Employees /></Layout>} />
           <Route path="/hr/departments" element={<Layout><Departments /></Layout>} />
+          <Route path="/hr/departments/:id" element={<Layout><DepartmentDetails /></Layout>} />
           <Route path="/hr/designations" element={<Layout><Designations /></Layout>} />
           <Route path="/hr/employeedocuments" element={<Layout><EmployeeDocuments /></Layout>} />
           <Route path="/hr/leavevacation" element={<Layout><LeaveVacation /></Layout>} />

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { IoAddOutline, IoWarningOutline, IoSearchOutline } from 'react-icons/io5';
 
-import { getEmployees, createEmployee, patchEmployee } from '../../api/employees.api';
-import { currentUser } from '../../mocks/employees.mock';
+import { getEmployees, createEmployee, patchEmployee, updateEmployee } from '../../api/employees.api';
+import api from '../../config/axios';
 
 import EmployeeTable from './EmployeeTable';
 import EmployeeFilters from './EmployeeFilters';
@@ -14,9 +14,19 @@ import ConfirmDialog from './ConfirmDialog';
 const Employees = () => {
   // State
   const [employees, setEmployees] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
   const [filters, setFilters] = useState({ branchId: 'All', status: 'All', search: '' });
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  const totalPages = Math.ceil(employees.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedEmployees = employees.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const emptyRowsCount = ITEMS_PER_PAGE - paginatedEmployees.length;
 
   // Modals / Drawers State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -50,8 +60,22 @@ const Employees = () => {
     fetchEmployees(filters);
   }, [filters, fetchEmployees]);
 
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const res = await api.get('/branches/');
+        // Can filter for active branches if necessary, but here we just load them
+        setBranches(res.data);
+      } catch (err) {
+        console.error('Failed to load branches', err);
+      }
+    };
+    fetchBranches();
+  }, []);
+
   const handleFilterChange = (newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
+    setCurrentPage(1); // Reset to first page on filter change
   };
 
   // Orchestrator Actions
@@ -103,8 +127,24 @@ const Employees = () => {
     
     try {
       const newStatus = action === 'activate';
-      await patchEmployee(employee.id, { is_active: newStatus });
-      // TODO: confirm soft-delete vs hard-delete with backend. Currently soft-deleting via is_active patch.
+      const branchId = typeof employee.branch === 'object' ? employee.branch?.id : employee.branch;
+      
+      const payload = {
+        branch: branchId ? parseInt(branchId, 10) : 0,
+        name: employee.name || "",
+        phone: employee.phone || "",
+        address: employee.address || "",
+        designation: employee.designation || "",
+        salary_type: employee.salary_type || "MONTHLY",
+        biweekly_salary: employee.biweekly_salary?.toString() || "",
+        monthly_salary: employee.monthly_salary?.toString() || "",
+        daily_wage: employee.daily_wage?.toString() || "",
+        joining_date: employee.joining_date || new Date().toISOString().split('T')[0],
+        is_active: newStatus
+      };
+
+      await updateEmployee(employee.id, payload);
+      // TODO: confirm soft-delete vs hard-delete with backend. Currently soft-deleting via is_active PUT.
       
       toast.success(`Employee ${action}d successfully`);
       setConfirmDialog({ isOpen: false, employee: null, action: null, isProcessing: false });
@@ -189,7 +229,7 @@ const Employees = () => {
       {/* Main Content Area */}
       <div className="shadow-sm rounded-2xl border border-[#E7E8EE]">
         <EmployeeFilters 
-          accessibleBranches={currentUser.accessibleBranches} 
+          accessibleBranches={branches} 
           filters={filters}
           onFilterChange={handleFilterChange}
         />
@@ -212,11 +252,64 @@ const Employees = () => {
         )}
 
         <EmployeeTable 
-          employees={employees} 
+          employees={paginatedEmployees} 
           isLoading={isLoading} 
+          emptyRowsCount={emptyRowsCount}
           onRowClick={(emp) => handleAction('view', emp)}
           onAction={handleAction} 
         />
+
+        {/* Pagination Controls */}
+        {employees.length > 0 && !isLoading && (
+          <div className="p-4 bg-white rounded-b-2xl border-t border-[#E7E8EE] flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-sm text-[#6B7280]">
+              Showing <span className="font-medium text-[#1C1F2A]">{startIndex + 1}</span> to <span className="font-medium text-[#1C1F2A]">{Math.min(startIndex + ITEMS_PER_PAGE, employees.length)}</span> of <span className="font-medium text-[#1C1F2A]">{employees.length}</span> employees
+            </p>
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 border border-[#E7E8EE] rounded-lg text-sm font-medium text-[#4B5563] hover:bg-[#F4F5F8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              
+              <div className="hidden sm:flex items-center gap-1">
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  // Simple pagination: show first, last, and current +/- 1. For simplicity, just show all if < 7 pages.
+                  if (totalPages > 7) {
+                    if (idx !== 0 && idx !== totalPages - 1 && Math.abs(currentPage - 1 - idx) > 1) {
+                      if (Math.abs(currentPage - 1 - idx) === 2) return <span key={idx} className="px-2 text-gray-400">...</span>;
+                      return null;
+                    }
+                  }
+                  
+                  return (
+                    <button 
+                      key={idx + 1}
+                      onClick={() => setCurrentPage(idx + 1)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === idx + 1 
+                          ? 'bg-[#1C1F2A] text-white' 
+                          : 'text-[#4B5563] hover:bg-[#F4F5F8]'
+                      }`}
+                    >
+                      {idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 border border-[#E7E8EE] rounded-lg text-sm font-medium text-[#4B5563] hover:bg-[#F4F5F8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
 
         {renderEmptyState()}
       </div>
@@ -227,7 +320,7 @@ const Employees = () => {
         onClose={() => setIsFormOpen(false)}
         mode={formMode}
         employeeData={selectedEmployee}
-        accessibleBranches={currentUser.accessibleBranches}
+        accessibleBranches={branches}
         onSubmit={handleFormSubmit}
       />
 

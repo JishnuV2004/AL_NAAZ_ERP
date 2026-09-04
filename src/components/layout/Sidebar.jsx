@@ -240,11 +240,11 @@ const Sidebar = () => {
                 title={!isHovered ? group.name : ''}
               >
                 <div className={`flex items-center gap-3 ${!isHovered ? 'justify-center w-full' : ''}`}>
-                  {isHovered && (
+                  {/* {isHovered && (
                     <span className={`text-xs font-mono ${isExpanded || hasActiveChild ? 'text-[#94A3B8]' : 'text-[#475569]'}`}>
                       {group.id}
                     </span>
-                  )}
+                  )} */}
                   <Icon size={isHovered ? 18 : 22} className={isExpanded || hasActiveChild ? 'text-white' : 'text-[#94A3B8]'} />
                   {isHovered && <span className="font-medium text-sm whitespace-nowrap">{group.name}</span>}
                 </div>

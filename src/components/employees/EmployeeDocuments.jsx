@@ -5,9 +5,9 @@ import toast from 'react-hot-toast';
 
 const EmployeeDocuments = ({ employeeId }) => {
   const [proof, setProof] = useState(null);
+  const [fileUrl, setFileUrl] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
-  const [isViewing, setIsViewing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [formError, setFormError] = useState(null);
@@ -16,9 +16,8 @@ const EmployeeDocuments = ({ employeeId }) => {
   const [docType, setDocType] = useState('AADHAAR');
   const [docNumber, setDocNumber] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
-  
+
   // Image Viewer State
-  const [viewerUrl, setViewerUrl] = useState(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -32,6 +31,14 @@ const EmployeeDocuments = ({ employeeId }) => {
     try {
       const data = await getIdentityProof(employeeId);
       setProof(data);
+      if (data) {
+        try {
+          const fileData = await getIdentityProofFile(employeeId);
+          setFileUrl(fileData.url);
+        } catch (err) {
+          console.error("Failed to load file url", err);
+        }
+      }
     } catch (err) {
       toast.error('Failed to load identity proof metadata.');
     } finally {
@@ -100,24 +107,6 @@ const EmployeeDocuments = ({ employeeId }) => {
       setFormError(err.message || 'Upload failed. Please try again.');
     } finally {
       setIsUploading(false);
-    }
-  };
-
-  const handleViewDocument = async () => {
-    setIsViewing(true);
-    try {
-      const { url } = await getIdentityProofFile(employeeId);
-      
-      if (proof.mime_type === 'application/pdf') {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      } else {
-        setViewerUrl(url);
-        setIsViewerOpen(true);
-      }
-    } catch (err) {
-      toast.error('Failed to fetch document.');
-    } finally {
-      setIsViewing(false);
     }
   };
 
@@ -240,39 +229,63 @@ const EmployeeDocuments = ({ employeeId }) => {
           </form>
         </div>
       ) : proof ? (
-        /* Proof Exists Card */
-        <div className="bg-white border border-[#E7E8EE] rounded-2xl p-5 shadow-sm">
-          <div className="grid grid-cols-[100px_1fr] gap-y-3 gap-x-4 text-sm">
-            <div className="text-[#6B7280]">Type:</div>
-            <div className="font-semibold text-[#1C1F2A]">{formatDocType(proof.document_type)}</div>
-            
-            <div className="text-[#6B7280]">Number:</div>
-            <div className="font-mono text-[#1C1F2A]">{proof.masked_document_number}</div>
-            
-            <div className="text-[#6B7280]">File:</div>
-            <div className="flex items-center gap-1.5 text-[#1C1F2A]">
-              {getFileIcon(proof.mime_type)}
-              <span className="truncate max-w-[200px]" title={proof.original_filename}>{proof.original_filename}</span>
+        /* Proof Exists Card with Inline Preview */
+        <div className="bg-white border border-[#E7E8EE] rounded-2xl shadow-sm overflow-hidden flex flex-col md:flex-row">
+          <div className="p-5 md:w-1/2 border-b md:border-b-0 md:border-r border-[#E7E8EE]">
+            <div className="grid grid-cols-[100px_1fr] gap-y-3 gap-x-4 text-sm">
+              <div className="text-[#6B7280]">Type:</div>
+              <div className="font-semibold text-[#1C1F2A]">{formatDocType(proof.document_type)}</div>
+              
+              <div className="text-[#6B7280]">Number:</div>
+              <div className="font-mono text-[#1C1F2A]">{proof.masked_document_number}</div>
+              
+              <div className="text-[#6B7280]">File:</div>
+              <div className="flex items-center gap-1.5 text-[#1C1F2A]">
+                {getFileIcon(proof.mime_type)}
+                <span className="truncate max-w-[200px]" title={proof.original_filename}>{proof.original_filename}</span>
+              </div>
+              
+              <div className="text-[#6B7280]">Uploaded:</div>
+              <div className="text-[#1C1F2A]">{new Date(proof.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
             </div>
             
-            <div className="text-[#6B7280]">Uploaded:</div>
-            <div className="text-[#1C1F2A]">{new Date(proof.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            <div className="mt-5 flex items-center gap-3">
+              <button 
+                onClick={() => setShowUploadForm(true)}
+                className="px-4 py-1.5 text-[#C9A227] text-sm font-semibold hover:bg-[#C9A227]/10 rounded-lg transition-colors"
+              >
+                Replace Identity Proof
+              </button>
+            </div>
           </div>
           
-          <div className="mt-5 flex items-center gap-3">
-            <button 
-              onClick={handleViewDocument}
-              disabled={isViewing}
-              className="px-4 py-1.5 bg-[#F4F5F8] text-[#1C1F2A] text-sm font-semibold border border-[#E7E8EE] rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              {isViewing ? 'Loading...' : 'View Document'}
-            </button>
-            <button 
-              onClick={() => setShowUploadForm(true)}
-              className="px-4 py-1.5 text-[#C9A227] text-sm font-semibold hover:bg-[#C9A227]/10 rounded-lg transition-colors"
-            >
-              Replace Identity Proof
-            </button>
+          <div className="p-5 md:w-1/2 bg-[#F4F5F8]/50 flex items-center justify-center min-h-[220px]">
+            {fileUrl ? (
+              proof.mime_type.startsWith('image/') ? (
+                <img 
+                  src={fileUrl} 
+                  alt="Identity Proof" 
+                  onClick={() => setIsViewerOpen(true)}
+                  className="max-w-full max-h-[180px] object-contain rounded-lg shadow-sm border border-[#E7E8EE] bg-white cursor-pointer hover:opacity-90 transition-opacity" 
+                  title="Click to enlarge"
+                />
+              ) : (
+                <a 
+                  href={fileUrl} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="flex flex-col items-center gap-3 text-[#C9A227] hover:text-[#B49122] transition-colors bg-white p-6 rounded-xl shadow-sm border border-[#E7E8EE]"
+                >
+                  <IoDocumentTextOutline size={48} />
+                  <span className="font-semibold text-sm">View PDF Document</span>
+                </a>
+              )
+            ) : (
+              <div className="animate-pulse flex flex-col items-center gap-2 text-[#6B7280]">
+                <IoImageOutline size={40} className="opacity-50" />
+                <span className="text-sm font-medium">Loading preview...</span>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -298,13 +311,20 @@ const EmployeeDocuments = ({ employeeId }) => {
           <div className="absolute inset-0" onClick={() => setIsViewerOpen(false)}></div>
           <div className="relative z-10 w-full max-w-4xl bg-[#12141C] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-screen">
             <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-[#12141C]">
-              <h3 className="text-white font-medium">{proof.original_filename}</h3>
-              <button onClick={() => setIsViewerOpen(false)} className="text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 p-1.5 rounded-lg">
+              <h3 className="font-semibold text-white truncate pr-4">{proof?.original_filename}</h3>
+              <button 
+                onClick={() => setIsViewerOpen(false)}
+                className="p-1 text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
+              >
                 <IoCloseOutline size={24} />
               </button>
             </div>
-            <div className="flex-1 p-4 overflow-auto flex items-center justify-center min-h-[300px]">
-              <img src={viewerUrl} alt="Identity Proof" className="max-w-full max-h-full object-contain rounded-lg shadow-lg" />
+            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAAXNSR0IArs4c6QAAACVJREFUKFNjZCASMDKgAhjR1cDQAAz///+HuB7B1U1B1U08BQAAPxQK+wYn7c8AAAAASUVORK5CYII=')] bg-repeat min-h-[50vh]">
+              <img 
+                src={fileUrl} 
+                alt="Document View" 
+                className="max-w-full max-h-[75vh] object-contain bg-white shadow-sm"
+              />
             </div>
           </div>
         </div>

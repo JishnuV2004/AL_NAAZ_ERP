@@ -12,6 +12,8 @@ const initialForm = {
   biweekly_salary: '',
   daily_wage: '',
   joining_date: '',
+  document_type: '',
+  document: null,
   is_active: true
 };
 
@@ -26,7 +28,7 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
     if (isOpen) {
       if (mode === 'edit' && employeeData) {
         setForm({
-          branch: employeeData.branch.id.toString(),
+          branch: typeof employeeData.branch === 'object' ? employeeData.branch?.id?.toString() : employeeData.branch?.toString() || '',
           name: employeeData.name || '',
           phone: employeeData.phone || '',
           address: employeeData.address || '',
@@ -36,6 +38,8 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
           biweekly_salary: employeeData.biweekly_salary || '',
           daily_wage: employeeData.daily_wage || '',
           joining_date: employeeData.joining_date || '',
+          document_type: employeeData.document_type || '',
+          document: null,
           is_active: employeeData.is_active !== undefined ? employeeData.is_active : true
         });
       } else {
@@ -87,6 +91,10 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
       if (selected > today) newErrors.joining_date = 'Joining date cannot be in the future';
     }
 
+    if (form.document && !form.document_type) {
+      newErrors.document_type = 'Document type is required when uploading a document';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -109,21 +117,21 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
     setIsSubmitting(true);
 
     try {
-      const selectedBranch = accessibleBranches.find(b => b.id.toString() === form.branch);
-      
       const payload = {
         name: form.name.trim(),
-        branch: selectedBranch ? { id: selectedBranch.id, name: selectedBranch.name } : employeeData?.branch,
+        branch: parseInt(form.branch, 10),
         phone: form.phone.trim(),
         address: form.address.trim(),
         designation: form.designation.trim(),
         salary_type: form.salary_type,
         joining_date: form.joining_date,
         is_active: form.is_active,
-        // Nullify unselected salary types
-        monthly_salary: form.salary_type === 'MONTHLY' ? Number(form.monthly_salary) : null,
-        biweekly_salary: form.salary_type === 'BIWEEKLY' ? Number(form.biweekly_salary) : null,
-        daily_wage: form.salary_type === 'DAILY' ? Number(form.daily_wage) : null,
+        // Send string for amount, empty string for unselected
+        monthly_salary: form.monthly_salary ? form.monthly_salary.toString() : "",
+        biweekly_salary: form.biweekly_salary ? form.biweekly_salary.toString() : "",
+        daily_wage: form.daily_wage ? form.daily_wage.toString() : "",
+        document_type: form.document ? form.document_type : "",
+        document: form.document,
       };
 
       await onSubmit(payload);
@@ -191,7 +199,7 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
                 >
                   <option value="" disabled>Select a branch</option>
                   {accessibleBranches.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
+                    <option key={b.id} value={b.id}>{b.code}</option>
                   ))}
                 </select>
                 {errors.branch && <p className="mt-1 text-xs text-[#C1443A]">{errors.branch}</p>}
@@ -361,31 +369,60 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
                 {errors.joining_date && <p className="mt-1 text-xs text-[#C1443A]">{errors.joining_date}</p>}
               </div>
 
-              {/* Active Toggle (visible but usually left alone) */}
-              <div className="col-span-1 md:col-span-2 pt-2 border-t border-[#E7E8EE] flex items-center justify-between">
-                <div>
-                  <label className="text-sm font-semibold text-[#1C1F2A]" htmlFor="is_active">
-                    Active Status
-                  </label>
-                  <p className="text-xs text-[#6B7280]">Is this employee currently active?</p>
-                </div>
-                <div className="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
-                  <input 
-                    type="checkbox" 
-                    name="is_active" 
-                    id="is_active" 
-                    checked={form.is_active}
-                    onChange={handleChange}
-                    disabled={isSubmitting}
-                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-[#E7E8EE] appearance-none cursor-pointer transition-transform duration-200 ease-in-out checked:right-0 checked:border-[#2F6F62] disabled:opacity-50"
-                    style={{ right: form.is_active ? '0' : '1.5rem' }}
-                  />
-                  <label 
-                    htmlFor="is_active" 
-                    className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors duration-200 ease-in-out ${form.is_active ? 'bg-[#2F6F62]' : 'bg-[#E7E8EE]'}`}
-                  ></label>
+              {/* Document Section (Optional) - Only show on Create */}
+              {mode === 'create' && (
+                <div className="col-span-1 md:col-span-2 p-4 border border-[#E7E8EE] rounded-xl bg-gray-50/50">
+                <h3 className="text-sm font-bold text-[#1C1F2A] mb-4">Employee Document <span className="text-[#6B7280] font-normal">(Optional)</span></h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Document Type */}
+                  <div className="col-span-1">
+                    <label className="block text-sm font-semibold text-[#1C1F2A] mb-2" htmlFor="document_type">
+                      Document Type {form.document && <span className="text-[#C1443A]">*</span>}
+                    </label>
+                    <select
+                      id="document_type"
+                      name="document_type"
+                      value={form.document_type}
+                      onChange={handleChange}
+                      disabled={isSubmitting}
+                      className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-1 bg-white text-sm transition-colors ${
+                        errors.document_type ? 'border-[#C1443A] focus:border-[#C1443A] focus:ring-[#C1443A]' : 'border-[#E7E8EE] focus:border-[#C9A227] focus:ring-[#C9A227]'
+                      }`}
+                    >
+                      <option value="" disabled>Select Document Type</option>
+                      <option value="Aadhaar">Aadhaar</option>
+                      <option value="PAN">PAN</option>
+                      <option value="Driving License">Driving License</option>
+                      <option value="Passport">Passport</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    {errors.document_type && <p className="mt-1 text-xs text-[#C1443A]">{errors.document_type}</p>}
+                  </div>
+
+                  {/* Document Upload */}
+                  <div className="col-span-1">
+                    <label className="block text-sm font-semibold text-[#1C1F2A] mb-2" htmlFor="document">
+                      Upload File
+                    </label>
+                    <input
+                      id="document"
+                      name="document"
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        setForm(prev => ({ ...prev, document: file || null }));
+                        if (errors.document_type) setErrors(prev => ({ ...prev, document_type: undefined }));
+                      }}
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2 border border-[#E7E8EE] rounded-xl focus:outline-none focus:ring-1 focus:border-[#C9A227] focus:ring-[#C9A227] bg-white text-sm text-[#6B7280] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#F4F5F8] file:text-[#1C1F2A] hover:file:bg-[#E7E8EE] transition-colors"
+                    />
+                    <p className="mt-1 text-xs text-[#6B7280]">Accepted formats: PDF, JPG, PNG.</p>
+                  </div>
                 </div>
               </div>
+              )}
+
+              {/* Active Toggle removed as status editing is handled via a dedicated API */}
 
             </div>
           </form>
