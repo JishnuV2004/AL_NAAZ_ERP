@@ -99,9 +99,9 @@ const EmployeeDetailsDrawer = ({ isOpen, onClose, employee, onEdit }) => {
               
               <div className="text-[#6B7280]">Amount:</div>
               <div className="font-mono text-[#1C1F2A] font-medium">
-                {employee.salary_type === 'MONTHLY' && employee.monthly_salary ? `AED ${employee.monthly_salary.toLocaleString()}` :
-                 employee.salary_type === 'BIWEEKLY' && employee.biweekly_salary ? `AED ${employee.biweekly_salary.toLocaleString()}` :
-                 employee.salary_type === 'DAILY' && employee.daily_wage ? `AED ${employee.daily_wage.toLocaleString()}` :
+                {employee.salary_type === 'MONTHLY' && employee.monthly_salary ? `₹${employee.monthly_salary.toLocaleString()}` :
+                 employee.salary_type === 'BIWEEKLY' && employee.biweekly_salary ? `₹${employee.biweekly_salary.toLocaleString()}` :
+                 employee.salary_type === 'DAILY' && employee.daily_wage ? `₹${employee.daily_wage.toLocaleString()}` :
                  <span className="text-red-500 italic">Not configured</span>
                 }
               </div>

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { IoCloseOutline } from 'react-icons/io5';
 
-const Modal = ({ isOpen, onClose, title, size = 'max-w-lg', children }) => {
+const Modal = ({ isOpen, onClose, title, size = 'max-w-lg', overflowVisible = false, children }) => {
   // Prevent background scrolling when open
   useEffect(() => {
     if (isOpen) {
@@ -34,14 +34,14 @@ const Modal = ({ isOpen, onClose, title, size = 'max-w-lg', children }) => {
           </h3>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-brand-text-muted hover:bg-brand-cream-dark hover:text-brand-text transition-colors"
+            className="rounded-full p-1.5 text-brand-text-muted hover:bg-brand-cream-dark hover:text-brand-text transition-colors cursor-pointer"
           >
             <IoCloseOutline className="h-6 w-6" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="mt-4 max-h-[75vh] overflow-y-auto pr-1">
+        <div className={`mt-4 ${overflowVisible ? 'overflow-visible' : 'max-h-[75vh] overflow-y-auto pr-1'}`}>
           {children}
         </div>
       </div>

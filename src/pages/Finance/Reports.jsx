@@ -57,7 +57,7 @@ const Reports = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Financial Summary */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h3 className="text-gray-900 font-bold mb-4">Financial summary · August 2026</h3>
+          <h3 className="text-gray-900 font-bold mb-4">Financial summary · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-gray-700 font-medium text-sm">Opening balance</span>

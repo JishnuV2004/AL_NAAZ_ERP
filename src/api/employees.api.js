@@ -60,3 +60,16 @@ export const deleteEmployee = async (id) => {
   return response.data;
 };
 
+/**
+ * Fetch department-based employees: GET /employees/?department=:departmentId
+ */
+export const getEmployeesByDepartment = async (departmentId) => {
+  try {
+    const response = await api.get(`/employees/?department=${departmentId}`);
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (error) {
+    console.error(`API GET /employees/?department=${departmentId} failed:`, error);
+    return [];
+  }
+};
+

@@ -111,6 +111,8 @@ const MENU_GROUPS = [
     name: 'Finance',
     icon: Banknote,
     links: [
+      { name: 'Overview', path: '/finance/overview' },
+      { name: 'Receivables', path: '/finance/receivables' },
       { name: 'Income', path: '/finance/income' },
       { name: 'Expenses', path: '/finance/expenses' },
       { name: 'Petty Cash', path: '/finance/pettycash' },
@@ -186,7 +188,8 @@ const Sidebar = () => {
 
   // Find which group is currently active based on URL
   const activeGroupId = MENU_GROUPS.find(group =>
-    group.links.some(link => location.pathname.startsWith(link.path))
+    group.links.some(link => location.pathname.startsWith(link.path)) ||
+    (group.links[0] && location.pathname.split('/')[1] === group.links[0].path.split('/')[1])
   )?.id || '00';
 
   const [expandedGroup, setExpandedGroup] = useState(activeGroupId);
@@ -230,7 +233,8 @@ const Sidebar = () => {
         {MENU_GROUPS.map((group) => {
           const Icon = group.icon;
           const isExpanded = expandedGroup === group.id;
-          const hasActiveChild = group.links.some(link => location.pathname.startsWith(link.path));
+          const hasActiveChild = group.links.some(link => location.pathname.startsWith(link.path)) ||
+            (group.links[0] && location.pathname.split('/')[1] === group.links[0].path.split('/')[1]);
 
           return (
             <div key={group.id} className="mb-2">

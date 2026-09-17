@@ -3,12 +3,12 @@ import { IoAddOutline, IoSearchOutline, IoPencilOutline, IoTrashOutline, IoBrief
 
 // Dummy Data
 const dummyDesignations = [
-  { id: 'DES-001', title: 'Head Chef', department: 'Kitchen & Culinary', level: 'Senior Management', employeeCount: 1, baseSalaryRange: '15,000 - 25,000 AED', status: 'Active' },
-  { id: 'DES-002', title: 'Sous Chef', department: 'Kitchen & Culinary', level: 'Middle Management', employeeCount: 3, baseSalaryRange: '8,000 - 12,000 AED', status: 'Active' },
-  { id: 'DES-003', title: 'Restaurant Manager', department: 'Management', level: 'Senior Management', employeeCount: 1, baseSalaryRange: '12,000 - 20,000 AED', status: 'Active' },
-  { id: 'DES-004', title: 'Senior Waiter', department: 'Customer Service', level: 'Staff', employeeCount: 5, baseSalaryRange: '4,000 - 6,000 AED', status: 'Active' },
-  { id: 'DES-005', title: 'Delivery Driver', department: 'Logistics & Delivery', level: 'Staff', employeeCount: 8, baseSalaryRange: '3,000 - 4,500 AED', status: 'Active' },
-  { id: 'DES-006', title: 'Cleaner', department: 'Maintenance', level: 'Staff', employeeCount: 0, baseSalaryRange: '2,000 - 3,000 AED', status: 'Inactive' },
+  { id: 'DES-001', title: 'Head Chef', department: 'Kitchen & Culinary', level: 'Senior Management', employeeCount: 1, baseSalaryRange: '₹15,000 - ₹25,000', status: 'Active' },
+  { id: 'DES-002', title: 'Sous Chef', department: 'Kitchen & Culinary', level: 'Middle Management', employeeCount: 3, baseSalaryRange: '₹8,000 - ₹12,000', status: 'Active' },
+  { id: 'DES-003', title: 'Restaurant Manager', department: 'Management', level: 'Senior Management', employeeCount: 1, baseSalaryRange: '₹12,000 - ₹20,000', status: 'Active' },
+  { id: 'DES-004', title: 'Senior Waiter', department: 'Customer Service', level: 'Staff', employeeCount: 5, baseSalaryRange: '₹4,000 - ₹6,000', status: 'Active' },
+  { id: 'DES-005', title: 'Delivery Driver', department: 'Logistics & Delivery', level: 'Staff', employeeCount: 8, baseSalaryRange: '₹3,000 - ₹4,500', status: 'Active' },
+  { id: 'DES-006', title: 'Cleaner', department: 'Maintenance', level: 'Staff', employeeCount: 0, baseSalaryRange: '₹2,000 - ₹3,000', status: 'Inactive' },
 ];
 
 const Designations = () => {

@@ -67,29 +67,29 @@ const Permissions = () => {
   const currentPerms = permissions[selectedRole.id] || {};
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-4 font-sans w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-gray-900 tracking-tight">Permissions Matrix</h1>
-          <p className="text-sm text-gray-500 mt-1">Configure fine-grained access controls for each organizational role</p>
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900 tracking-tight">Permissions Matrix</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Configure fine-grained access controls for each organizational role</p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="relative z-20 w-full sm:w-auto">
             <button 
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm min-w-[240px] text-left hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-between gap-3 px-3.5 py-2 bg-white border border-gray-200 rounded-xl shadow-xs min-w-[220px] text-left hover:bg-gray-50 transition-colors cursor-pointer"
             >
               <div>
-                <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider">Editing Role</span>
-                <span className="block text-sm font-bold text-gray-900">{selectedRole.name}</span>
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Editing Role</span>
+                <span className="block text-xs sm:text-sm font-bold text-gray-900">{selectedRole.name}</span>
               </div>
-              <ChevronDown size={18} className={`text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={16} className={`text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             
             {isDropdownOpen && (
-              <div className="absolute top-full mt-2 right-0 w-full bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden">
+              <div className="absolute top-full mt-1.5 right-0 w-full bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden">
                 {ROLES.map(role => (
                   <button
                     key={role.id}
@@ -97,7 +97,7 @@ const Permissions = () => {
                       setSelectedRole(role);
                       setIsDropdownOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left hover:bg-gray-50 transition-colors ${selectedRole.id === role.id ? 'bg-gray-50/50' : ''}`}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs sm:text-sm text-left hover:bg-gray-50 transition-colors cursor-pointer ${selectedRole.id === role.id ? 'bg-gray-50/50' : ''}`}
                   >
                     <span className={`font-medium ${selectedRole.id === role.id ? 'text-gray-900' : 'text-gray-700'}`}>{role.name}</span>
                     {selectedRole.id === role.id && <Check size={16} className="text-gray-900" />}
@@ -106,31 +106,31 @@ const Permissions = () => {
               </div>
             )}
           </div>
-          <button className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-medium text-white bg-gray-900 hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap">
-            <Save size={18} /> Save Matrix
+          <button className="w-full sm:w-auto px-4 py-2 rounded-xl font-medium text-white bg-gray-900 hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-xs text-xs sm:text-sm whitespace-nowrap cursor-pointer">
+            <Save size={16} /> Save Matrix
           </button>
         </div>
       </div>
 
-      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-start gap-3">
-        <AlertTriangle size={20} className="text-orange-600 shrink-0 mt-0.5" />
+      <div className="bg-orange-50 border border-orange-200 rounded-xl p-3.5 flex items-start gap-3">
+        <AlertTriangle size={18} className="text-orange-600 shrink-0 mt-0.5" />
         <div>
-          <h4 className="font-bold text-orange-900 text-sm">Warning: Security Implications</h4>
-          <p className="text-xs text-orange-800 mt-1">Changes made to this matrix take effect immediately upon saving. Ensure you do not accidentally grant administrative access (like "Delete" or "Approve") to low-level roles.</p>
+          <h4 className="font-bold text-orange-900 text-xs sm:text-sm">Warning: Security Implications</h4>
+          <p className="text-xs text-orange-800 mt-0.5">Changes made to this matrix take effect immediately upon saving. Ensure you do not accidentally grant administrative access (like "Delete" or "Approve") to low-level roles.</p>
         </div>
       </div>
 
       {/* Permissions Matrix Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-gray-50/50">
-                <th className="py-4 px-6 text-sm font-bold text-gray-900 border-b border-gray-100 w-1/3">
+                <th className="py-3 px-5 text-xs font-bold text-gray-900 border-b border-gray-100 w-1/3">
                   System Module
                 </th>
                 {ACTIONS.map(action => (
-                  <th key={action.id} className="py-4 px-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                  <th key={action.id} className="py-3 px-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
                     {action.name}
                   </th>
                 ))}
@@ -139,14 +139,14 @@ const Permissions = () => {
             <tbody className="divide-y divide-gray-100">
               {MODULES.map((module) => (
                 <tr key={module.id} className="hover:bg-gray-50/30 transition-colors">
-                  <td className="py-4 px-6 font-medium text-gray-900">
+                  <td className="py-3 px-5 text-xs sm:text-sm font-medium text-gray-900">
                     {module.name}
                   </td>
                   {ACTIONS.map(action => {
                     const isGranted = currentPerms[module.id]?.[action.id] || false;
                     
                     return (
-                      <td key={action.id} className="py-4 px-4 text-center">
+                      <td key={action.id} className="py-3 px-4 text-center">
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input 
                             type="checkbox" 
@@ -154,7 +154,7 @@ const Permissions = () => {
                             checked={isGranted}
                             onChange={() => handleToggle(selectedRole.id, module.id, action.id)}
                           />
-                          <div className={`w-11 h-6 rounded-full peer peer-focus:outline-none transition-all after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                          <div className={`w-10 h-5.5 rounded-full peer peer-focus:outline-none transition-all after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all ${
                             isGranted 
                               ? 'bg-gray-900 after:translate-x-full after:border-white' 
                               : 'bg-gray-200'

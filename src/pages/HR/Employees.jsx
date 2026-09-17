@@ -3,7 +3,7 @@ import EmployeesComponent from '../../components/employees/Employees';
 
 const Employees = () => {
   return (
-    <div className="p-6">
+    <div className="w-full font-sans">
       <EmployeesComponent />
     </div>
   );

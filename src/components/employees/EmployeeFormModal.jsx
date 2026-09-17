@@ -318,7 +318,7 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
                   <span className="text-[#C1443A]"> *</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6B7280] font-mono text-sm">AED</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6B7280] font-mono text-sm font-bold">₹</span>
                   <input
                     id="salary_input"
                     name={

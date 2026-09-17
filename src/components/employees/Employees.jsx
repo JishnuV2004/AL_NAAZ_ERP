@@ -211,18 +211,18 @@ const Employees = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 font-sans w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-[#1C1F2A]">Employees Directory</h1>
-          <p className="text-[#6B7280] mt-1">Manage staff members and personal information.</p>
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1C1F2A] tracking-tight">Employees Directory</h1>
+          <p className="text-xs sm:text-sm text-[#6B7280] mt-0.5">Manage staff members and personal information.</p>
         </div>
         <button 
           onClick={handleOpenCreate}
-          className="flex items-center px-5 py-2.5 bg-[#C9A227] text-white rounded-xl font-semibold hover:bg-[#B49122] transition-colors shadow-sm"
+          className="flex items-center px-4 py-2 bg-[#C9A227] text-white rounded-xl font-semibold text-xs sm:text-sm hover:bg-[#B49122] transition-colors shadow-xs cursor-pointer"
         >
-          <IoAddOutline className="mr-2" size={20} /> Add Employee
+          <IoAddOutline className="mr-1.5" size={18} /> Add Employee
         </button>
       </div>
 

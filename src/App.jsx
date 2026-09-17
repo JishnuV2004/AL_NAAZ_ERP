@@ -34,6 +34,7 @@ import CheckInOut from './pages/Attendance/CheckInOut';
 import Overtime from './pages/Attendance/Overtime';
 import AttendanceReports from './pages/Attendance/AttendanceReports';
 import Salary from './pages/Payroll/Salary';
+import EmployeeSalaryHistory from './pages/Payroll/EmployeeSalaryHistory';
 import Advances from './pages/Payroll/Advances';
 import Deductions from './pages/Payroll/Deductions';
 import SalaryHistory from './pages/Payroll/SalaryHistory';
@@ -49,6 +50,8 @@ import PurchaseItems from './pages/Procurement/PurchaseItems';
 import CreditPurchases from './pages/Procurement/CreditPurchases';
 import SupplierPayments from './pages/Procurement/SupplierPayments';
 import SupplierLedger from './pages/Procurement/SupplierLedger';
+import FinanceOverview from './pages/Finance/Overview';
+import Receivables from './pages/Finance/Receivables';
 import Income from './pages/Finance/Income';
 import Expenses from './pages/Finance/Expenses';
 import PettyCash from './pages/Finance/PettyCash';
@@ -96,7 +99,7 @@ const Layout = ({ children }) => {
       <Sidebar />
       <main className="flex-1 min-w-0 h-screen overflow-y-auto bg-[#F8F9FA] shadow-2xl relative text-gray-900 border-l border-gray-200">
         <Navbar />
-        <div className="p-8">
+        <div className="p-3 sm:p-4">
           {children}
         </div>
       </main>
@@ -144,6 +147,7 @@ function App() {
           <Route path="/attendance/overtime" element={<Layout><Overtime /></Layout>} />
           <Route path="/attendance/attendancereports" element={<Layout><AttendanceReports /></Layout>} />
           <Route path="/payroll/salary" element={<Layout><Salary /></Layout>} />
+          <Route path="/payroll/employee-salary-history" element={<Layout><EmployeeSalaryHistory /></Layout>} />
           <Route path="/payroll/advances" element={<Layout><Advances /></Layout>} />
           <Route path="/payroll/deductions" element={<Layout><Deductions /></Layout>} />
           <Route path="/payroll/salaryhistory" element={<Layout><SalaryHistory /></Layout>} />
@@ -159,6 +163,9 @@ function App() {
           <Route path="/procurement/creditpurchases" element={<Layout><CreditPurchases /></Layout>} />
           <Route path="/procurement/supplierpayments" element={<Layout><SupplierPayments /></Layout>} />
           <Route path="/procurement/supplierledger" element={<Layout><SupplierLedger /></Layout>} />
+          <Route path="/finance" element={<Navigate to="/finance/overview" replace />} />
+          <Route path="/finance/overview" element={<Layout><FinanceOverview /></Layout>} />
+          <Route path="/finance/receivables" element={<Layout><Receivables /></Layout>} />
           <Route path="/finance/income" element={<Layout><Income /></Layout>} />
           <Route path="/finance/expenses" element={<Layout><Expenses /></Layout>} />
           <Route path="/finance/pettycash" element={<Layout><PettyCash /></Layout>} />

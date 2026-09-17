@@ -88,7 +88,7 @@ const Overtime = () => {
           </div>
           <div className="mt-auto min-w-0">
             <div className="font-sans text-[28px] font-medium text-slate-800 tracking-tighter mb-1 truncate">
-              1,250 <span className="text-lg font-normal text-slate-500">AED</span>
+              ₹1,250
             </div>
             <p className="text-[13px] font-medium text-[#94a3b8] truncate">Month to date</p>
           </div>
