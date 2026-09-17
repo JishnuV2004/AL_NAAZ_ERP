@@ -36,23 +36,23 @@ const MOCK_BAR_DATA = [
 ];
 
 const MetricCard = ({ title, amount, subtitle, icon: Icon, trend, trendValue, iconColor, iconBg }) => (
-  <div className="bg-white p-5 rounded-[20px] border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow min-h-[140px]">
-    <div className="flex items-start gap-3 mb-4">
-      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${iconBg}`}>
-        <Icon size={22} className={iconColor} />
+  <div className="bg-white p-4.5 sm:p-5 rounded-[20px] border border-gray-100 shadow-xs flex flex-col justify-between hover:shadow-md transition-all min-h-[135px]">
+    <div className="flex items-start justify-between gap-2.5 mb-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+          <Icon size={20} className={iconColor} />
+        </div>
+        <span className="text-[#475569] text-xs sm:text-[13px] font-semibold leading-tight">{title}</span>
       </div>
-      <div className="flex flex-col items-start pt-0.5">
-        <span className="text-[#475569] text-[13px] font-semibold leading-tight">{title}</span>
-        {trend && (
-          <span className={`text-[11px] font-bold px-2 py-0.5 mt-1.5 rounded-full ${trend === 'up' ? 'text-[#16a34a] bg-[#dcfce7]' : 'text-[#ef4444] bg-[#fee2e2]'}`}>
-            {trendValue}
-          </span>
-        )}
-      </div>
+      {trend && (
+        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${trend === 'up' ? 'text-[#16a34a] bg-[#dcfce7]' : 'text-[#ef4444] bg-[#fee2e2]'}`}>
+          {trendValue}
+        </span>
+      )}
     </div>
     <div className="mt-auto min-w-0">
-      <div className="font-sans text-[28px] font-medium text-slate-800 tracking-tighter mb-1 truncate">{amount}</div>
-      <p className="text-[13px] font-medium text-[#94a3b8] truncate">{subtitle}</p>
+      <div className="font-sans text-xl sm:text-2xl font-bold text-slate-800 tracking-tight mb-0.5 whitespace-nowrap">{amount}</div>
+      <p className="text-xs font-medium text-[#94a3b8] truncate">{subtitle}</p>
     </div>
   </div>
 );
@@ -89,8 +89,8 @@ const CompanyOverview = () => {
         </div>
       </div>
 
-      {/* Top Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8 gap-4">
+      {/* Top Metrics Grid: 4 cards in 1st row, remaining 4 cards in 2nd row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         <MetricCard title="Revenue Today" amount="₹ 2,45,000" subtitle="vs yesterday" icon={DollarSign} trend="up" trendValue="+12%" iconBg="bg-blue-50" iconColor="text-blue-500" />
         <MetricCard title="Expenses Today" amount="₹ 1,12,000" subtitle="vs yesterday" icon={Wallet} trend="down" trendValue="-4%" iconBg="bg-red-50" iconColor="text-red-500" />
         <MetricCard title="Profit Today" amount="₹ 1,33,000" subtitle="vs yesterday" icon={TrendingUp} trend="up" trendValue="+18%" iconBg="bg-green-50" iconColor="text-green-500" />
