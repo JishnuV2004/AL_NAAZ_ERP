@@ -112,6 +112,9 @@ const MENU_GROUPS = [
     icon: Banknote,
     links: [
       { name: 'Overview', path: '/finance/overview' },
+      { name: 'Daily Sales', path: '/finance/dailysales' },
+      { name: 'Financial Accounts', path: '/finance/financialaccounts' },
+      { name: 'Workflow Reference', path: '/finance/workflowreference' },
       { name: 'Receivables', path: '/finance/receivables' },
       { name: 'Income', path: '/finance/income' },
       { name: 'Expenses', path: '/finance/expenses' },

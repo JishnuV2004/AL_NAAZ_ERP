@@ -150,10 +150,18 @@ const normalizeStatus = (rawStatus) => {
   return clean;
 };
 
+const getTodayDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const DailyAttendance = () => {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
-  const [selectedDate, setSelectedDate] = useState('2026-09-16');
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [showCalendarPopover, setShowCalendarPopover] = useState(false);
   const datePickerRef = useRef(null);
 
@@ -162,7 +170,7 @@ const DailyAttendance = () => {
     { id: 2, name: 'Al Naaz Kochi' }
   ]);
   const [selectedBranchId, setSelectedBranchId] = useState(1);
-  const [department, setDepartment] = useState('All Departments');
+  const [designation, setDesignation] = useState('All Designations');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [salaryTypeFilter, setSalaryTypeFilter] = useState('All Types');
   const [searchQuery, setSearchQuery] = useState('');
@@ -226,8 +234,7 @@ const DailyAttendance = () => {
             name: item.employee_name || `Employee ${item.employee || idx + 1}`,
             email: `${(item.employee_name || 'emp').toLowerCase().replace(/\s+/g, '.')}@alnaaz.com`,
             avatar: `https://i.pravatar.cc/150?u=emp${item.employee || idx + 1}`,
-            department: item.department || item.designation || 'Staff',
-            designation: item.designation || 'Staff',
+            designation: item.designation || item.department || 'Staff',
             salaryType: item.salaryType || 'MONTHLY',
             workingDays: item.workingDays || 30,
             presentAbsent: {
@@ -315,13 +322,13 @@ const DailyAttendance = () => {
       emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.empId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.department.toLowerCase().includes(searchQuery.toLowerCase());
+      emp.designation.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus =
       statusFilter === 'All Status' || emp.status === statusFilter;
 
-    const matchesDepartment =
-      department === 'All Departments' || emp.department === department;
+    const matchesDesignation =
+      designation === 'All Designations' || emp.designation === designation;
 
     const matchesSalaryType =
       salaryTypeFilter === 'All Types' || emp.salaryType === salaryTypeFilter;
@@ -329,7 +336,7 @@ const DailyAttendance = () => {
     return (
       matchesSearch &&
       matchesStatus &&
-      matchesDepartment &&
+      matchesDesignation &&
       matchesSalaryType
     );
   });
@@ -380,9 +387,9 @@ const DailyAttendance = () => {
   };
 
   const handleResetFilters = () => {
-    setSelectedDate('2026-09-13');
+    setSelectedDate(getTodayDateString());
     setSelectedBranchId(1);
-    setDepartment('All Departments');
+    setDesignation('All Designations');
     setStatusFilter('All Status');
     setSalaryTypeFilter('All Types');
     setSearchQuery('');
@@ -800,13 +807,13 @@ const DailyAttendance = () => {
 
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Department
+              Designation
             </label>
             <CustomSelect
-              value={department}
-              onChange={setDepartment}
-              options={['All Departments', 'Kitchen', 'Service', 'Accounts', 'Logistics', 'Management', 'Testing']}
-              placeholder="Department Filter"
+              value={designation}
+              onChange={setDesignation}
+              options={['All Designations', 'Cook', 'Helper', 'Manager', 'Accountant', 'Staff']}
+              placeholder="Designation Filter"
             />
           </div>
 
@@ -922,20 +929,10 @@ const DailyAttendance = () => {
                   />
                 </th>
                 <th className="py-4 px-4 text-left">Employee</th>
-                <th className="py-4 px-4 text-left">Department</th>
+                <th className="py-4 px-4 text-left">Designation</th>
                 <th className="py-4 px-4 text-center">
                   <div className="inline-flex items-center justify-center gap-1">
                     Working Days <IoInformationCircleOutline className="text-gray-400" size={14} />
-                  </div>
-                </th>
-                <th className="py-4 px-4 text-center">
-                  <div className="inline-flex items-center justify-center gap-1">
-                    Present / Absent <IoInformationCircleOutline className="text-gray-400" size={14} />
-                  </div>
-                </th>
-                <th className="py-4 px-4 text-center">
-                  <div className="inline-flex items-center justify-center gap-1">
-                    Leave / Half <IoInformationCircleOutline className="text-gray-400" size={14} />
                   </div>
                 </th>
                 <th className="py-4 px-4 text-center">Status</th>
@@ -963,12 +960,6 @@ const DailyAttendance = () => {
                     </td>
                     <td className="py-4 px-4 text-center">
                       <div className="h-3.5 bg-gray-200 rounded w-10 mx-auto"></div>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <div className="h-3.5 bg-gray-200 rounded w-12 mx-auto"></div>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <div className="h-3.5 bg-gray-200 rounded w-12 mx-auto"></div>
                     </td>
                     <td className="py-4 px-4 text-center">
                       <div className="h-6 bg-gray-200 rounded-lg w-24 mx-auto"></div>
@@ -1028,36 +1019,14 @@ const DailyAttendance = () => {
                       </div>
                     </td>
 
-                    {/* Department */}
+                    {/* Designation */}
                     <td className="py-4 px-4 text-left font-semibold text-gray-800 text-sm">
-                      {row.department}
+                      {row.designation}
                     </td>
 
                     {/* Working Days */}
                     <td className="py-4 px-4 text-center font-bold text-gray-900 text-sm">
                       {row.workingDays}
-                    </td>
-
-                    {/* Present / Absent Split */}
-                    <td className="py-4 px-4 text-center text-sm font-bold">
-                      <span className="text-emerald-600">
-                        {row.presentAbsent.present}
-                      </span>
-                      <span className="text-gray-300 mx-1.5">/</span>
-                      <span className="text-rose-500">
-                        {row.presentAbsent.absent}
-                      </span>
-                    </td>
-
-                    {/* Leave / Half Split */}
-                    <td className="py-4 px-4 text-center text-sm font-bold">
-                      <span className="text-purple-600">
-                        {row.leaveHalf.leave}
-                      </span>
-                      <span className="text-gray-300 mx-1.5">/</span>
-                      <span className="text-amber-500">
-                        {row.leaveHalf.half}
-                      </span>
                     </td>
 
                     {/* Status Badge Dropdown */}
@@ -1182,7 +1151,7 @@ const DailyAttendance = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="p-10 text-center text-gray-500 font-medium text-sm">
+                  <td colSpan="6" className="p-10 text-center text-gray-500 font-medium text-sm">
                     No employees found matching the filters.
                   </td>
                 </tr>
@@ -1243,7 +1212,7 @@ const DailyAttendance = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 text-base">{editingEmployee.name}</h3>
-                  <span className="text-xs font-mono text-gray-500 font-semibold">{editingEmployee.empId} • {editingEmployee.department}</span>
+                  <span className="text-xs font-mono text-gray-500 font-semibold">{editingEmployee.empId} • {editingEmployee.designation}</span>
                 </div>
               </div>
               <button

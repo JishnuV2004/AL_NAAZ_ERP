@@ -51,6 +51,9 @@ import CreditPurchases from './pages/Procurement/CreditPurchases';
 import SupplierPayments from './pages/Procurement/SupplierPayments';
 import SupplierLedger from './pages/Procurement/SupplierLedger';
 import FinanceOverview from './pages/Finance/Overview';
+import DailySales from './pages/Finance/DailySales';
+import FinancialAccounts from './pages/Finance/FinancialAccounts';
+import WorkflowReference from './pages/Finance/WorkflowReference';
 import Receivables from './pages/Finance/Receivables';
 import Income from './pages/Finance/Income';
 import Expenses from './pages/Finance/Expenses';
@@ -165,6 +168,9 @@ function App() {
           <Route path="/procurement/supplierledger" element={<Layout><SupplierLedger /></Layout>} />
           <Route path="/finance" element={<Navigate to="/finance/overview" replace />} />
           <Route path="/finance/overview" element={<Layout><FinanceOverview /></Layout>} />
+          <Route path="/finance/dailysales" element={<Layout><DailySales /></Layout>} />
+          <Route path="/finance/financialaccounts" element={<Layout><FinancialAccounts /></Layout>} />
+          <Route path="/finance/workflowreference" element={<Layout><WorkflowReference /></Layout>} />
           <Route path="/finance/receivables" element={<Layout><Receivables /></Layout>} />
           <Route path="/finance/income" element={<Layout><Income /></Layout>} />
           <Route path="/finance/expenses" element={<Layout><Expenses /></Layout>} />

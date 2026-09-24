@@ -1,458 +1,907 @@
-import React, { useState, useEffect } from 'react';
-import { useFinanceStore } from '../../store/financeStore';
-import { financeService } from '../../services/financeService';
-import { IoAddOutline, IoSearchOutline } from 'react-icons/io5';
-import { FiEdit } from 'react-icons/fi';
-import { PageLoader, ButtonLoader } from '../../components/common/Loader';
-import Modal from '../../components/common/Modal';
+import React, { useState } from 'react';
+import {
+  IoAddOutline,
+  IoChevronDownOutline,
+  IoCloseOutline,
+  IoEyeOutline,
+  IoCheckmarkOutline,
+  IoCloseCircleOutline,
+  IoCheckmarkCircleOutline,
+  IoCalendarOutline
+} from 'react-icons/io5';
+import toast from 'react-hot-toast';
+
+// Custom Dropdown Select
+const CustomSelect = ({ value, onChange, options, className = '' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+      >
+        <span className="truncate">{value || 'Select...'}</span>
+        <IoChevronDownOutline className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? 'rotate-180' : ''}`} size={13} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 font-sans max-h-56 overflow-y-auto">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => {
+                onChange(opt);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-3 py-1.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                value === opt ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <span>{opt}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Initial Data for Expenses Tab
+const INITIAL_EXPENSES = [
+  {
+    id: 4,
+    expenseCode: '#4',
+    date: '2026-09-20',
+    formattedDate: '20 Sep 2026',
+    branch: 'Kochi — Main Mandi',
+    category: 'Ice & Packaging',
+    paymentAccount: 'Petty Cash',
+    amount: 1800,
+    description: 'Ice blocks — evening batch',
+    createdBy: 'Sana Iqbal'
+  },
+  {
+    id: 3,
+    expenseCode: '#3',
+    date: '2026-09-19',
+    formattedDate: '19 Sep 2026',
+    branch: 'Kochi — Main Mandi',
+    category: 'Transport & Logistics',
+    paymentAccount: 'Main Cash Drawer',
+    amount: 3200,
+    description: 'Auto hire — market run',
+    createdBy: 'Rahim K.'
+  },
+  {
+    id: 2,
+    expenseCode: '#2',
+    date: '2026-09-15',
+    formattedDate: '15 Sep 2026',
+    branch: 'Kochi — Main Mandi',
+    category: 'Utilities',
+    paymentAccount: 'HDFC Current A/C',
+    amount: 6400,
+    description: 'Electricity bill — Aug cycle',
+    createdBy: 'Farhan Rasheed'
+  },
+  {
+    id: 1,
+    expenseCode: '#1',
+    date: '2026-09-12',
+    formattedDate: '12 Sep 2026',
+    branch: 'Kochi — Main Mandi',
+    category: 'Maintenance',
+    paymentAccount: 'Main Cash Drawer',
+    amount: 950,
+    description: 'Weighing scale repair',
+    createdBy: 'Rahim K.'
+  }
+];
+
+// Initial Data for Expense Adjustments Tab
+const INITIAL_ADJUSTMENTS = [
+  {
+    id: 1,
+    adjustmentCode: '#1',
+    expenseCode: 'EXPENSE-2',
+    oldAmount: 6400,
+    newAmount: 6800,
+    status: 'PENDING',
+    reason: 'Meter reading was under-billed; DISCOM issued a revised invoice.',
+    requestedBy: 'Farhan Rasheed'
+  },
+  {
+    id: 2,
+    adjustmentCode: '#2',
+    expenseCode: 'EXPENSE-1',
+    oldAmount: 950,
+    newAmount: 1150,
+    status: 'APPROVED',
+    reason: 'Vendor added a spare part cost after initial invoice.',
+    requestedBy: 'Rahim K.'
+  },
+  {
+    id: 3,
+    adjustmentCode: '#3',
+    expenseCode: 'EXPENSE-3',
+    oldAmount: 3200,
+    newAmount: 2600,
+    status: 'REJECTED',
+    reason: 'Original entry used round-trip fare by mistake.',
+    requestedBy: 'Rahim K.'
+  }
+];
 
 const Expenses = () => {
-  const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const categories = useFinanceStore(state => state.expenseCategories);
+  const [activeTab, setActiveTab] = useState('expenses'); // 'expenses' | 'adjustments'
 
-  // Pagination State
-  const [page, setPage] = useState(1);
+  // --- Expenses Tab State ---
+  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
+  const [branchFilter, setBranchFilter] = useState('Kochi — Main Mandi');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [accountFilter, setAccountFilter] = useState('All');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [viewingExpense, setViewingExpense] = useState(null);
 
-  // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const defaultForm = { category: '', amount: '', expense_date: new Date().toISOString().split('T')[0], description: '' };
-  const [formData, setFormData] = useState(defaultForm);
-  const [editingId, setEditingId] = useState(null);
-
-  // Detail Modal
-  const [selectedExpense, setSelectedExpense] = useState(null);
-
-  // Fetch ALL data once and on refresh
-  useEffect(() => {
-    let ignore = false;
-
-    const loadData = async () => {
-      setLoading(true);
-      const data = await financeService.fetchExpenses();
-      if (!ignore) {
-        setExpenses(data);
-        setLoading(false);
-      }
-    };
-
-    loadData();
-    return () => { ignore = true; };
-  }, [refreshKey]);
-
-  // Local filtering and pagination
-  const filteredExpenses = expenses.filter(e => {
-    let matches = true;
-    if (searchTerm) {
-      matches = matches && (
-        e.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.category_name?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    if (categoryFilter !== 'ALL') {
-      matches = matches && (e.category?.toString() === categoryFilter.toString());
-    }
-    if (startDate) {
-      const eDate = new Date(e.expense_date || e.created_at);
-      matches = matches && (eDate >= new Date(startDate));
-    }
-    if (endDate) {
-      const eDate = new Date(e.expense_date || e.created_at);
-      matches = matches && (eDate <= new Date(endDate));
-    }
-    return matches;
+  const [newExpense, setNewExpense] = useState({
+    branch: 'Kochi — Main Mandi',
+    category: 'Ice & Packaging',
+    paymentAccount: 'Petty Cash',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    description: ''
   });
 
-  const totalItems = filteredExpenses.length;
-  const totalPages = Math.ceil(totalItems / 10) || 1;
-  const currentExpenses = filteredExpenses.slice((page - 1) * 10, page * 10);
-  const hasNext = page < totalPages;
-  const hasPrev = page > 1;
+  // --- Expense Adjustments Tab State ---
+  const [adjustments, setAdjustments] = useState(INITIAL_ADJUSTMENTS);
+  const [adjStatusFilter, setAdjStatusFilter] = useState('All');
+  const [adjExpenseFilter, setAdjExpenseFilter] = useState('All');
 
+  const [showRequestAdjModal, setShowRequestAdjModal] = useState(false);
+  const [viewingAdjustment, setViewingAdjustment] = useState(null);
 
+  const [newAdjustment, setNewAdjustment] = useState({
+    expenseCode: 'EXPENSE-2',
+    oldAmount: 6400,
+    newAmount: '',
+    reason: ''
+  });
 
-  // Load categories once
-  useEffect(() => {
-    financeService.fetchExpenseCategories();
-  }, []);
+  // Filtered Expenses
+  const filteredExpenses = expenses.filter((e) => {
+    if (branchFilter && e.branch !== branchFilter) return false;
+    if (categoryFilter !== 'All' && e.category !== categoryFilter) return false;
+    if (accountFilter !== 'All' && e.paymentAccount !== accountFilter) return false;
+    if (dateFrom && e.date < dateFrom) return false;
+    if (dateTo && e.date > dateTo) return false;
+    return true;
+  });
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm, categoryFilter, startDate, endDate]);
+  // Filtered Adjustments
+  const filteredAdjustments = adjustments.filter((a) => {
+    if (adjStatusFilter !== 'All' && a.status !== adjStatusFilter) return false;
+    if (adjExpenseFilter !== 'All' && a.expenseCode !== adjExpenseFilter) return false;
+    return true;
+  });
 
-  const handleSubmit = async (e) => {
+  // Add Expense Handler
+  const handleAddExpense = (e) => {
     e.preventDefault();
-    if (!formData.amount || Number(formData.amount) <= 0) return;
-
-    setIsSubmitting(true);
-    try {
-      if (editingId) {
-        await financeService.updateExpense(editingId, formData);
-      } else {
-        await financeService.createExpense(formData);
-      }
-      setIsModalOpen(false);
-      setFormData(defaultForm);
-      setEditingId(null);
-      setRefreshKey(r => r + 1);
-    } finally {
-      setIsSubmitting(false);
+    const amt = parseFloat(newExpense.amount) || 0;
+    if (amt <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
     }
-  };
 
-  const openEditModal = (expense, e) => {
-    e.stopPropagation();
-    setFormData({
-      category: expense.category,
-      amount: expense.amount,
-      expense_date: expense.expense_date,
-      description: expense.description
+    const newId = expenses.length > 0 ? Math.max(...expenses.map((ex) => ex.id)) + 1 : 1;
+    const record = {
+      id: newId,
+      expenseCode: `#${newId}`,
+      date: newExpense.date,
+      formattedDate: new Date(newExpense.date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }),
+      branch: newExpense.branch,
+      category: newExpense.category,
+      paymentAccount: newExpense.paymentAccount,
+      amount: amt,
+      description: newExpense.description || 'General expense entry',
+      createdBy: 'Admin User'
+    };
+
+    setExpenses([record, ...expenses]);
+    setShowAddModal(false);
+    toast.success(`Expense #${newId} added successfully!`);
+    setNewExpense({
+      branch: 'Kochi — Main Mandi',
+      category: 'Ice & Packaging',
+      paymentAccount: 'Petty Cash',
+      amount: '',
+      date: new Date().toISOString().split('T')[0],
+      description: ''
     });
-    setEditingId(expense.id);
-    setIsModalOpen(true);
   };
 
-  const openAddModal = () => {
-    setEditingId(null);
-    setFormData(defaultForm);
-    setIsModalOpen(true);
+  // Request Adjustment Handler
+  const handleRequestAdjustment = (e) => {
+    e.preventDefault();
+    const newAmt = parseFloat(newAdjustment.newAmount) || 0;
+    if (newAmt <= 0) {
+      toast.error('Please enter a valid new amount');
+      return;
+    }
+
+    const newId = adjustments.length > 0 ? Math.max(...adjustments.map((a) => a.id)) + 1 : 1;
+    const record = {
+      id: newId,
+      adjustmentCode: `#${newId}`,
+      expenseCode: newAdjustment.expenseCode,
+      oldAmount: newAdjustment.oldAmount,
+      newAmount: newAmt,
+      status: 'PENDING',
+      reason: newAdjustment.reason || 'Expense amount adjustment request',
+      requestedBy: 'Admin User'
+    };
+
+    setAdjustments([record, ...adjustments]);
+    setShowRequestAdjModal(false);
+    toast.success(`Adjustment Request #${newId} submitted!`);
+    setNewAdjustment({
+      expenseCode: 'EXPENSE-2',
+      oldAmount: 6400,
+      newAmount: '',
+      reason: ''
+    });
+  };
+
+  // Approve / Reject Adjustment Handler
+  const handleUpdateAdjStatus = (id, newStatus) => {
+    setAdjustments((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a))
+    );
+    if (viewingAdjustment && viewingAdjustment.id === id) {
+      setViewingAdjustment({ ...viewingAdjustment, status: newStatus });
+    }
+    toast.success(`Adjustment #${id} marked as ${newStatus}`);
   };
 
   return (
-    <div className="space-y-6 animate-fade-in-up pb-12">
-      {/* Filters & Actions */}
-      <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-start">
-          <div className="relative w-64">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-              <IoSearchOutline className="h-4 w-4" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search description or category"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-[#1E5E45] focus:ring-1 focus:ring-[#1E5E45]"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="flex flex-col sm:flex-row gap-3 items-center w-full sm:w-auto">
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full sm:w-80 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45] focus:ring-1 focus:ring-[#1E5E45]"
-            >
-              <option value="ALL">All categories</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45]"
-              />
-              <span className="text-gray-400 text-sm">to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={e => setEndDate(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45]"
-              />
-              {(searchTerm || categoryFilter !== 'ALL' || startDate || endDate) && (
-                <button
-                  onClick={() => { setSearchTerm(''); setCategoryFilter('ALL'); setStartDate(''); setEndDate(''); }}
-                  className="text-sm text-[#1E5E45] font-medium hover:underline ml-2"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          </div>
-
-          <button
-            onClick={openAddModal}
-            className="flex items-center justify-center space-x-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover transition-colors shadow-sm shrink-0"
-          >
-            <IoAddOutline className="h-4 w-4" />
-            <span>Add expense</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
-          <PageLoader />
-        ) : filteredExpenses.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <span className="text-4xl mb-2">🧾</span>
-            <p className="font-medium text-sm">No expenses found for this period.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left font-sans text-sm">
-              <thead className="bg-white text-gray-400 text-[10px] font-bold tracking-wider uppercase border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4">Expense ID</th>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Category</th>
-                  <th className="px-6 py-4">Amount</th>
-                  <th className="px-6 py-4">Description</th>
-                  <th className="px-6 py-4">Created By</th>
-                  <th className="px-6 py-4">Created At</th>
-                  <th className="px-6 py-4 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {currentExpenses.map(expense => (
-                  <tr
-                    key={expense.id}
-                    onClick={() => setSelectedExpense(expense)}
-                    className="hover:bg-gray-50 transition-colors cursor-pointer group"
-                  >
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-500 font-mono text-[10px] rounded border border-gray-200">
-                        EXP-{expense.id}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                      {new Date(expense.expense_date || expense.date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </td>
-                    <td className="px-6 py-4 text-gray-900 font-medium">
-                      {expense.category || expense.category_name}
-                    </td>
-                    <td className="px-6 py-4 font-bold text-gray-900 font-mono">
-                      ₹{Number(expense.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 max-w-[200px] truncate" title={expense.description}>
-                      {expense.description}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 text-sm">
-                      {expense.created_by_name || 'admin'}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 text-sm whitespace-nowrap">
-                      {new Date(expense.created_at || expense.expense_date).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit' })}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={(e) => openEditModal(expense, e)}
-                        className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {/* Add dummy rows to maintain table height if less than 10 rows */}
-                {currentExpenses.length > 0 && currentExpenses.length < 10 && Array.from({ length: 10 - currentExpenses.length }).map((_, i) => (
-                  <tr key={`empty-${i}`} className="h-[73px]">
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4"></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {!loading && filteredExpenses.length > 0 && (
-          <div className="border-t border-brand-border/60 p-4 flex flex-col sm:flex-row items-center justify-between bg-brand-cream/10 gap-4">
-            <span className="text-sm font-medium text-brand-text-muted">
-              Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, totalItems)} of {totalItems} entries (Page {page} of {totalPages})
-            </span>
-            <div className="flex items-center space-x-1">
-              <button
-                disabled={!hasPrev || loading}
-                onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1.5 text-sm font-medium text-brand-text bg-white border border-brand-border rounded-lg hover:bg-brand-cream disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Prev
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-                <button
-                  key={pageNum}
-                  onClick={() => setPage(pageNum)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${page === pageNum
-                    ? 'bg-brand-gold border-brand-gold text-brand-brown font-bold'
-                    : 'bg-white border-brand-border text-brand-text hover:bg-brand-cream'
-                    }`}
-                >
-                  {pageNum}
-                </button>
-              ))}
-
-              <button
-                disabled={!hasNext || loading}
-                onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1.5 text-sm font-medium text-brand-text bg-white border border-brand-border rounded-lg hover:bg-brand-cream disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Edit Expense" : "Add Expense"} size="max-w-md">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {editingId && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-              <p className="text-xs text-amber-800 font-medium">
-                Changing the amount of an existing expense will automatically record an <strong>ADJUSTMENT</strong> in the Petty Cash ledger to correct the balance.
-              </p>
-            </div>
-          )}
-          <div>
-            <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Category</label>
-            <select
-              required
-              value={formData.category}
-              onChange={e => setFormData({ ...formData, category: e.target.value })}
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden bg-white"
-            >
-              <option value="">Select category...</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Amount (₹)</label>
-            <input
-              type="number"
-              required
-              min="0.01"
-              step="0.01"
-              value={formData.amount}
-              onChange={e => setFormData({ ...formData, amount: e.target.value })}
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden font-mono font-bold text-red-600"
-              placeholder="0.00"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Date</label>
-            <input
-              type="date"
-              required
-              value={formData.expense_date}
-              onChange={e => setFormData({ ...formData, expense_date: e.target.value })}
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Description</label>
-            <textarea
-              rows="3"
-              required
-              value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden resize-none"
-              placeholder="Detailed description of the expense..."
-            ></textarea>
-          </div>
-          <div className="flex justify-end pt-4">
+    <div className="space-y-5 font-sans w-full pb-10">
+      
+      {/* Outer Card Wrapper with Tab Navigation */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        
+        {/* 1. Tab Navigation Bar (Underlined Active Tab Style) */}
+        <div className="flex px-6 border-b border-gray-200 bg-white overflow-x-auto">
+          {[
+            { id: 'expenses', label: 'Expenses' },
+            { id: 'adjustments', label: 'Expense Adjustments' }
+          ].map((tab) => (
             <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full rounded-xl bg-brand-gold px-5 py-3 text-sm font-bold text-brand-brown hover:bg-brand-gold-hover shadow-md cursor-pointer disabled:opacity-50 transition-colors flex justify-center"
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`whitespace-nowrap px-6 py-4 text-sm transition-colors relative cursor-pointer ${
+                activeTab === tab.id
+                  ? 'text-blue-600 font-bold'
+                  : 'text-gray-500 font-semibold hover:text-gray-900'
+              }`}
             >
-              {isSubmitting ? <ButtonLoader /> : (editingId ? 'Update Expense' : 'Create Expense')}
+              {tab.label}
+              {activeTab === tab.id && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full"></div>
+              )}
             </button>
-          </div>
-        </form>
-      </Modal>
+          ))}
+        </div>
 
-      {/* Expense Detail Drawer / Modal */}
-      <Modal isOpen={!!selectedExpense} onClose={() => setSelectedExpense(null)} title="Expense Details" size="max-w-lg">
-        {selectedExpense && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center bg-brand-cream/30 p-4 rounded-xl border border-brand-border/60">
+        {/* --- TAB 1: EXPENSES VIEW --- */}
+        {activeTab === 'expenses' && (
+          <div className="p-5 sm:p-6 space-y-5">
+            {/* Header Section */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Expense ID</p>
-                <p className="font-mono text-sm text-brand-text font-bold">#{selectedExpense.id}</p>
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Expenses</h1>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Every expense reduces a financial account and creates an immutable EXPENSE transaction.
+                </p>
               </div>
-              <div className="text-right">
-                <span className="px-2.5 py-1 rounded-md text-xs font-bold border bg-brand-cream border-brand-border text-brand-text">
-                  {selectedExpense.category || selectedExpense.category_name}
+
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
+              >
+                <IoAddOutline size={16} />
+                <span>+ Add Expense</span>
+              </button>
+            </div>
+
+            {/* Filter Bar Box */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3.5 max-w-5xl">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Branch</label>
+                  <CustomSelect
+                    value={branchFilter}
+                    onChange={setBranchFilter}
+                    options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+                  <CustomSelect
+                    value={categoryFilter}
+                    onChange={setCategoryFilter}
+                    options={['All', 'Ice & Packaging', 'Transport & Logistics', 'Utilities', 'Maintenance', 'Staff Welfare']}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Payment Account</label>
+                  <CustomSelect
+                    value={accountFilter}
+                    onChange={setAccountFilter}
+                    options={['All', 'Petty Cash', 'Main Cash Drawer', 'HDFC Current A/C']}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Date From</label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium shadow-2xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Date To</label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium shadow-2xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Main Expenses Table */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden w-full">
+              <div className="overflow-x-auto w-full">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
+                      <th className="py-3.5 px-4">Expense ID</th>
+                      <th className="py-3.5 px-4">Date</th>
+                      <th className="py-3.5 px-4">Branch</th>
+                      <th className="py-3.5 px-4">Category</th>
+                      <th className="py-3.5 px-4">Payment Account</th>
+                      <th className="py-3.5 px-4">Amount</th>
+                      <th className="py-3.5 px-4">Description</th>
+                      <th className="py-3.5 px-4">Created By</th>
+                      <th className="py-3.5 px-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-xs bg-white">
+                    {filteredExpenses.length > 0 ? (
+                      filteredExpenses.map((exp) => (
+                        <tr key={exp.id} className="hover:bg-gray-50/70 transition-colors h-[52px]">
+                          {/* Expense ID */}
+                          <td className="py-3.5 px-4 font-bold text-gray-900">{exp.expenseCode}</td>
+
+                          {/* Date */}
+                          <td className="py-3.5 px-4 font-medium text-gray-800">{exp.formattedDate}</td>
+
+                          {/* Branch */}
+                          <td className="py-3.5 px-4 font-medium text-gray-700">{exp.branch}</td>
+
+                          {/* Category */}
+                          <td className="py-3.5 px-4 font-semibold text-gray-800">{exp.category}</td>
+
+                          {/* Payment Account */}
+                          <td className="py-3.5 px-4 font-medium text-gray-700">{exp.paymentAccount}</td>
+
+                          {/* Amount */}
+                          <td className="py-3.5 px-4 font-extrabold text-rose-600 tabular-nums">
+                            - ₹{exp.amount.toLocaleString('en-IN')}
+                          </td>
+
+                          {/* Description */}
+                          <td className="py-3.5 px-4 font-medium text-gray-600">{exp.description}</td>
+
+                          {/* Created By */}
+                          <td className="py-3.5 px-4 font-medium text-gray-700">{exp.createdBy}</td>
+
+                          {/* Actions */}
+                          <td className="py-3.5 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setViewingExpense(exp)}
+                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
+                              title="View Details"
+                            >
+                              <IoEyeOutline size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="9" className="py-12 text-center text-gray-400 font-medium">
+                          No expenses found matching the selected filters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer API Notice */}
+            <div className="inline-block px-3 py-1.5 bg-gray-100 text-gray-500 text-[11px] font-medium rounded-lg border border-gray-200/60">
+              ExpenseViewSet currently exposes CRUD only — category / account / date filters shown here are frontend-only until the backend adds query parameters.
+            </div>
+          </div>
+        )}
+
+        {/* --- TAB 2: EXPENSE ADJUSTMENTS VIEW --- */}
+        {activeTab === 'adjustments' && (
+          <div className="p-5 sm:p-6 space-y-5">
+            {/* Header Section */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Expense Adjustments</h1>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Approval workflow for correcting posted expenses without altering the original record.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowRequestAdjModal(true)}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
+              >
+                <IoAddOutline size={16} />
+                <span>+ Request Adjustment</span>
+              </button>
+            </div>
+
+            {/* Filter Bar Box */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 max-w-xl">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+                  <CustomSelect
+                    value={adjStatusFilter}
+                    onChange={setAdjStatusFilter}
+                    options={['All', 'PENDING', 'APPROVED', 'REJECTED']}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Expense</label>
+                  <CustomSelect
+                    value={adjExpenseFilter}
+                    onChange={setAdjExpenseFilter}
+                    options={['All', 'EXPENSE-1', 'EXPENSE-2', 'EXPENSE-3', 'EXPENSE-4']}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Adjustments Table */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden w-full">
+              <div className="overflow-x-auto w-full">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
+                      <th className="py-3.5 px-4">Adjustment ID</th>
+                      <th className="py-3.5 px-4">Expense ID</th>
+                      <th className="py-3.5 px-4">Old Amount</th>
+                      <th className="py-3.5 px-4">New Amount</th>
+                      <th className="py-3.5 px-4">Status</th>
+                      <th className="py-3.5 px-4">Reason</th>
+                      <th className="py-3.5 px-4">Requested By</th>
+                      <th className="py-3.5 px-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-xs bg-white">
+                    {filteredAdjustments.length > 0 ? (
+                      filteredAdjustments.map((adj) => (
+                        <tr key={adj.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
+                          {/* Adjustment ID */}
+                          <td className="py-3.5 px-4 font-bold text-gray-900">{adj.adjustmentCode}</td>
+
+                          {/* Expense ID Link */}
+                          <td className="py-3.5 px-4 font-bold text-blue-600">{adj.expenseCode}</td>
+
+                          {/* Old Amount */}
+                          <td className="py-3.5 px-4 font-bold text-gray-900 tabular-nums">
+                            ₹{adj.oldAmount.toLocaleString('en-IN')}
+                          </td>
+
+                          {/* New Amount */}
+                          <td className="py-3.5 px-4 font-extrabold text-gray-900 tabular-nums">
+                            ₹{adj.newAmount.toLocaleString('en-IN')}
+                          </td>
+
+                          {/* Status Badge */}
+                          <td className="py-3.5 px-4">
+                            {adj.status === 'PENDING' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                <span>PENDING</span>
+                              </span>
+                            )}
+                            {adj.status === 'APPROVED' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span>✓ APPROVED</span>
+                              </span>
+                            )}
+                            {adj.status === 'REJECTED' && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                <span>✕ REJECTED</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Reason */}
+                          <td className="py-3.5 px-4 text-gray-600 font-medium max-w-xs leading-relaxed">
+                            {adj.reason}
+                          </td>
+
+                          {/* Requested By */}
+                          <td className="py-3.5 px-4 font-medium text-gray-700">{adj.requestedBy}</td>
+
+                          {/* Actions */}
+                          <td className="py-3.5 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setViewingAdjustment(adj)}
+                              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer shadow-2xs"
+                            >
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="8" className="py-12 text-center text-gray-400 font-medium">
+                          No expense adjustments found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* Add Expense Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <h3 className="text-base font-bold text-gray-900">+ Add Expense Entry</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                <IoCloseOutline size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddExpense} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Branch</label>
+                <CustomSelect
+                  value={newExpense.branch}
+                  onChange={(val) => setNewExpense({ ...newExpense, branch: val })}
+                  options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
+                  <CustomSelect
+                    value={newExpense.category}
+                    onChange={(val) => setNewExpense({ ...newExpense, category: val })}
+                    options={['Ice & Packaging', 'Transport & Logistics', 'Utilities', 'Maintenance', 'Staff Welfare']}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Payment Account</label>
+                  <CustomSelect
+                    value={newExpense.paymentAccount}
+                    onChange={(val) => setNewExpense({ ...newExpense, paymentAccount: val })}
+                    options={['Petty Cash', 'Main Cash Drawer', 'HDFC Current A/C']}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Amount (₹)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 1800"
+                  value={newExpense.amount}
+                  onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={newExpense.date}
+                  onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Description</label>
+                <textarea
+                  rows="2"
+                  placeholder="Enter expense details..."
+                  value={newExpense.description}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+                >
+                  Save Expense
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Expense Details Modal */}
+      {viewingExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Expense Details {viewingExpense.expenseCode}</h3>
+                <p className="text-xs text-gray-500">{viewingExpense.branch} • {viewingExpense.formattedDate}</p>
+              </div>
+              <button onClick={() => setViewingExpense(null)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                <IoCloseOutline size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-4 bg-rose-50/60 rounded-2xl border border-rose-100 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-rose-700 font-semibold">Total Amount Deducted</p>
+                  <p className="text-xl font-extrabold text-rose-900 tabular-nums">
+                    - ₹{viewingExpense.amount.toLocaleString('en-IN')}
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-rose-100 text-rose-800">
+                  {viewingExpense.category}
                 </span>
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Amount</p>
-                <p className="font-mono text-xl font-bold text-red-600">
-                  ₹{Number(selectedExpense.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Date</p>
-                <p className="text-sm font-medium text-brand-text mt-1">
-                  {new Date(selectedExpense.expense_date || selectedExpense.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Created By</p>
-                <p className="text-sm font-medium text-brand-text mt-1">
-                  {selectedExpense.created_by_name || 'System'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Created At</p>
-                <p className="text-sm font-medium text-brand-text mt-1">
-                  {new Date(selectedExpense.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                </p>
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                <div className="flex justify-between py-1.5 border-b border-gray-50 text-gray-700">
+                  <span>Payment Account:</span>
+                  <span className="font-bold">{viewingExpense.paymentAccount}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-gray-50 text-gray-700">
+                  <span>Description:</span>
+                  <span className="font-semibold text-gray-900">{viewingExpense.description}</span>
+                </div>
+                <div className="flex justify-between py-1.5 text-gray-700">
+                  <span>Created By:</span>
+                  <span className="font-bold">{viewingExpense.createdBy}</span>
+                </div>
               </div>
             </div>
 
-            <div>
-              <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Description</p>
-              <p className="text-sm text-brand-text bg-white p-4 rounded-xl border border-brand-border/60 leading-relaxed">
-                {selectedExpense.description || 'No description provided.'}
-              </p>
-            </div>
-
-            <div className="bg-red-50/50 p-4 rounded-xl border border-red-100">
-              <h4 className="text-xs font-bold text-red-800 uppercase mb-2">Petty Cash Impact</h4>
-              <p className="text-sm font-medium text-red-700">
-                This expense reduced the petty cash balance by ₹{Number(selectedExpense.amount).toLocaleString()}.
-              </p>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button onClick={() => setSelectedExpense(null)} className="rounded-xl bg-brand-cream/50 px-5 py-2.5 text-sm font-semibold text-brand-text hover:bg-brand-cream shadow-sm cursor-pointer border border-brand-border">
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setViewingExpense(null)}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+              >
                 Close
               </button>
             </div>
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
+
+      {/* Request Adjustment Modal */}
+      {showRequestAdjModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <h3 className="text-base font-bold text-gray-900">+ Request Expense Adjustment</h3>
+              <button onClick={() => setShowRequestAdjModal(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                <IoCloseOutline size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRequestAdjustment} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Expense ID</label>
+                <CustomSelect
+                  value={newAdjustment.expenseCode}
+                  onChange={(val) => {
+                    const match = expenses.find((e) => e.expenseCode === val || `EXPENSE-${e.id}` === val);
+                    const oldAmt = match ? match.amount : 6400;
+                    setNewAdjustment({ ...newAdjustment, expenseCode: val, oldAmount: oldAmt });
+                  }}
+                  options={['EXPENSE-1', 'EXPENSE-2', 'EXPENSE-3', 'EXPENSE-4']}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Old Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={newAdjustment.oldAmount}
+                    disabled
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-100 text-gray-600 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">New Amount (₹)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 6800"
+                    value={newAdjustment.newAmount}
+                    onChange={(e) => setNewAdjustment({ ...newAdjustment, newAmount: e.target.value })}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Reason for Adjustment</label>
+                <textarea
+                  rows="3"
+                  placeholder="Explain why adjustment is required..."
+                  value={newAdjustment.reason}
+                  onChange={(e) => setNewAdjustment({ ...newAdjustment, reason: e.target.value })}
+                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  required
+                />
+              </div>
+
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRequestAdjModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+                >
+                  Submit Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Adjustment Details Modal with Approve / Reject Actions */}
+      {viewingAdjustment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Adjustment Request {viewingAdjustment.adjustmentCode}</h3>
+                <p className="text-xs text-gray-500">For {viewingAdjustment.expenseCode}</p>
+              </div>
+              <button onClick={() => setViewingAdjustment(null)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                <IoCloseOutline size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-center">
+                <div>
+                  <p className="text-[11px] text-gray-500 font-semibold">Old Amount</p>
+                  <p className="text-base font-bold text-gray-800 tabular-nums">₹{viewingAdjustment.oldAmount.toLocaleString('en-IN')}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 font-semibold">New Revised Amount</p>
+                  <p className="text-base font-bold text-blue-600 tabular-nums">₹{viewingAdjustment.newAmount.toLocaleString('en-IN')}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                <div className="flex justify-between py-1 border-b border-gray-50 text-gray-700">
+                  <span>Current Status:</span>
+                  <span className="font-bold">{viewingAdjustment.status}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-gray-50 text-gray-700">
+                  <span>Requested By:</span>
+                  <span className="font-bold">{viewingAdjustment.requestedBy}</span>
+                </div>
+                <div className="space-y-1 pt-1 text-gray-700">
+                  <p className="font-semibold text-gray-500">Adjustment Reason:</p>
+                  <p className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-gray-800 leading-relaxed font-medium">
+                    {viewingAdjustment.reason}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              {viewingAdjustment.status === 'PENDING' ? (
+                <div className="flex items-center gap-2 w-full justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleUpdateAdjStatus(viewingAdjustment.id, 'APPROVED')}
+                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleUpdateAdjStatus(viewingAdjustment.id, 'REJECTED')}
+                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setViewingAdjustment(null)}
+                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded-xl cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <div className="flex justify-end w-full">
+                  <button
+                    onClick={() => setViewingAdjustment(null)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
