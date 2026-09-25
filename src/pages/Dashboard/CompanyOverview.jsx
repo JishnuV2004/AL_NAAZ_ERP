@@ -91,9 +91,9 @@ const CompanyOverview = () => {
 
       {/* Top Metrics Grid: 4 cards in 1st row, remaining 4 cards in 2nd row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-        <MetricCard title="Revenue Today" amount="₹ 2,45,000" subtitle="vs yesterday" icon={DollarSign} trend="up" trendValue="+12%" iconBg="bg-blue-50" iconColor="text-blue-500" />
-        <MetricCard title="Expenses Today" amount="₹ 1,12,000" subtitle="vs yesterday" icon={Wallet} trend="down" trendValue="-4%" iconBg="bg-red-50" iconColor="text-red-500" />
-        <MetricCard title="Profit Today" amount="₹ 1,33,000" subtitle="vs yesterday" icon={TrendingUp} trend="up" trendValue="+18%" iconBg="bg-green-50" iconColor="text-green-500" />
+        <MetricCard title="Monthly Revenue" amount="₹ 2,45,000" subtitle="" icon={DollarSign} trend="up" trendValue="+12%" iconBg="bg-blue-50" iconColor="text-blue-500" />
+        <MetricCard title="Monthly Expenses" amount="₹ 1,12,000" subtitle="" icon={Wallet} trend="down" trendValue="-4%" iconBg="bg-red-50" iconColor="text-red-500" />
+        <MetricCard title="Monthly Profit" amount="₹ 1,33,000" subtitle="" icon={TrendingUp} trend="up" trendValue="+18%" iconBg="bg-green-50" iconColor="text-green-500" />
         <MetricCard title="Cash Balance" amount="₹ 8,75,000" subtitle="Total Balance" icon={Briefcase} iconBg="bg-purple-50" iconColor="text-purple-500" />
         <MetricCard title="Pending Payables" amount="₹ 2,35,000" subtitle="Total Pending" icon={Wallet} iconBg="bg-orange-50" iconColor="text-orange-500" />
         <MetricCard title="Employees Present" amount="128 / 156" subtitle="Today" icon={Users} iconBg="bg-teal-50" iconColor="text-teal-500" />
@@ -135,9 +135,9 @@ const CompanyOverview = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} tickFormatter={(val) => `${val}L`} />
-                <Tooltip 
-                  cursor={{ stroke: '#CBD5E1', strokeWidth: 1.5, strokeDasharray: '4 4' }} 
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' }} 
+                <Tooltip
+                  cursor={{ stroke: '#CBD5E1', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' }}
                 />
                 <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#374151' }} />
                 <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3B82F6" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" dot={{ r: 4, strokeWidth: 2, fill: '#3B82F6' }} activeDot={{ r: 6 }} />

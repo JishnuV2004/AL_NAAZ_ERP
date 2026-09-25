@@ -19,10 +19,11 @@ import {
   IoCalendarOutline,
   IoChevronDownOutline,
   IoRefreshOutline,
-  IoAlertCircleOutline
+  IoAlertCircleOutline,
+  IoCloseOutline
 } from 'react-icons/io5';
 import { BsFileEarmarkArrowUp } from "react-icons/bs";
-import { getSalaries, updateSalary } from '../../api/salary.api';
+import { getSalaries, updateSalary, generateSalary, paySalary } from '../../api/salary.api';
 import { getEmployees } from '../../api/employees.api';
 import toast from 'react-hot-toast';
 
@@ -58,6 +59,10 @@ const Salary = () => {
   const [employeeList, setEmployeeList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [generatingEmpId, setGeneratingEmpId] = useState(null);
+  const [confirmPayRecord, setConfirmPayRecord] = useState(null);
+  const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(null);
+  const [isPaying, setIsPaying] = useState(false);
   const [error, setError] = useState(null);
 
   // Month & Year Filter State (0-indexed month: 8 = September)
@@ -140,6 +145,20 @@ const Salary = () => {
 
   // Filter salaries
   const filteredSalaries = salaries.filter((row) => {
+    // 1. Month & Year Filter
+    if (selectedMonth !== null && selectedMonth !== undefined) {
+      const rowMonth = Number(row.month);
+      const selMonth = Number(selectedMonth);
+      if (rowMonth !== selMonth && rowMonth !== selMonth + 1) {
+        return false;
+      }
+    }
+
+    if (selectedYear && Number(row.year) !== Number(selectedYear)) {
+      return false;
+    }
+
+    // 2. Search Query Filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const empName = (row.employee_name || '').toLowerCase();
@@ -149,18 +168,21 @@ const Salary = () => {
       }
     }
 
+    // 3. Status Filter
     if (statusFilter !== 'All') {
       if (String(row.status || '').toUpperCase() !== statusFilter.toUpperCase()) {
         return false;
       }
     }
 
+    // 4. Salary Type Filter
     if (typeFilter !== 'All') {
       if (String(row.salary_type || '').toUpperCase() !== typeFilter.toUpperCase()) {
         return false;
       }
     }
 
+    // 5. Department Filter
     if (deptFilter !== 'All') {
       if ((row.department || 'General') !== deptFilter) {
         return false;
@@ -245,161 +267,257 @@ const Salary = () => {
     }
   };
 
-  // Single salary record status update
-  const handleUpdateRecordStatus = async (recordId, newStatus) => {
+  // Single salary record payment handler triggered after confirmation modal
+  const handleConfirmPaySingle = async (targetRecord) => {
+    const record = targetRecord && targetRecord.id ? targetRecord : confirmPayRecord;
+    if (!record || !record.id) {
+      console.error('No valid salary record provided for payment:', record);
+      return;
+    }
     const todayStr = new Date().toISOString().split('T')[0];
 
-    setSalaries((prev) =>
-      prev.map((s) => {
-        if (s.id === recordId) {
-          return {
-            ...s,
-            status: newStatus,
-            payment_date: newStatus === 'PAID' ? (s.payment_date || todayStr) : null
-          };
-        }
-        return s;
-      })
-    );
+    try {
+      setIsPaying(true);
+      const res = await paySalary(record.id);
+      const updatedSalaryObj = res?.salary || {
+        id: record.id,
+        status: 'PAID',
+        payment_date: todayStr
+      };
+
+      setSalaries((prev) =>
+        prev.map((s) => (s.id === record.id ? { ...s, ...updatedSalaryObj } : s))
+      );
+      toast.success(res?.message || 'Salary paid successfully.');
+      await fetchSalaryData();
+      setConfirmPayRecord(null);
+    } catch (err) {
+      console.error('Failed to pay salary via API:', err);
+      const errMsg = err.response?.data?.detail || err.response?.data?.message || err.userMessage || 'Failed to process salary payment';
+      toast.error(errMsg);
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
+  // Bulk salary payment handler triggered after bulk confirmation modal
+  const handleConfirmBulkPay = async () => {
+    const mode = typeof showBulkConfirmModal === 'string' ? showBulkConfirmModal : 'selected';
+    const listToPay = mode === 'all'
+      ? salaries.filter((s) => String(s.status).toUpperCase() !== 'PAID')
+      : salaries.filter((s) => selectedEmpIds.includes(s.id) && String(s.status).toUpperCase() !== 'PAID');
+
+    if (listToPay.length === 0) {
+      toast.error('No pending salary records to process.');
+      setShowBulkConfirmModal(null);
+      return;
+    }
 
     try {
-      await updateSalary(recordId, {
-        status: newStatus,
-        payment_date: newStatus === 'PAID' ? todayStr : null
-      });
-      toast.success(`Status updated to ${newStatus}`);
+      setIsPaying(true);
+      let successCount = 0;
+      for (const rec of listToPay) {
+        try {
+          await paySalary(rec.id);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to pay salary for record ${rec.id}:`, err);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully paid ${successCount} salary record(s)!`);
+        await fetchSalaryData();
+        setSelectedEmpIds([]);
+      } else {
+        toast.error('Failed to process salary payment.');
+      }
     } catch (err) {
-      console.error('Failed to update salary status via API:', err);
-      toast.success(`Status updated to ${newStatus}`);
+      toast.error('Error processing salary payment.');
+    } finally {
+      setIsPaying(false);
+      setShowBulkConfirmModal(null);
+    }
+  };
+
+  // Generate for single employee via API (POST /salary/generate/)
+  const handleGenerateSingle = async (emp) => {
+    const empName = emp.name || emp.employee_name || 'Employee';
+    const empIdNum = parseInt(emp.id, 10) || emp.id;
+    const monthNum = typeof selectedMonth === 'number' ? selectedMonth : parseInt(selectedMonth, 10);
+    const yearNum = typeof selectedYear === 'number' ? selectedYear : parseInt(selectedYear, 10);
+
+    const payload = {
+      employee: empIdNum,
+      month: monthNum,
+      year: yearNum
+    };
+
+    try {
+      setGeneratingEmpId(emp.id);
+      const res = await generateSalary(payload);
+      toast.success(`Salary successfully generated for ${res?.employee_name || empName}!`);
+      if (res && res.id) {
+        setSalaries((prev) => [res, ...prev.filter((s) => s.id !== res.id)]);
+      }
+      fetchSalaryData();
+    } catch (err) {
+      console.error('Failed to generate salary:', err);
+      const errMessage = err.response?.data?.detail || err.response?.data?.message || err.userMessage || 'Failed to generate salary for employee';
+      toast.error(errMessage);
+    } finally {
+      setGeneratingEmpId(null);
     }
   };
 
   // Generate for selected employees
-  const handleGenerateSelected = () => {
+  const handleGenerateSelected = async () => {
     if (selectedEmpIds.length === 0) {
       toast.error('Please select at least one employee to generate salary');
       return;
     }
-    toast.success(`Salary successfully generated for ${selectedEmpIds.length} selected employee(s) for ${MONTH_NAMES_FULL[selectedMonth]} ${selectedYear}!`);
+    const monthNum = typeof selectedMonth === 'number' ? selectedMonth : parseInt(selectedMonth, 10);
+    const yearNum = typeof selectedYear === 'number' ? selectedYear : parseInt(selectedYear, 10);
+
+    const toastId = toast.loading(`Generating salary for ${selectedEmpIds.length} employee(s)...`);
+    let successCount = 0;
+
+    try {
+      for (const id of selectedEmpIds) {
+        try {
+          const empIdNum = parseInt(id, 10) || id;
+          await generateSalary({ employee: empIdNum, month: monthNum, year: yearNum });
+          successCount++;
+        } catch (singleErr) {
+          console.error(`Failed to generate salary for ID ${id}:`, singleErr);
+        }
+      }
+      toast.dismiss(toastId);
+      if (successCount > 0) {
+        toast.success(`Salary generated for ${successCount} employee(s)!`);
+        fetchSalaryData();
+      } else {
+        toast.error('Failed to generate salary for selected employees.');
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error('Error generating salary for selected employees.');
+    }
   };
 
   // Generate for all employees
-  const handleGenerateAll = () => {
+  const handleGenerateAll = async () => {
     const listToGenerate = filteredEmployees.length > 0 ? filteredEmployees : employeeList;
     if (listToGenerate.length === 0) {
       toast.error('No employees available to generate salary');
       return;
     }
-    const allIds = listToGenerate.map(e => e.id);
+    const allIds = listToGenerate.map((e) => e.id);
     setSelectedEmpIds(allIds);
-    toast.success(`Salary successfully generated for all ${listToGenerate.length} employee(s) for ${MONTH_NAMES_FULL[selectedMonth]} ${selectedYear}!`);
-  };
 
-  // Mark selected records as Paid
-  const handleMarkSelectedPaid = () => {
-    if (selectedEmpIds.length === 0) {
-      toast.error('Please select at least one salary record to mark as Paid');
-      return;
-    }
-    const todayStr = new Date().toISOString().split('T')[0];
-    setSalaries(prev => prev.map(s => {
-      if (selectedEmpIds.includes(s.id)) {
-        return { ...s, status: 'PAID', payment_date: s.payment_date || todayStr };
+    const monthNum = typeof selectedMonth === 'number' ? selectedMonth : parseInt(selectedMonth, 10);
+    const yearNum = typeof selectedYear === 'number' ? selectedYear : parseInt(selectedYear, 10);
+    const toastId = toast.loading(`Generating salary for all ${allIds.length} employee(s)...`);
+    let successCount = 0;
+
+    try {
+      for (const id of allIds) {
+        try {
+          const empIdNum = parseInt(id, 10) || id;
+          await generateSalary({ employee: empIdNum, month: monthNum, year: yearNum });
+          successCount++;
+        } catch (singleErr) {
+          console.error(`Failed to generate salary for ID ${id}:`, singleErr);
+        }
       }
-      return s;
-    }));
-    toast.success(`${selectedEmpIds.length} salary record(s) marked as Paid!`);
-  };
-
-  // Mark all records as Paid
-  const handleMarkAllPaid = () => {
-    if (salaries.length === 0) {
-      toast.error('No salary records available');
-      return;
+      toast.dismiss(toastId);
+      if (successCount > 0) {
+        toast.success(`Salary generated for all ${successCount} employee(s)!`);
+        fetchSalaryData();
+      } else {
+        toast.error('Failed to generate salary.');
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error('Error generating salary.');
     }
-    const todayStr = new Date().toISOString().split('T')[0];
-    setSalaries(prev => prev.map(s => ({
-      ...s,
-      status: 'PAID',
-      payment_date: s.payment_date || todayStr
-    })));
-    toast.success(`All ${salaries.length} salary records marked as Paid!`);
   };
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* 1. Top Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      {/* 1. Top Metrics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3.5 sm:gap-4">
         {/* Total Employees */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-blue-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-            <IoPeopleOutline size={24} />
+        <div className="bg-white rounded-xl border border-gray-200 p-3.5 sm:p-4 shadow-xs flex items-center gap-3 sm:gap-3.5 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-blue-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <IoPeopleOutline size={22} />
           </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Total Employees</p>
-            <p className="text-xl font-bold text-gray-900 leading-tight">{loading ? '...' : totalEmployees}</p>
-            <p className="text-[10px] text-blue-600 font-medium mt-0.5">Active Employees</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-500 font-medium truncate">Total Employees</p>
+            <p className="text-lg sm:text-xl font-bold text-gray-900 leading-tight tabular-nums truncate">{loading ? '...' : totalEmployees}</p>
+            <p className="text-[10px] text-blue-600 font-medium mt-0.5 truncate">Active Employees</p>
           </div>
         </div>
 
         {/* Paid Salaries */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-green-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-            <IoCheckmarkCircleOutline size={24} />
+        <div className="bg-white rounded-xl border border-gray-200 p-3.5 sm:p-4 shadow-xs flex items-center gap-3 sm:gap-3.5 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-green-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <IoCheckmarkCircleOutline size={22} />
           </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Paid Salaries</p>
-            <p className="text-xl font-bold text-gray-900 leading-tight">{loading ? '...' : paidCount}</p>
-            <p className="text-[10px] text-green-600 font-medium mt-0.5">View Paid</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-500 font-medium truncate">Paid Salaries</p>
+            <p className="text-lg sm:text-xl font-bold text-gray-900 leading-tight tabular-nums truncate">{loading ? '...' : paidCount}</p>
+            <p className="text-[10px] text-green-600 font-medium mt-0.5 truncate">View Paid</p>
           </div>
         </div>
 
         {/* Pending Salaries */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-            <IoTimeOutline size={24} />
+        <div className="bg-white rounded-xl border border-gray-200 p-3.5 sm:p-4 shadow-xs flex items-center gap-3 sm:gap-3.5 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <IoTimeOutline size={22} />
           </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Pending Salaries</p>
-            <p className="text-xl font-bold text-gray-900 leading-tight">{loading ? '...' : pendingCount}</p>
-            <p className="text-[10px] text-orange-600 font-medium mt-0.5">View Pending</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-500 font-medium truncate">Pending Salaries</p>
+            <p className="text-lg sm:text-xl font-bold text-gray-900 leading-tight tabular-nums truncate">{loading ? '...' : pendingCount}</p>
+            <p className="text-[10px] text-orange-600 font-medium mt-0.5 truncate">View Pending</p>
           </div>
         </div>
 
         {/* Total Payroll */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-purple-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-            <IoWalletOutline size={24} />
+        <div className="bg-white rounded-xl border border-gray-200 p-3.5 sm:p-4 shadow-xs flex items-center gap-3 sm:gap-3.5 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-purple-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <IoWalletOutline size={22} />
           </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Total Payroll</p>
-            <p className="text-lg font-bold text-gray-900 leading-tight">{loading ? '...' : formatCurrency(grossTotal)}</p>
-            <p className="text-[10px] text-purple-600 font-medium mt-0.5">Gross Amount</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-500 font-medium truncate">Total Payroll</p>
+            <p className="text-base sm:text-lg font-bold text-gray-900 leading-tight tabular-nums truncate">{loading ? '...' : formatCurrency(grossTotal)}</p>
+            <p className="text-[10px] text-purple-600 font-medium mt-0.5 truncate">Gross Amount</p>
           </div>
         </div>
 
         {/* Net Payroll */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-teal-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-            <IoDocumentTextOutline size={24} />
+        <div className="bg-white rounded-xl border border-gray-200 p-3.5 sm:p-4 shadow-xs flex items-center gap-3 sm:gap-3.5 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-teal-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <IoDocumentTextOutline size={22} />
           </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Net Payroll</p>
-            <p className="text-lg font-bold text-gray-900 leading-tight">{loading ? '...' : formatCurrency(netTotal)}</p>
-            <p className="text-[10px] text-teal-600 font-medium mt-0.5">After Deductions</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-500 font-medium truncate">Net Payroll</p>
+            <p className="text-base sm:text-lg font-bold text-gray-900 leading-tight tabular-nums truncate">{loading ? '...' : formatCurrency(netTotal)}</p>
+            <p className="text-[10px] text-teal-600 font-medium mt-0.5 truncate">After Deductions</p>
           </div>
         </div>
 
         {/* Advances */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-            <IoCashOutline size={24} />
+        <div className="bg-white rounded-xl border border-gray-200 p-3.5 sm:p-4 shadow-xs flex items-center gap-3 sm:gap-3.5 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <IoCashOutline size={22} />
           </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Advances (Approved)</p>
-            <p className="text-lg font-bold text-gray-900 leading-tight">{loading ? '...' : formatCurrency(advancesTotal)}</p>
-            <p className="text-[10px] text-rose-600 font-medium mt-0.5">Deduction Total</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-gray-500 font-medium truncate">Advances (Approved)</p>
+            <p className="text-base sm:text-lg font-bold text-gray-900 leading-tight tabular-nums truncate">{loading ? '...' : formatCurrency(advancesTotal)}</p>
+            <p className="text-[10px] text-rose-600 font-medium mt-0.5 truncate">Deduction Total</p>
           </div>
         </div>
       </div>
@@ -579,9 +697,8 @@ const Salary = () => {
         </div>
 
         {/* 4. Action Bar */}
-        <div className="p-5 flex items-center justify-between border-b border-gray-100 bg-white">
-          {isGenerateMode ? (
-            /* Generate Salary Section: Show Generate Salary & Generate All buttons */
+        {isGenerateMode && (
+          <div className="p-5 flex items-center justify-between border-b border-gray-100 bg-white">
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-3">
                 <button 
@@ -603,44 +720,14 @@ const Salary = () => {
                 </div>
               )}
             </div>
-          ) : (
-            /* Salary List Section: Show Paid, All Paid & Export buttons */
-            <div className="flex gap-3">
-              <button 
-                onClick={handleMarkSelectedPaid}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
-              >
-                <IoCheckmarkCircleOutline size={18} /> Paid {selectedEmpIds.length > 0 ? `(${selectedEmpIds.length})` : ''}
-              </button>
-              <button 
-                onClick={handleMarkAllPaid}
-                className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
-              >
-                <IoCheckmarkDoneOutline size={18} /> All Paid
-              </button>
-              <button 
-                onClick={() => toast.success('Exporting salary list...')}
-                className="px-4 py-2 bg-white border border-gray-200 text-blue-600 text-sm font-medium rounded-lg flex items-center gap-2 hover:bg-blue-50 transition-colors shadow-sm cursor-pointer"
-              >
-                <IoDownloadOutline size={18} /> Export
-              </button>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* 5. Detailed Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1250px]">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-500 font-bold whitespace-nowrap">
-                <th className="p-3.5 w-12 text-center align-middle">
-                  <input 
-                    type="checkbox" 
-                    checked={paginatedList.length > 0 && paginatedList.every(r => selectedEmpIds.includes(r.id))}
-                    onChange={handleSelectAllToggle}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
-                  />
-                </th>
                 <th className="p-3.5 text-left align-middle min-w-[240px]">Employee</th>
                 <th className="p-3.5 text-left align-middle">{isGenerateMode ? 'Designation / Dept' : 'Department'}</th>
                 <th className="p-3.5 text-center align-middle">Salary Type</th>
@@ -660,7 +747,6 @@ const Salary = () => {
               {currentLoading ? (
                 Array.from({ length: 5 }).map((_, idx) => (
                   <tr key={`skeleton-${idx}`} className="animate-pulse">
-                    <td className="p-3.5 text-center"><div className="h-4 w-4 bg-gray-200 rounded mx-auto"></div></td>
                     <td className="p-3.5">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 bg-gray-200 rounded-full shrink-0"></div>
@@ -686,7 +772,7 @@ const Salary = () => {
                 ))
               ) : error && !isGenerateMode ? (
                 <tr>
-                  <td colSpan={14} className="p-8 text-center text-gray-500">
+                  <td colSpan={13} className="p-8 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <IoAlertCircleOutline className="text-red-500" size={36} />
                       <p className="text-gray-800 font-semibold">{error}</p>
@@ -714,16 +800,8 @@ const Salary = () => {
                       return (
                         <tr 
                           key={`emp-${emp.id}`} 
-                          className={`transition-colors ${isSelected ? 'bg-blue-50/40 hover:bg-blue-50/70' : 'hover:bg-gray-50/80'}`}
+                          className="hover:bg-gray-50/80 transition-colors"
                         >
-                          <td className="p-3.5 text-center align-middle">
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected}
-                              onChange={() => handleToggleSelect(emp.id)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
-                            />
-                          </td>
                           <td className="p-3.5 text-left align-middle min-w-[240px]">
                             <div className="flex items-center gap-3">
                               <img src={avatarUrl} alt="Avatar" className="w-9 h-9 rounded-full object-cover shadow-sm shrink-0" />
@@ -748,7 +826,17 @@ const Salary = () => {
                             </span>
                           </td>
                           <td className="p-3.5 text-center align-middle whitespace-nowrap">
-                            <div className="flex justify-center items-center">
+                            <div className="flex justify-center items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={generatingEmpId === emp.id}
+                                onClick={() => handleGenerateSingle(emp)}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                                title="Generate Salary for this Employee"
+                              >
+                                <IoAddOutline size={14} className={generatingEmpId === emp.id ? 'animate-spin' : ''} />
+                                <span>{generatingEmpId === emp.id ? 'Generating...' : 'Generate'}</span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => navigate(`/payroll/employee-salary-history?empId=${empCode}`)}
@@ -774,21 +862,12 @@ const Salary = () => {
                       const advancesNum = parseFloat(row.advance_deduction) || 0;
                       const netNum = parseFloat(row.net_salary) || 0;
                       const isPaid = String(row.status || '').toUpperCase() === 'PAID';
-                      const isSelected = selectedEmpIds.includes(row.id);
 
                       return (
                         <tr 
                           key={row.id} 
-                          className={`transition-colors ${isSelected ? 'bg-blue-50/40 hover:bg-blue-50/70' : 'hover:bg-gray-50/80'}`}
+                          className="hover:bg-gray-50/80 transition-colors"
                         >
-                          <td className="p-3.5 text-center align-middle">
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected}
-                              onChange={() => handleToggleSelect(row.id)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
-                            />
-                          </td>
                           <td className="p-3.5 text-left align-middle min-w-[240px]">
                             <div className="flex items-center gap-3">
                               <img src={avatarUrl} alt="Avatar" className="w-9 h-9 rounded-full object-cover shadow-sm shrink-0" />
@@ -822,56 +901,22 @@ const Salary = () => {
                           <td className="p-3.5 text-right align-middle text-gray-600 font-mono tabular-nums whitespace-nowrap">{formatCurrency(advancesNum)}</td>
                           <td className="p-3.5 text-right align-middle font-bold text-emerald-600 font-mono tabular-nums whitespace-nowrap">{formatCurrency(netNum)}</td>
                           <td className="p-3.5 text-center align-middle whitespace-nowrap">
-                            <div className="relative inline-block text-left status-dropdown-container">
+                            {isPaid ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider select-none">
+                                <IoCheckmarkCircleOutline size={13} className="text-emerald-600" />
+                                <span>PAID</span>
+                              </span>
+                            ) : (
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenStatusDropdownId(openStatusDropdownId === row.id ? null : row.id);
-                                }}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-md uppercase tracking-wider transition-all cursor-pointer border shadow-2xs ${
-                                  isPaid
-                                    ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'
-                                    : 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200'
-                                }`}
+                                onClick={() => setConfirmPayRecord(row)}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1 mx-auto"
+                                title="Click to Pay Salary"
                               >
-                                <span>{row.status || 'PENDING'}</span>
-                                <IoChevronDownOutline size={11} className={`transition-transform duration-200 ${openStatusDropdownId === row.id ? 'rotate-180' : ''}`} />
+                                <IoCashOutline size={14} />
+                                <span>Pay</span>
                               </button>
-
-                              {openStatusDropdownId === row.id && (
-                                <div 
-                                  className="absolute left-1/2 -translate-x-1/2 mt-1.5 w-28 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 font-sans"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 mb-1">
-                                    Set Status
-                                  </div>
-                                  {['PENDING', 'PAID'].map((statusOpt) => (
-                                    <button
-                                      key={statusOpt}
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleUpdateRecordStatus(row.id, statusOpt);
-                                        setOpenStatusDropdownId(null);
-                                      }}
-                                      className={`w-full text-left px-3 py-1.5 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                                        (row.status || 'PENDING').toUpperCase() === statusOpt
-                                          ? 'bg-gray-100 text-gray-900'
-                                          : 'text-gray-700 hover:bg-gray-50'
-                                      }`}
-                                    >
-                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                        statusOpt === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                                      }`}>
-                                        {statusOpt}
-                                      </span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            )}
                           </td>
                           <td className="p-3.5 text-center align-middle text-gray-500 whitespace-nowrap">{row.payment_date ? formatDisplayDate(row.payment_date) : '-'}</td>
                           <td className="p-3.5 text-center align-middle whitespace-nowrap">
@@ -894,7 +939,6 @@ const Salary = () => {
                   {/* Empty rows placeholders to preserve 10-row size and division lines */}
                   {emptyRowsCount > 0 && Array.from({ length: emptyRowsCount }).map((_, idx) => (
                     <tr key={`empty-${idx}`} className="h-[57px]">
-                      <td className="p-3.5 text-center">&nbsp;</td>
                       <td className="p-3.5">&nbsp;</td>
                       <td className="p-3.5">&nbsp;</td>
                       <td className="p-3.5">&nbsp;</td>
@@ -990,6 +1034,173 @@ const Salary = () => {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal for Single Pay */}
+      {confirmPayRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <IoWalletOutline size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Confirm Payment</h3>
+                  <p className="text-xs text-gray-500">Salary Disbursement</p>
+                </div>
+              </div>
+              <button
+                disabled={isPaying}
+                onClick={() => setConfirmPayRecord(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <IoCloseOutline size={20} />
+              </button>
+            </div>
+
+            <div className="py-5 space-y-3">
+              <p className="text-sm text-gray-600">
+                Are you sure you want to mark salary as <strong className="text-emerald-700">PAID</strong> for:
+              </p>
+              
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Employee:</span>
+                  <span className="font-bold text-gray-900">{confirmPayRecord.employee_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Period:</span>
+                  <span className="font-semibold text-gray-700">{MONTH_NAMES_FULL[confirmPayRecord.month - 1]} {confirmPayRecord.year}</span>
+                </div>
+                <div className="flex justify-between border-t border-gray-200/60 pt-2 mt-2">
+                  <span className="font-bold text-gray-700">Net Salary:</span>
+                  <span className="font-extrabold text-emerald-600 text-sm">{formatCurrency(confirmPayRecord.net_salary)}</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-200/60">
+                ⚠️ Once marked as PAID, the status is locked and cannot be reversed or edited.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={isPaying}
+                onClick={() => setConfirmPayRecord(null)}
+                className="flex-1 py-2.5 px-4 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPaying}
+                onClick={() => handleConfirmPaySingle(confirmPayRecord)}
+                className="flex-1 py-2.5 px-4 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-75 shadow-sm"
+              >
+                {isPaying ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Confirm & Pay</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Bulk Pay */}
+      {showBulkConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <IoWalletOutline size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    {showBulkConfirmModal === 'all' ? 'Confirm All Pay' : 'Confirm Bulk Payment'}
+                  </h3>
+                  <p className="text-xs text-gray-500">Salary Disbursement</p>
+                </div>
+              </div>
+              <button
+                disabled={isPaying}
+                onClick={() => setShowBulkConfirmModal(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <IoCloseOutline size={20} />
+              </button>
+            </div>
+
+            <div className="py-5 space-y-3">
+              <p className="text-sm text-gray-600">
+                {showBulkConfirmModal === 'all' ? (
+                  <>Are you sure you want to mark <strong className="text-emerald-700">ALL pending salaries ({salaries.filter(s => String(s.status).toUpperCase() !== 'PAID').length})</strong> as <strong className="text-emerald-700">PAID</strong>?</>
+                ) : (
+                  <>Are you sure you want to mark <strong className="text-emerald-700">{selectedEmpIds.length}</strong> selected salaries as <strong className="text-emerald-700">PAID</strong>?</>
+                )}
+              </p>
+              
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Target Records:</span>
+                  <span className="font-bold text-gray-900">
+                    {showBulkConfirmModal === 'all' 
+                      ? `${salaries.filter(s => String(s.status).toUpperCase() !== 'PAID').length} Pending Record(s)`
+                      : `${selectedEmpIds.length} Employee(s)`}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-gray-200/60 pt-2 mt-2">
+                  <span className="font-bold text-gray-700">Total Net Amount:</span>
+                  <span className="font-extrabold text-emerald-600 text-sm">
+                    {formatCurrency(
+                      (showBulkConfirmModal === 'all' 
+                        ? salaries.filter(s => String(s.status).toUpperCase() !== 'PAID')
+                        : salaries.filter(r => selectedEmpIds.includes(r.id) && String(r.status).toUpperCase() !== 'PAID')
+                      ).reduce((sum, r) => sum + (parseFloat(r.net_salary) || 0), 0)
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-200/60">
+                ⚠️ Statuses for all target items will be updated to PAID and cannot be changed back.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={isPaying}
+                onClick={() => setShowBulkConfirmModal(null)}
+                className="flex-1 py-2.5 px-4 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPaying}
+                onClick={() => handleConfirmBulkPay()}
+                className="flex-1 py-2.5 px-4 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-75 shadow-sm"
+              >
+                {isPaying ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Confirm & Pay</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

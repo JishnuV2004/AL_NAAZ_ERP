@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   IoAddOutline,
   IoSearchOutline,
@@ -11,15 +11,29 @@ import {
   IoChevronDownOutline,
   IoCheckmarkCircleOutline,
   IoCalendarOutline,
-  IoCashOutline
+  IoCashOutline,
+  IoArrowBackOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
+import { Calendar } from '../../components/ui/calendar';
 
 // Custom Dropdown Select
 const CustomSelect = ({ value, onChange, options, className = '' }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
-    <div className={`relative ${className}`}>
+    <div ref={dropdownRef} className={`relative ${className}`}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -30,7 +44,7 @@ const CustomSelect = ({ value, onChange, options, className = '' }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 font-sans">
+        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 font-sans max-h-60 overflow-y-auto">
           {options.map((opt) => (
             <button
               key={opt}
@@ -52,7 +66,39 @@ const CustomSelect = ({ value, onChange, options, className = '' }) => {
   );
 };
 
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const y = parts[0];
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+  return `${monthNamesShort[m]} ${d}, ${y}`;
+};
+
+const getTodayDateString = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const INITIAL_SALES = [
+  {
+    id: 5,
+    saleCode: '#5',
+    businessDate: getTodayDateString(),
+    formattedDate: formatDisplayDate(getTodayDateString()),
+    branch: 'Kochi — Main Mandi',
+    totalGross: 42500,
+    paymentMethods: ['Cash', 'UPI', 'Card', 'Food Delivery'],
+    amounts: { cash: 18000, upi: 12000, card: 7500, foodDelivery: 5000 },
+    status: 'DRAFT',
+    createdBy: 'Sana Iqbal',
+    createdAt: `${getTodayDateString()} 12:00`
+  },
   {
     id: 4,
     saleCode: '#4',
@@ -110,23 +156,75 @@ const INITIAL_SALES = [
 const DailySales = () => {
   const [salesList, setSalesList] = useState(INITIAL_SALES);
   const [selectedBranch, setSelectedBranch] = useState('Kochi — Main Mandi');
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [selectedStatus, setSelectedStatus] = useState('All');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewingSale, setViewingSale] = useState(null);
   const [editingSale, setEditingSale] = useState(null);
 
+  // Calendar popover state & refs for Filter Bar and Form Modal
+  const [showFilterCalendarPopover, setShowFilterCalendarPopover] = useState(false);
+  const filterDatePickerRef = useRef(null);
+
+  const [showFormCalendarPopover, setShowFormCalendarPopover] = useState(false);
+  const formDatePickerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterDatePickerRef.current && !filterDatePickerRef.current.contains(event.target)) {
+        setShowFilterCalendarPopover(false);
+      }
+      if (formDatePickerRef.current && !formDatePickerRef.current.contains(event.target)) {
+        setShowFormCalendarPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Form State for Create / Edit
   const [formData, setFormData] = useState({
     branch: 'Kochi — Main Mandi',
-    businessDate: new Date().toISOString().split('T')[0],
-    cashAmount: '',
-    upiAmount: '',
-    cardAmount: '',
-    foodDeliveryAmount: '',
+    businessDate: getTodayDateString(),
     status: 'DRAFT'
   });
+
+  const [paymentRows, setPaymentRows] = useState([
+    { id: 1, method: 'CASH', amount: '', deliveryPartner: '—' }
+  ]);
+
+  const handleAddPaymentRow = () => {
+    setPaymentRows((prev) => [
+      ...prev,
+      { id: Date.now(), method: 'CASH', amount: '', deliveryPartner: '—' }
+    ]);
+  };
+
+  const handleRemovePaymentRow = (id) => {
+    if (paymentRows.length > 1) {
+      setPaymentRows((prev) => prev.filter((r) => r.id !== id));
+    }
+  };
+
+  const handlePaymentRowChange = (id, field, value) => {
+    setPaymentRows((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          const updated = { ...r, [field]: value };
+          if (field === 'method') {
+            if (value === 'FOOD_DELIVERY') {
+              updated.deliveryPartner = 'Swiggy';
+            } else {
+              updated.deliveryPartner = '—';
+            }
+          }
+          return updated;
+        }
+        return r;
+      })
+    );
+  };
 
   const handleClearFilters = () => {
     setSelectedBranch('');
@@ -148,6 +246,54 @@ const DailySales = () => {
     toast.success(`Daily Sale #${id} successfully posted!`);
   };
 
+  const handleStartCreate = () => {
+    setEditingSale(null);
+    setFormData({
+      branch: 'Kochi — Main Mandi',
+      businessDate: getTodayDateString(),
+      status: 'DRAFT'
+    });
+    setPaymentRows([{ id: 1, method: 'CASH', amount: '', deliveryPartner: '—' }]);
+    setShowCreateModal(true);
+  };
+
+  const handleStartEdit = (sale) => {
+    setEditingSale(sale);
+    setFormData({
+      branch: sale.branch,
+      businessDate: sale.businessDate,
+      status: sale.status || 'DRAFT'
+    });
+
+    const rows = [];
+    if (sale.amounts) {
+      if (sale.amounts.cash > 0) {
+        rows.push({ id: 1, method: 'CASH', amount: String(sale.amounts.cash), deliveryPartner: '—' });
+      }
+      if (sale.amounts.upi > 0) {
+        rows.push({ id: 2, method: 'UPI', amount: String(sale.amounts.upi), deliveryPartner: '—' });
+      }
+      if (sale.amounts.card > 0) {
+        rows.push({ id: 3, method: 'CARD', amount: String(sale.amounts.card), deliveryPartner: '—' });
+      }
+      if (sale.amounts.foodDelivery > 0) {
+        rows.push({
+          id: 4,
+          method: 'FOOD_DELIVERY',
+          amount: String(sale.amounts.foodDelivery),
+          deliveryPartner: sale.deliveryPartner || 'Swiggy'
+        });
+      }
+    }
+
+    if (rows.length === 0) {
+      rows.push({ id: 1, method: 'CASH', amount: '', deliveryPartner: '—' });
+    }
+
+    setPaymentRows(rows);
+    setShowCreateModal(true);
+  };
+
   const handleDeleteSale = (id) => {
     setSalesList((prev) => prev.filter((s) => s.id !== id));
     toast.success(`Daily Sale #${id} deleted.`);
@@ -155,55 +301,335 @@ const DailySales = () => {
 
   const handleSaveCreate = (e) => {
     e.preventDefault();
-    const cash = parseFloat(formData.cashAmount) || 0;
-    const upi = parseFloat(formData.upiAmount) || 0;
-    const card = parseFloat(formData.cardAmount) || 0;
-    const foodDelivery = parseFloat(formData.foodDeliveryAmount) || 0;
+    let cash = 0, upi = 0, card = 0, foodDelivery = 0;
+    const paymentMethodsSet = new Set();
+    let deliveryPartnerVal = '—';
+
+    paymentRows.forEach((r) => {
+      const amt = parseFloat(r.amount) || 0;
+      if (r.method === 'CASH') { cash += amt; paymentMethodsSet.add('Cash'); }
+      if (r.method === 'UPI') { upi += amt; paymentMethodsSet.add('UPI'); }
+      if (r.method === 'CARD') { card += amt; paymentMethodsSet.add('Card'); }
+      if (r.method === 'FOOD_DELIVERY') {
+        foodDelivery += amt;
+        paymentMethodsSet.add('Food Delivery');
+        if (r.deliveryPartner && r.deliveryPartner !== '—') {
+          deliveryPartnerVal = r.deliveryPartner;
+        }
+      }
+    });
+
     const totalGross = cash + upi + card + foodDelivery;
 
     if (totalGross <= 0) {
-      toast.error('Please enter valid sale amounts');
+      toast.error('Please enter valid sale amounts (greater than 0)');
       return;
     }
 
-    const paymentMethods = [];
-    if (cash > 0) paymentMethods.push('Cash');
-    if (upi > 0) paymentMethods.push('UPI');
-    if (card > 0) paymentMethods.push('Card');
-    if (foodDelivery > 0) paymentMethods.push('Food Delivery');
+    if (editingSale) {
+      const updatedList = salesList.map((s) => {
+        if (s.id === editingSale.id) {
+          const updated = {
+            ...s,
+            branch: formData.branch,
+            businessDate: formData.businessDate,
+            formattedDate: formatDisplayDate(formData.businessDate),
+            totalGross: totalGross,
+            paymentMethods: Array.from(paymentMethodsSet),
+            amounts: { cash, upi, card, foodDelivery },
+            deliveryPartner: deliveryPartnerVal
+          };
+          if (viewingSale && viewingSale.id === editingSale.id) {
+            setViewingSale(updated);
+          }
+          return updated;
+        }
+        return s;
+      });
+      setSalesList(updatedList);
+      setShowCreateModal(false);
+      setEditingSale(null);
+      toast.success(`Daily Sale ${editingSale.saleCode} updated successfully!`);
+    } else {
+      const newId = salesList.length > 0 ? Math.max(...salesList.map((s) => s.id)) + 1 : 1;
+      const newRecord = {
+        id: newId,
+        saleCode: `#${newId}`,
+        businessDate: formData.businessDate,
+        formattedDate: formatDisplayDate(formData.businessDate),
+        branch: formData.branch,
+        totalGross: totalGross,
+        paymentMethods: Array.from(paymentMethodsSet),
+        amounts: { cash, upi, card, foodDelivery },
+        deliveryPartner: deliveryPartnerVal,
+        status: 'DRAFT',
+        createdBy: 'Sana Iqbal',
+        createdAt: `${formData.businessDate} 21:00`
+      };
 
-    const newId = salesList.length > 0 ? Math.max(...salesList.map((s) => s.id)) + 1 : 1;
-    const newRecord = {
-      id: newId,
-      saleCode: `#${newId}`,
-      businessDate: formData.businessDate,
-      formattedDate: new Date(formData.businessDate).toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      }),
-      branch: formData.branch,
-      totalGross: totalGross,
-      paymentMethods: paymentMethods,
-      amounts: { cash, upi, card, foodDelivery },
-      status: formData.status,
-      createdBy: 'Admin User',
-      createdAt: `${formData.businessDate} 21:00`
-    };
+      setSalesList([newRecord, ...salesList]);
+      setShowCreateModal(false);
+      toast.success(`Daily Sale #${newId} recorded successfully as Draft!`);
+    }
 
-    setSalesList([newRecord, ...salesList]);
-    setShowCreateModal(false);
-    toast.success(`Daily Sale #${newId} recorded successfully!`);
     setFormData({
       branch: 'Kochi — Main Mandi',
-      businessDate: new Date().toISOString().split('T')[0],
-      cashAmount: '',
-      upiAmount: '',
-      cardAmount: '',
-      foodDeliveryAmount: '',
+      businessDate: getTodayDateString(),
       status: 'DRAFT'
     });
+    setPaymentRows([{ id: 1, method: 'CASH', amount: '', deliveryPartner: '—' }]);
   };
+
+  if (viewingSale) {
+    return (
+      <div className="space-y-6 font-sans w-full pb-10 animate-in fade-in duration-150">
+        {/* Back Button */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setViewingSale(null)}
+            className="inline-flex items-center gap-2 text-slate-700 hover:text-slate-900 text-sm font-bold transition-colors cursor-pointer"
+          >
+            <IoArrowBackOutline size={18} />
+            <span>Back to Daily Sales</span>
+          </button>
+        </div>
+
+        {/* Top Page Header & Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+                Daily Sale {viewingSale.saleCode}
+              </h1>
+              {viewingSale.status === 'DRAFT' ? (
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  DRAFT
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  POSTED
+                </span>
+              )}
+            </div>
+            <p className="text-xs font-medium text-gray-500 mt-1">
+              {viewingSale.branch} · {viewingSale.formattedDate}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleStartEdit(viewingSale)}
+              className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            >
+              <IoPencilOutline size={14} />
+              <span>Edit</span>
+            </button>
+
+            {viewingSale.status === 'DRAFT' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSalesList(salesList.map((s) => (s.id === viewingSale.id ? { ...s, status: 'POSTED' } : s)));
+                  setViewingSale({ ...viewingSale, status: 'POSTED' });
+                  toast.success(`Sale ${viewingSale.saleCode} posted successfully!`);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <IoCheckmarkCircleOutline size={14} />
+                <span>Post Sale</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setSalesList(salesList.filter((s) => s.id !== viewingSale.id));
+                setViewingSale(null);
+                toast.success(`Sale ${viewingSale.saleCode} deleted.`);
+              }}
+              className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <IoTrashOutline size={14} />
+              <span>Delete</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Main 2-Column Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column (2 Cols) */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Sale Details Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
+              <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900">Sale Details</h3>
+                {viewingSale.status === 'DRAFT' ? (
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    DRAFT
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    POSTED
+                  </span>
+                )}
+              </div>
+
+              <div className="divide-y divide-gray-100 text-xs">
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-gray-500 font-medium">Sale ID</span>
+                  <span className="font-bold text-gray-900">{viewingSale.saleCode}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-gray-500 font-medium">Branch</span>
+                  <span className="font-bold text-gray-900">{viewingSale.branch}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-gray-500 font-medium">Business Date</span>
+                  <span className="font-bold text-gray-900">{viewingSale.formattedDate}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-gray-500 font-medium">Total Gross</span>
+                  <span className="font-extrabold text-gray-900 text-sm tabular-nums">
+                    ₹{(viewingSale.totalGross || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-gray-500 font-medium">Created By</span>
+                  <span className="font-semibold text-gray-800">{viewingSale.createdBy || 'Sana Iqbal'}</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-gray-500 font-medium">Created At</span>
+                  <span className="font-medium text-gray-600">{viewingSale.createdAt || '2026-09-20 21:40'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payments Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
+              <div className="p-4 sm:p-5 border-b border-gray-100">
+                <h3 className="text-sm font-bold text-gray-900">Payments</h3>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#F8F9FA] border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-500 font-bold">
+                      <th className="py-3 px-5">Payment ID</th>
+                      <th className="py-3 px-5">Method</th>
+                      <th className="py-3 px-5">Amount</th>
+                      <th className="py-3 px-5">Delivery Partner</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {/* Cash */}
+                    <tr className="hover:bg-gray-50/70 transition-colors">
+                      <td className="py-3.5 px-5 font-bold text-gray-900">#1</td>
+                      <td className="py-3.5 px-5">
+                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Cash
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
+                        ₹{(viewingSale.amounts?.cash ?? 18400).toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
+                    </tr>
+
+                    {/* UPI */}
+                    <tr className="hover:bg-gray-50/70 transition-colors">
+                      <td className="py-3.5 px-5 font-bold text-gray-900">#2</td>
+                      <td className="py-3.5 px-5">
+                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                          UPI
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
+                        ₹{(viewingSale.amounts?.upi ?? 9200).toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
+                    </tr>
+
+                    {/* Card */}
+                    <tr className="hover:bg-gray-50/70 transition-colors">
+                      <td className="py-3.5 px-5 font-bold text-gray-900">#3</td>
+                      <td className="py-3.5 px-5">
+                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-purple-50 text-purple-700 border border-purple-200">
+                          Card
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
+                        ₹{(viewingSale.amounts?.card ?? 5000).toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
+                    </tr>
+
+                    {/* Food Delivery */}
+                    <tr className="hover:bg-gray-50/70 transition-colors">
+                      <td className="py-3.5 px-5 font-bold text-gray-900">#4</td>
+                      <td className="py-3.5 px-5">
+                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                          Food Delivery
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
+                        ₹{(viewingSale.amounts?.foodDelivery ?? 3100).toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3.5 px-5 font-medium text-gray-700">
+                        {viewingSale.deliveryPartner || 'Swiggy'}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column (1 Col Sidebar) */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs space-y-4">
+              <h3 className="text-sm font-bold text-gray-900">What happens on posting</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Posting this sale will create the corresponding revenue transactions below. This action cannot be undone through the normal sales workflow.
+              </p>
+
+              <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-200/80 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-gray-600 text-[11px]">CASH</span>
+                  <span className="font-extrabold text-emerald-600 tabular-nums">
+                    + ₹{(viewingSale.amounts?.cash ?? 18400).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-gray-600 text-[11px]">UPI</span>
+                  <span className="font-extrabold text-emerald-600 tabular-nums">
+                    + ₹{(viewingSale.amounts?.upi ?? 9200).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-gray-600 text-[11px]">CARD RECEIVABLE</span>
+                  <span className="font-extrabold text-emerald-600 tabular-nums">
+                    + ₹{(viewingSale.amounts?.card ?? 5000).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-gray-600 text-[11px]">FOOD DELIVERY RECEIVABLE</span>
+                  <span className="font-extrabold text-emerald-600 tabular-nums">
+                    + ₹{(viewingSale.amounts?.foodDelivery ?? 3100).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 font-sans w-full pb-10">
@@ -222,10 +648,9 @@ const DailySales = () => {
         </div>
 
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={handleStartCreate}
           className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
         >
-          <IoAddOutline size={16} />
           <span>+ New Daily Sale</span>
         </button>
       </div>
@@ -242,14 +667,38 @@ const DailySales = () => {
             />
           </div>
 
-          <div>
+          <div className="relative" ref={filterDatePickerRef}>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Business Date</label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium shadow-2xs"
-            />
+            <button
+              type="button"
+              onClick={() => setShowFilterCalendarPopover(!showFilterCalendarPopover)}
+              className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <IoCalendarOutline size={15} className="text-blue-600" />
+                <span className="font-bold">
+                  {selectedDate ? formatDisplayDate(selectedDate) : 'Select Date'}
+                </span>
+              </div>
+              <IoChevronDownOutline
+                className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${
+                  showFilterCalendarPopover ? 'rotate-180' : ''
+                }`}
+                size={13}
+              />
+            </button>
+
+            {showFilterCalendarPopover && (
+              <div className="absolute left-0 mt-1.5 z-40 animate-in fade-in zoom-in-95 duration-100">
+                <Calendar
+                  value={selectedDate}
+                  onChange={(newDate) => {
+                    setSelectedDate(newDate);
+                    setShowFilterCalendarPopover(false);
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           <div>
@@ -374,7 +823,7 @@ const DailySales = () => {
                           <>
                             <button
                               type="button"
-                              onClick={() => setEditingSale(sale)}
+                              onClick={() => handleStartEdit(sale)}
                               className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
                               title="Edit Sale"
                             >
@@ -387,7 +836,7 @@ const DailySales = () => {
                               className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
                               title="Post Sale to Ledger"
                             >
-                              <IoPlayOutline size={15} />
+                              <IoCheckmarkCircleOutline size={15} />
                             </button>
 
                             <button
@@ -424,167 +873,194 @@ const DailySales = () => {
       {/* Create New Sale Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <h3 className="text-base font-bold text-gray-900">+ New Daily Sale Entry</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-6 border-b border-gray-100 flex items-start justify-between bg-gray-50/40">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 tracking-tight">
+                  {editingSale ? `Edit Daily Sale ${editingSale.saleCode}` : 'Create Daily Sale'}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  {editingSale
+                    ? 'Modify the business date and payment breakdown for this sale.'
+                    : 'Enter the business date and payment breakdown collected for the day.'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setEditingSale(null);
+                }}
+                className="text-gray-400 hover:text-gray-700 cursor-pointer pt-1"
+              >
                 <IoCloseOutline size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCreate} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Branch</label>
-                <CustomSelect
-                  value={formData.branch}
-                  onChange={(val) => setFormData({ ...formData, branch: val })}
-                  options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Business Date</label>
-                <input
-                  type="date"
-                  value={formData.businessDate}
-                  onChange={(e) => setFormData({ ...formData, businessDate: e.target.value })}
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSaveCreate} className="p-6 space-y-5">
+              {/* Row 1: Branch & Business Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Cash Amount (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={formData.cashAmount}
-                    onChange={(e) => setFormData({ ...formData, cashAmount: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Branch <span className="text-rose-500">*</span>
+                  </label>
+                  <CustomSelect
+                    value={formData.branch}
+                    onChange={(val) => setFormData({ ...formData, branch: val })}
+                    options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">UPI Amount (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={formData.upiAmount}
-                    onChange={(e) => setFormData({ ...formData, upiAmount: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                  />
-                </div>
+                <div className="relative" ref={formDatePickerRef}>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Business Date <span className="text-rose-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowFormCalendarPopover(!showFormCalendarPopover)}
+                    className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <IoCalendarOutline size={15} className="text-blue-600" />
+                      <span className="font-bold">
+                        {formatDisplayDate(formData.businessDate) || 'Select Date'}
+                      </span>
+                    </div>
+                    <IoChevronDownOutline
+                      className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${
+                        showFormCalendarPopover ? 'rotate-180' : ''
+                      }`}
+                      size={13}
+                    />
+                  </button>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Card Amount (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={formData.cardAmount}
-                    onChange={(e) => setFormData({ ...formData, cardAmount: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Food Delivery (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={formData.foodDeliveryAmount}
-                    onChange={(e) => setFormData({ ...formData, foodDeliveryAmount: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                  />
+                  {showFormCalendarPopover && (
+                    <div className="absolute left-0 mt-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                      <Calendar
+                        value={formData.businessDate}
+                        onChange={(newDate) => {
+                          setFormData({ ...formData, businessDate: newDate });
+                          setShowFormCalendarPopover(false);
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Initial Status</label>
-                <CustomSelect
-                  value={formData.status}
-                  onChange={(val) => setFormData({ ...formData, status: val })}
-                  options={['DRAFT', 'POSTED']}
-                />
+              {/* Payments Section */}
+              <div className="space-y-3 pt-1">
+                <h4 className="text-xs font-bold text-gray-900">Payments</h4>
+
+                {/* Column Headers */}
+                <div className="grid grid-cols-12 gap-3 text-[11px] font-bold text-gray-600 px-0.5">
+                  <div className="col-span-4">Method</div>
+                  <div className="col-span-4">Amount (₹)</div>
+                  <div className="col-span-3">Delivery Partner</div>
+                  <div className="col-span-1"></div>
+                </div>
+
+                {/* Payment Rows */}
+                {paymentRows.map((row) => (
+                  <div key={row.id} className="grid grid-cols-12 gap-3 items-center">
+                    <div className="col-span-4">
+                      <CustomSelect
+                        value={row.method}
+                        onChange={(val) => handlePaymentRowChange(row.id, 'method', val)}
+                        options={['CASH', 'UPI', 'CARD', 'FOOD_DELIVERY']}
+                      />
+                    </div>
+
+                    <div className="col-span-4">
+                      <input
+                        type="number"
+                        placeholder="0.00"
+                        value={row.amount}
+                        onChange={(e) => handlePaymentRowChange(row.id, 'amount', e.target.value)}
+                        className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium shadow-2xs"
+                      />
+                    </div>
+
+                    <div className="col-span-3">
+                      {row.method === 'FOOD_DELIVERY' ? (
+                        <CustomSelect
+                          value={row.deliveryPartner === '—' ? 'Swiggy' : row.deliveryPartner}
+                          onChange={(val) => handlePaymentRowChange(row.id, 'deliveryPartner', val)}
+                          options={['Swiggy', 'Zomato', 'MandiEats']}
+                        />
+                      ) : (
+                        <div className="w-full text-xs border border-gray-100 rounded-xl px-3 py-2 bg-gray-50 text-gray-400 font-medium">
+                          —
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="col-span-1 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePaymentRow(row.id)}
+                        className={`p-2 border rounded-xl transition-colors ${
+                          paymentRows.length > 1
+                            ? 'border-gray-200 hover:border-rose-300 hover:bg-rose-50 text-gray-400 hover:text-rose-600 cursor-pointer'
+                            : 'border-gray-100 text-gray-300 cursor-not-allowed'
+                        }`}
+                        disabled={paymentRows.length <= 1}
+                      >
+                        <IoCloseOutline size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleAddPaymentRow}
+                    className="px-3.5 py-1.5 bg-white text-gray-800 border border-gray-200 hover:border-gray-300 rounded-xl transition-colors text-xs font-semibold shadow-2xs flex items-center gap-1 cursor-pointer"
+                  >
+                    <IoAddOutline size={14} />
+                    <span>+ Add Payment</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              {/* Total Gross Box */}
+              <div className="p-4 bg-white rounded-2xl border border-dashed border-gray-300 flex items-center justify-between shadow-2xs">
+                <span className="text-xs font-semibold text-gray-500">Total Gross</span>
+                <span className="text-lg font-extrabold text-gray-900 tabular-nums">
+                  ₹{paymentRows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              {/* Form Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setEditingSale(null);
+                  }}
+                  className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  Save Daily Sale
+                  {editingSale ? 'Update Sale' : 'Save Draft'}
                 </button>
+              </div>
+
+              {/* Validation notice pill */}
+              <div className="p-3 bg-gray-100 text-gray-500 text-[11px] font-medium rounded-xl border border-gray-200/80 leading-relaxed">
+                Validation: amount must be greater than 0 · Food Delivery requires an active delivery partner belonging to the same branch · Delivery partner must not be supplied for Cash / UPI / Card.
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* View Details Modal */}
-      {viewingSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <div>
-                <h3 className="text-base font-bold text-gray-900">Daily Sale Details {viewingSale.saleCode}</h3>
-                <p className="text-xs text-gray-500">{viewingSale.branch} • {viewingSale.formattedDate}</p>
-              </div>
-              <button onClick={() => setViewingSale(null)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
-                <IoCloseOutline size={20} />
-              </button>
-            </div>
 
-            <div className="p-5 space-y-4 text-xs">
-              <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 flex items-center justify-between">
-                <span className="font-bold text-blue-900 text-sm">Total Gross Revenue</span>
-                <span className="font-extrabold text-blue-900 text-lg tabular-nums">₹{viewingSale.totalGross.toLocaleString('en-IN')}</span>
-              </div>
-
-              <div className="space-y-2 border-t border-gray-100 pt-3">
-                <p className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">Payment Breakdown</p>
-                <div className="flex justify-between py-1 border-b border-gray-50 text-gray-700">
-                  <span>Cash</span>
-                  <span className="font-bold">₹{(viewingSale.amounts?.cash || 0).toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-gray-50 text-gray-700">
-                  <span>UPI</span>
-                  <span className="font-bold">₹{(viewingSale.amounts?.upi || 0).toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-gray-50 text-gray-700">
-                  <span>Card</span>
-                  <span className="font-bold">₹{(viewingSale.amounts?.card || 0).toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between py-1 text-gray-700">
-                  <span>Food Delivery AR</span>
-                  <span className="font-bold">₹{(viewingSale.amounts?.foodDelivery || 0).toLocaleString('en-IN')}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-between text-gray-500 text-[11px]">
-                <span>Status: <strong className="text-gray-800">{viewingSale.status}</strong></span>
-                <span>Created By: <strong className="text-gray-800">{viewingSale.createdBy}</strong></span>
-              </div>
-            </div>
-
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-              <button
-                onClick={() => setViewingSale(null)}
-                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

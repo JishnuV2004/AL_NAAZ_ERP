@@ -30,7 +30,6 @@ import EmployeeDocuments from './pages/HR/EmployeeDocuments';
 import LeaveVacation from './pages/HR/LeaveVacation';
 import EmployeeHistory from './pages/HR/EmployeeHistory';
 import DailyAttendance from './pages/Attendance/DailyAttendance';
-import CheckInOut from './pages/Attendance/CheckInOut';
 import Overtime from './pages/Attendance/Overtime';
 import AttendanceReports from './pages/Attendance/AttendanceReports';
 import Salary from './pages/Payroll/Salary';
@@ -55,14 +54,14 @@ import DailySales from './pages/Finance/DailySales';
 import FinancialAccounts from './pages/Finance/FinancialAccounts';
 import WorkflowReference from './pages/Finance/WorkflowReference';
 import Receivables from './pages/Finance/Receivables';
-import Income from './pages/Finance/Income';
 import Expenses from './pages/Finance/Expenses';
 import PettyCash from './pages/Finance/PettyCash';
-import OwnerFunding from './pages/Finance/OwnerFunding';
 import CashTransfers from './pages/Finance/CashTransfers';
 import SupplierPayables from './pages/Finance/SupplierPayables';
 import Budgets from './pages/Finance/Budgets';
 import FinancialLedger from './pages/Finance/FinancialLedger';
+import Transactions from './pages/Finance/Transactions';
+import DeliveryPartners from './pages/Finance/DeliveryPartners';
 import Customers from './pages/CRM/Customers';
 import CustomerProfiles from './pages/CRM/CustomerProfiles';
 import CustomerHistory from './pages/CRM/CustomerHistory';
@@ -146,7 +145,6 @@ function App() {
           <Route path="/hr/leavevacation" element={<Layout><LeaveVacation /></Layout>} />
           <Route path="/hr/employeehistory" element={<Layout><EmployeeHistory /></Layout>} />
           <Route path="/attendance/dailyattendance" element={<Layout><DailyAttendance /></Layout>} />
-          <Route path="/attendance/checkinout" element={<Layout><CheckInOut /></Layout>} />
           <Route path="/attendance/overtime" element={<Layout><Overtime /></Layout>} />
           <Route path="/attendance/attendancereports" element={<Layout><AttendanceReports /></Layout>} />
           <Route path="/payroll/salary" element={<Layout><Salary /></Layout>} />
@@ -172,14 +170,15 @@ function App() {
           <Route path="/finance/financialaccounts" element={<Layout><FinancialAccounts /></Layout>} />
           <Route path="/finance/workflowreference" element={<Layout><WorkflowReference /></Layout>} />
           <Route path="/finance/receivables" element={<Layout><Receivables /></Layout>} />
-          <Route path="/finance/income" element={<Layout><Income /></Layout>} />
           <Route path="/finance/expenses" element={<Layout><Expenses /></Layout>} />
           <Route path="/finance/pettycash" element={<Layout><PettyCash /></Layout>} />
-          <Route path="/finance/ownerfunding" element={<Layout><OwnerFunding /></Layout>} />
-          <Route path="/finance/cashtransfers" element={<Layout><CashTransfers /></Layout>} />
+          <Route path="/finance/transactions" element={<Layout><Transactions /></Layout>} />
+          <Route path="/finance/cashtransfers" element={<Layout><Transactions /></Layout>} />
           <Route path="/finance/supplierpayables" element={<Layout><SupplierPayables /></Layout>} />
+          <Route path="/finance/deliverypartners" element={<Layout><DeliveryPartners /></Layout>} />
+          <Route path="/finance/commissionrates" element={<Layout><DeliveryPartners /></Layout>} />
           <Route path="/finance/budgets" element={<Layout><Budgets /></Layout>} />
-          <Route path="/finance/financialledger" element={<Layout><FinancialLedger /></Layout>} />
+          <Route path="/finance/financialledger" element={<Layout><Transactions /></Layout>} />
           <Route path="/crm/customers" element={<Layout><Customers /></Layout>} />
           <Route path="/crm/customerprofiles" element={<Layout><CustomerProfiles /></Layout>} />
           <Route path="/crm/customerhistory" element={<Layout><CustomerHistory /></Layout>} />
@@ -202,6 +201,7 @@ function App() {
           <Route path="/reports/budgetreports" element={<Layout><BudgetReports /></Layout>} />
           <Route path="/reports/branchreports" element={<Layout><BranchReports /></Layout>} />
           <Route path="/audit/activitylogs" element={<Layout><ActivityLogs /></Layout>} />
+          <Route path="/dashboard" element={<Layout><CompanyOverview /></Layout>} />
           <Route path="/dashboard/companyoverview" element={<Layout><CompanyOverview /></Layout>} />
           <Route path="/dashboard/branchoverview" element={<Layout><BranchOverview /></Layout>} />
           <Route path="/dashboard/finance" element={<Layout><Finance /></Layout>} />

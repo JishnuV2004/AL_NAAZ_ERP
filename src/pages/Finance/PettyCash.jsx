@@ -1,426 +1,556 @@
-import React, { useState, useEffect } from 'react';
-import { useFinanceStore } from '../../store/financeStore';
-import { financeService } from '../../services/financeService';
-import { IoAddOutline, IoSearchOutline } from 'react-icons/io5';
-import { PageLoader, ButtonLoader } from '../../components/common/Loader';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  IoPencilOutline,
+  IoSwapHorizontalOutline,
+  IoWalletOutline,
+  IoDownloadOutline,
+  IoArrowBackOutline,
+  IoCloseOutline
+} from 'react-icons/io5';
+import toast from 'react-hot-toast';
 import Modal from '../../components/common/Modal';
 
+const INITIAL_TRANSACTIONS = [
+  {
+    id: 'TXN-9021',
+    dateTime: '2026-09-24 14:10',
+    description: 'Daily Sales Revenue Collection',
+    type: 'CREDIT',
+    amount: 42500,
+    balance: 6180
+  },
+  {
+    id: 'TXN-8845',
+    dateTime: '2026-09-23 18:30',
+    description: 'Supplier Payment Settlement — Fresh Fruits Ltd',
+    type: 'DEBIT',
+    amount: 15000,
+    balance: -21320
+  },
+  {
+    id: 'TXN-8720',
+    dateTime: '2026-09-22 11:15',
+    description: 'Store Expense Reimbursement — Utility Bills',
+    type: 'DEBIT',
+    amount: 3200,
+    balance: -18120
+  },
+  {
+    id: 'TXN-8510',
+    dateTime: '2026-09-20 09:00',
+    description: 'Account Opening / Initial Balance Setup',
+    type: 'CREDIT',
+    amount: 10000,
+    balance: 10000
+  }
+];
+
 const PettyCash = () => {
-  const [ledger, setLedger] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [totalItems, setTotalItems] = useState(0);
-  const [currentBalance, setCurrentBalance] = useState(0);
-  const [totalIn, setTotalIn] = useState(0);
-  const [totalOut, setTotalOut] = useState(0);
-  const [totalAdjustments, setTotalAdjustments] = useState(0);
-  
-  // Pagination State
-  const [page, setPage] = useState(1);
-  const [hasNext, setHasNext] = useState(false);
-  const [hasPrev, setHasPrev] = useState(false);
-  const [totalPages, setTotalPages] = useState(1);
-  
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('ALL');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const navigate = useNavigate();
 
-  // Modals
-  const [isAddCashOpen, setIsAddCashOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({ amount: '', date: new Date().toISOString().split('T')[0], remarks: '' });
-  
-  // Detail Modal
-  const [selectedTx, setSelectedTx] = useState(null);
+  // Account Metadata State
+  const [account, setAccount] = useState({
+    id: 'ACC-002',
+    name: 'Petty Cash',
+    typeTag: 'PETTY_CASH',
+    status: 'ACTIVE',
+    branch: 'Kochi — Main Mandi',
+    purposeTag: 'CASH',
+    currentBalance: 6180,
+    openingBalance: 10000
+  });
 
-  const fetchLedger = async () => {
-    setLoading(true);
-    const filters = {};
-    if (searchTerm) filters.search = searchTerm;
-    if (typeFilter !== 'ALL') filters.transaction_type = typeFilter;
-    if (startDate) filters.start_date = startDate;
-    if (endDate) filters.end_date = endDate;
+  const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
 
-    const response = await financeService.fetchPettyCash(page, 10, filters);
-    if (response) {
-      setLedger(response.results || response.data || []);
-      setTotalItems(response.count || 0);
-      setTotalPages(Math.ceil((response.count || 0) / 10) || 1);
-      setHasNext(!!response.next);
-      setCurrentBalance(response.current_balance || 0);
-      setTotalIn(response.total_in || 0);
-      setTotalOut(response.total_out || 0);
-      setTotalAdjustments(response.total_adjustments || 0);
-    }
-    setLoading(false);
-  };
+  // Modals state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
 
-  useEffect(() => {
-    fetchLedger();
-  }, [page, searchTerm, typeFilter, startDate, endDate]);
+  // Form states
+  const [editForm, setEditForm] = useState({
+    name: account.name,
+    branch: account.branch,
+    purposeTag: account.purposeTag
+  });
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm, typeFilter, startDate, endDate]);
+  const [transferForm, setTransferForm] = useState({
+    targetAccount: 'Main Cash Drawer',
+    amount: '',
+    reference: ''
+  });
 
-  const handleAddCash = async (e) => {
+  const [adjustmentForm, setAdjustmentForm] = useState({
+    type: 'CREDIT',
+    amount: '',
+    reason: 'Reconciliation adjustment'
+  });
+
+  const netMovement = account.currentBalance - account.openingBalance;
+
+  // Handlers
+  const handleSaveEdit = (e) => {
     e.preventDefault();
-    if (!formData.amount || Number(formData.amount) <= 0) return;
-    
-    setIsSubmitting(true);
-    try {
-      await financeService.addPettyCash({
-        amount: formData.amount,
-        transaction_date: formData.date,
-        remarks: formData.remarks
-      });
-      setIsAddCashOpen(false);
-      setFormData({ amount: '', date: new Date().toISOString().split('T')[0], remarks: '' });
-      fetchLedger();
-    } finally {
-      setIsSubmitting(false);
-    }
+    setAccount((prev) => ({
+      ...prev,
+      name: editForm.name,
+      branch: editForm.branch,
+      purposeTag: editForm.purposeTag
+    }));
+    setShowEditModal(false);
+    toast.success('Petty Cash account details updated!');
   };
 
+  const handleExecuteTransfer = (e) => {
+    e.preventDefault();
+    const num = parseFloat(transferForm.amount) || 0;
+    if (num <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    const newBal = account.currentBalance - num;
+    setAccount((prev) => ({ ...prev, currentBalance: newBal }));
 
+    const newTxn = {
+      id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
+      dateTime: `${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`,
+      description: `Fund Transfer to ${transferForm.targetAccount}`,
+      type: 'DEBIT',
+      amount: num,
+      balance: newBal
+    };
+    setTransactions([newTxn, ...transactions]);
+    setShowTransferModal(false);
+    toast.success(`Transferred ₹${num.toLocaleString('en-IN')} to ${transferForm.targetAccount}`);
+    setTransferForm({ targetAccount: 'Main Cash Drawer', amount: '', reference: '' });
+  };
+
+  const handleExecuteAdjustment = (e) => {
+    e.preventDefault();
+    const num = parseFloat(adjustmentForm.amount) || 0;
+    if (num <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    const newBal = adjustmentForm.type === 'CREDIT' ? account.currentBalance + num : account.currentBalance - num;
+    setAccount((prev) => ({ ...prev, currentBalance: newBal }));
+
+    const newTxn = {
+      id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
+      dateTime: `${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`,
+      description: adjustmentForm.reason || 'Ledger Adjustment',
+      type: adjustmentForm.type,
+      amount: num,
+      balance: newBal
+    };
+    setTransactions([newTxn, ...transactions]);
+    setShowAdjustmentModal(false);
+    toast.success(`Recorded ${adjustmentForm.type} adjustment of ₹${num.toLocaleString('en-IN')}`);
+    setAdjustmentForm({ type: 'CREDIT', amount: '', reason: 'Reconciliation adjustment' });
+  };
+
+  const handleDownloadReport = () => {
+    toast.success('Downloading Petty Cash Account PDF Report...');
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in-up pb-12">
-      {/* Top Section: Balance and Add Cash */}
-      <div className="flex justify-between items-start">
+    <div className="space-y-6 font-sans w-full pb-12">
+      
+      {/* 1. Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-gray-500 text-sm font-medium">Current balance</p>
-          <h2 className="text-4xl font-bold text-[#1E5E45] font-sans tracking-tight mt-1">
-            ₹{Number(currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight font-sans">
+              {account.name}
+            </h1>
+            <span className="px-2.5 py-0.5 text-xs font-mono font-bold rounded-md bg-gray-100 text-gray-700 border border-gray-200">
+              {account.typeTag}
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span>{account.status}</span>
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 font-medium mt-1">
+            Branch: <span className="font-semibold text-gray-800">{account.branch}</span> · Purpose Tag: <span className="font-semibold text-gray-800">{account.purposeTag}</span>
+          </p>
         </div>
-        <button 
-          onClick={() => setIsAddCashOpen(true)}
-          className="flex items-center justify-center space-x-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-gold-hover transition-colors shadow-sm cursor-pointer"
-        >
-          <IoAddOutline className="h-4 w-4" />
-          <span>Add cash</span>
-        </button>
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowEditModal(true)}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+          >
+            <IoPencilOutline size={15} />
+            <span>Edit Account</span>
+          </button>
+        </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* 2. Top 4 Metric Summary Cards Grid (Exact screenshot 4-box layout) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-4 border border-gray-200 border-l-4 border-l-blue-600 shadow-sm">
-          <p className="text-gray-500 text-xs font-medium mb-1">Total cash added</p>
-          <p className="text-xl font-bold text-gray-900">₹{Number(totalIn).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+        
+        {/* Card 1: Current Available Balance */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
+          <p className="text-xs font-semibold text-gray-500">Current Available Balance</p>
+          <p className="text-2xl font-extrabold text-emerald-600 tabular-nums font-mono">
+            ₹{account.currentBalance.toLocaleString('en-IN')}
+          </p>
+          <p className="text-[11px] text-gray-400 font-medium">Reconciled real-time balance</p>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 border-l-4 border-l-red-500 shadow-sm">
-          <p className="text-gray-500 text-xs font-medium mb-1">Total expenses</p>
-          <p className="text-xl font-bold text-gray-900">₹{Number(totalOut).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+
+        {/* Card 2: Opening Balance */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
+          <p className="text-xs font-semibold text-gray-500">Opening Balance</p>
+          <p className="text-2xl font-extrabold text-gray-900 tabular-nums font-mono">
+            ₹{account.openingBalance.toLocaleString('en-IN')}
+          </p>
+          <p className="text-[11px] text-gray-400 font-medium">Initial ledger setup amount</p>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 border-l-4 border-l-amber-500 shadow-sm">
-          <p className="text-gray-500 text-xs font-medium mb-1">Total adjustments</p>
-          <p className="text-xl font-bold text-gray-900">₹{Number(totalAdjustments).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+
+        {/* Card 3: Net Movement */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
+          <p className="text-xs font-semibold text-gray-500">Net Movement</p>
+          <p className={`text-2xl font-extrabold tabular-nums font-mono ${netMovement >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {netMovement >= 0 ? '+' : ''}₹{netMovement.toLocaleString('en-IN')}
+          </p>
+          <p className="text-[11px] text-gray-400 font-medium">Since account creation</p>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-200 border-l-4 border-l-gray-400 shadow-sm">
-          <p className="text-gray-500 text-xs font-medium mb-1">Transaction count</p>
-          <p className="text-xl font-bold text-gray-900">{totalItems}</p>
+
+        {/* Card 4: Account Classification */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
+          <p className="text-xs font-semibold text-gray-500">Account Classification</p>
+          <p className="text-lg font-bold text-gray-900 uppercase truncate">
+            {account.typeTag} / {account.purposeTag}
+          </p>
+          <p className="text-[11px] text-gray-400 font-medium">System purpose configuration</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3">
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="w-full sm:max-w-md rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45] focus:ring-1 focus:ring-[#1E5E45]"
-        >
-          <option value="ALL">All types</option>
-          <option value="CASH_IN">Cash Added</option>
-          <option value="EXPENSE">Expense</option>
-          <option value="ADJUSTMENT">Adjustment</option>
-        </select>
+      {/* 3. Main 2-Column Section (Left: Transactions Table, Right: Account Management Sidebar) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Column (2 Cols): Recent Account Ledger Transactions */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
+            
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-serif font-bold text-gray-900">Recent Account Ledger Transactions</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Automated debit and credit activity logged to this financial account.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/finance/financialledger')}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer hover:underline"
+              >
+                View Full Audit Log
+              </button>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <input 
-            type="date" 
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45]" 
-          />
-          <span className="text-gray-400 text-sm">to</span>
-          <input 
-            type="date" 
-            value={endDate}
-            onChange={e => setEndDate(e.target.value)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#1E5E45]" 
-          />
-        </div>
-
-        <div className="relative w-full sm:max-w-md">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-            <IoSearchOutline className="h-4 w-4" />
-          </div>
-          <input 
-            type="text" 
-            placeholder="Search remarks or expense ID" 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
-            className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-[#1E5E45] focus:ring-1 focus:ring-[#1E5E45]" 
-          />
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
-          <PageLoader />
-        ) : ledger.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <span className="text-4xl mb-2">📒</span>
-            <p className="font-medium text-sm">No transactions found for this period.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left font-sans text-sm">
-              <thead className="bg-white text-gray-400 text-[10px] font-bold tracking-wider uppercase border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4">TXN ID</th>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Amount</th>
-                  <th className="px-6 py-4">Balance After</th>
-                  <th className="px-6 py-4">Expense ID</th>
-                  <th className="px-6 py-4">Remarks</th>
-                  <th className="px-6 py-4">Created By</th>
-                  <th className="px-6 py-4">Time</th>
-                  <th className="px-6 py-4 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {ledger.map(tx => {
-                  let typePill = null;
-                  if (tx.transaction_type === 'CASH_IN') {
-                    typePill = <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-green-50 text-green-700 text-[11px] font-bold"><span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>Cash added</span>;
-                  } else if (tx.transaction_type === 'EXPENSE') {
-                    typePill = <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-50 text-red-700 text-[11px] font-bold"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>Expense</span>;
-                  } else {
-                    typePill = <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-[11px] font-bold"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Adjustment</span>;
-                  }
-
-                  return (
-                    <tr 
-                      key={tx.id} 
-                      onClick={() => setSelectedTx(tx)}
-                      className="hover:bg-gray-50 transition-colors cursor-pointer group"
-                    >
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-500 font-mono text-[10px] rounded border border-gray-200">
-                          PC-{tx.id}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                        {new Date(tx.transaction_date || tx.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-6 py-4">{typePill}</td>
-                      <td className="px-6 py-4 font-bold text-gray-900 font-mono">
-                        {tx.transaction_type === 'CASH_IN' ? '+' : '-'}₹{Math.abs(Number(tx.amount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4 font-bold text-gray-900 font-mono">
-                        ₹{Number(tx.balance_after).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-4">
-                        {tx.expense_id ? (
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-400 font-mono text-[10px] rounded border border-gray-200">
-                            EXP-{tx.expense_id}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    <th className="py-3.5 px-4">DATE & TIME</th>
+                    <th className="py-3.5 px-4">TXN ID / REF</th>
+                    <th className="py-3.5 px-4">DESCRIPTION</th>
+                    <th className="py-3.5 px-4">TYPE</th>
+                    <th className="py-3.5 px-4 text-right">AMOUNT</th>
+                    <th className="py-3.5 px-4 text-right">BALANCE</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white text-gray-700">
+                  {transactions.map((txn) => (
+                    <tr key={txn.id} className="hover:bg-gray-50/70 transition-colors h-[52px]">
+                      <td className="py-3.5 px-4 font-medium text-gray-500 font-mono whitespace-nowrap">{txn.dateTime}</td>
+                      <td className="py-3.5 px-4 font-extrabold text-gray-900 font-mono">{txn.id}</td>
+                      <td className="py-3.5 px-4 font-semibold text-gray-800">{txn.description}</td>
+                      <td className="py-3.5 px-4">
+                        {txn.type === 'CREDIT' ? (
+                          <span className="px-2.5 py-0.5 text-[10px] font-extrabold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
+                            + CREDIT
                           </span>
                         ) : (
-                          <span className="text-gray-300">—</span>
+                          <span className="px-2.5 py-0.5 text-[10px] font-extrabold rounded-md bg-rose-50 text-rose-700 border border-rose-200 uppercase">
+                            - DEBIT
+                          </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-gray-900 font-medium truncate max-w-[150px]" title={tx.remarks}>
-                        {tx.remarks}
+                      <td className={`py-3.5 px-4 text-right font-mono font-bold tabular-nums ${txn.type === 'CREDIT' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {txn.type === 'CREDIT' ? '+' : '-'}₹{txn.amount.toLocaleString('en-IN')}
                       </td>
-                      <td className="px-6 py-4 text-gray-600 text-sm">
-                        {tx.created_by_name || 'admin'}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 text-sm whitespace-nowrap">
-                        {new Date(tx.transaction_date || tx.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <button 
-                          className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                        >
-                          View
-                        </button>
+                      <td className="py-3.5 px-4 text-right font-mono font-extrabold text-gray-900 tabular-nums">
+                        ₹{txn.balance.toLocaleString('en-IN')}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
+        </div>
 
-        {/* Pagination */}
-        {!loading && ledger.length > 0 && (
-          <div className="border-t border-gray-100 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/50">
-            <span className="text-sm font-medium text-gray-500">
-              Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, totalItems)} of {totalItems} entries (Page {page} of {totalPages})
-            </span>
-            <div className="flex items-center space-x-1">
-              <button 
-                disabled={!hasPrev || loading} 
-                onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1.5 text-sm font-medium text-brand-text bg-white border border-brand-border rounded-lg hover:bg-brand-cream disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        {/* Right Column (1 Col Sidebar): Account Management & Audit Cards */}
+        <div className="lg:col-span-1 space-y-6">
+          
+          {/* Card 1: Account Management (Matching Screenshot Right Side) */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs space-y-4 font-sans">
+            <h3 className="text-base font-serif font-bold text-gray-900">Account Management</h3>
+            
+            <div className="space-y-2.5">
+              {/* Transfer Funds Button */}
+              <button
+                type="button"
+                onClick={() => setShowTransferModal(true)}
+                className="w-full py-3 px-4 bg-gray-50/80 hover:bg-blue-50/60 border border-gray-200/80 hover:border-blue-200 rounded-xl text-xs font-bold text-gray-800 flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
               >
-                Prev
+                <span className="flex items-center gap-3">
+                  <IoSwapHorizontalOutline className="text-blue-600 group-hover:scale-110 transition-transform" size={18} />
+                  <span>Transfer Funds</span>
+                </span>
+                <span className="text-gray-400 group-hover:translate-x-1 transition-transform">&rarr;</span>
               </button>
-              
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-                <button
-                  key={pageNum}
-                  onClick={() => setPage(pageNum)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
-                    page === pageNum 
-                      ? 'bg-brand-gold border-brand-gold text-brand-brown font-bold' 
-                      : 'bg-white border-brand-border text-brand-text hover:bg-brand-cream'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              ))}
 
-              <button 
-                disabled={!hasNext || loading} 
-                onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1.5 text-sm font-medium text-brand-text bg-white border border-brand-border rounded-lg hover:bg-brand-cream disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              {/* Record Adjustment Button */}
+              <button
+                type="button"
+                onClick={() => setShowAdjustmentModal(true)}
+                className="w-full py-3 px-4 bg-gray-50/80 hover:bg-emerald-50/60 border border-gray-200/80 hover:border-emerald-200 rounded-xl text-xs font-bold text-gray-800 flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
               >
-                Next
+                <span className="flex items-center gap-3">
+                  <IoWalletOutline className="text-emerald-600 group-hover:scale-110 transition-transform" size={18} />
+                  <span>Record Adjustment</span>
+                </span>
+                <span className="text-gray-400 group-hover:translate-x-1 transition-transform">&rarr;</span>
+              </button>
+
+              {/* Download PDF Report Button */}
+              <button
+                type="button"
+                onClick={handleDownloadReport}
+                className="w-full py-3 px-4 bg-gray-50/80 hover:bg-purple-50/60 border border-gray-200/80 hover:border-purple-200 rounded-xl text-xs font-bold text-gray-800 flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
+              >
+                <span className="flex items-center gap-3">
+                  <IoDownloadOutline className="text-purple-600 group-hover:scale-110 transition-transform" size={18} />
+                  <span>Download PDF Report</span>
+                </span>
+                <span className="text-gray-400 group-hover:translate-x-1 transition-transform">&rarr;</span>
               </button>
             </div>
           </div>
-        )}
+
+          {/* Card 2: System & Audit Info */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs space-y-3.5 font-sans">
+            <h3 className="text-base font-serif font-bold text-gray-900">System & Audit Info</h3>
+            
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between py-1.5 border-b border-gray-100">
+                <span className="text-gray-500 font-medium">Account ID</span>
+                <span className="font-mono font-bold text-gray-900">{account.id}</span>
+              </div>
+
+              <div className="flex justify-between py-1.5 border-b border-gray-100">
+                <span className="text-gray-500 font-medium">Branch Location</span>
+                <span className="font-bold text-gray-900">{account.branch}</span>
+              </div>
+
+              <div className="flex justify-between py-1.5 border-b border-gray-100">
+                <span className="text-gray-500 font-medium">Purpose Tag</span>
+                <span className="font-bold text-gray-900">{account.purposeTag}</span>
+              </div>
+
+              <div className="flex justify-between py-1.5">
+                <span className="text-gray-500 font-medium">Audit Status</span>
+                <span className="font-bold text-emerald-600">Reconciled & Active</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
-      {/* Add Cash Modal */}
-      <Modal isOpen={isAddCashOpen} onClose={() => setIsAddCashOpen(false)} title="Add to Petty Cash" size="max-w-md">
-        <form onSubmit={handleAddCash} className="space-y-4">
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
-            <p className="text-sm text-green-800">
-              Adding cash will permanently record a <strong>CASH_IN</strong> transaction and increase the total available petty cash balance.
-            </p>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Amount (₹)</label>
-            <input 
-              type="number" 
-              required 
-              min="1" 
-              step="0.01"
-              value={formData.amount} 
-              onChange={e => setFormData({...formData, amount: e.target.value})} 
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden font-mono font-bold" 
-              placeholder="0.00"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Date</label>
-            <input 
-              type="date" 
-              required 
-              value={formData.date} 
-              onChange={e => setFormData({...formData, date: e.target.value})} 
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden" 
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-brand-text uppercase mb-1.5">Remarks / Source</label>
-            <textarea 
-              rows="2"
-              required
-              value={formData.remarks} 
-              onChange={e => setFormData({...formData, remarks: e.target.value})} 
-              className="w-full rounded-xl border border-brand-border px-4 py-2.5 text-sm focus:border-brand-gold outline-hidden resize-none" 
-              placeholder="e.g. Added from main safe"
-            ></textarea>
-          </div>
-          <div className="flex justify-end pt-4">
-            <button 
-              type="submit" 
-              disabled={isSubmitting} 
-              className="w-full rounded-xl bg-brand-gold px-5 py-3 text-sm font-bold text-brand-brown hover:bg-brand-gold-hover shadow-md cursor-pointer disabled:opacity-50 transition-colors flex justify-center"
-            >
-              {isSubmitting ? <ButtonLoader /> : 'Confirm Add Cash'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Detail Drawer / Modal */}
-      <Modal isOpen={!!selectedTx} onClose={() => setSelectedTx(null)} title="Transaction Details" size="max-w-lg">
-        {selectedTx && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200">
-              <div>
-                <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Transaction ID</p>
-                <p className="font-mono text-sm text-gray-900 font-bold">PC-{selectedTx.id}</p>
-              </div>
-              <div className="text-right">
-                {selectedTx.transaction_type === 'CASH_IN' && <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-green-50 text-green-700 text-xs font-medium"><span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>Cash added</span>}
-                {selectedTx.transaction_type === 'EXPENSE' && <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-50 text-red-700 text-xs font-medium"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>Expense</span>}
-                {selectedTx.transaction_type === 'ADJUSTMENT' && <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-xs font-medium"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Adjustment</span>}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Amount</p>
-                <p className={`font-mono text-lg font-bold ${selectedTx.transaction_type === 'CASH_IN' ? 'text-green-600' : 'text-gray-900'}`}>
-                  {selectedTx.transaction_type === 'CASH_IN' ? '+' : '-'}₹{Math.abs(Number(selectedTx.amount)).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Balance After</p>
-                <p className="font-mono text-lg font-bold text-brand-brown">
-                  ₹{Number(selectedTx.balance_after).toLocaleString()}
-                </p>
-              </div>
-              
-              <div>
-                <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Date</p>
-                <p className="text-sm font-medium text-brand-text">
-                  {new Date(selectedTx.transaction_date || selectedTx.created_at).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Recorded By</p>
-                <p className="text-sm font-medium text-brand-text">
-                  {selectedTx.created_by_name || 'System'}
-                </p>
-              </div>
+      {/* --- MODAL 1: EDIT ACCOUNT --- */}
+      {showEditModal && (
+        <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Petty Cash Account">
+          <form onSubmit={handleSaveEdit} className="space-y-4 text-xs font-sans">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Account Name</label>
+              <input
+                type="text"
+                required
+                value={editForm.name}
+                onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-bold"
+              />
             </div>
 
             <div>
-              <p className="text-xs text-brand-text-muted font-bold uppercase tracking-wider mb-1">Remarks</p>
-              <p className="text-sm text-brand-text bg-white p-3 rounded-lg border border-brand-border/60">
-                {selectedTx.remarks || 'No remarks provided.'}
-              </p>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Branch</label>
+              <select
+                value={editForm.branch}
+                onChange={e => setEditForm({ ...editForm, branch: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
+              >
+                <option value="Kochi — Main Mandi">Kochi — Main Mandi</option>
+                <option value="Kozhikode Branch">Kozhikode Branch</option>
+                <option value="Trivandrum Branch">Trivandrum Branch</option>
+              </select>
             </div>
 
-            {selectedTx.expense_id && (
-              <div className="bg-brand-cream/20 p-4 rounded-xl border border-brand-border border-dashed">
-                <h4 className="text-xs font-bold text-brand-text uppercase mb-2">Related Expense Info</h4>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium text-brand-text">Expense #{selectedTx.expense_id}</p>
-                  </div>
-                  <button className="px-3 py-1.5 bg-white border border-brand-border text-brand-text text-xs font-bold rounded-lg hover:border-brand-gold transition-colors">
-                    View Expense
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Purpose Tag</label>
+              <select
+                value={editForm.purposeTag}
+                onChange={e => setEditForm({ ...editForm, purposeTag: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
+              >
+                <option value="CASH">CASH</option>
+                <option value="GENERAL">GENERAL</option>
+                <option value="OPERATIONAL">OPERATIONAL</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl font-medium text-xs cursor-pointer hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs cursor-pointer shadow-xs"
+              >
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* --- MODAL 2: TRANSFER FUNDS --- */}
+      {showTransferModal && (
+        <Modal isOpen={showTransferModal} onClose={() => setShowTransferModal(false)} title="Transfer Funds from Petty Cash">
+          <form onSubmit={handleExecuteTransfer} className="space-y-4 text-xs font-sans">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Destination Account</label>
+              <select
+                value={transferForm.targetAccount}
+                onChange={e => setTransferForm({ ...transferForm, targetAccount: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
+              >
+                <option value="Main Cash Drawer">Main Cash Drawer</option>
+                <option value="HDFC Current A/C">HDFC Current A/C</option>
+                <option value="UPI Collections">UPI Collections</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Transfer Amount (₹)</label>
+              <input
+                type="number"
+                required
+                min="1"
+                value={transferForm.amount}
+                onChange={e => setTransferForm({ ...transferForm, amount: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-mono font-bold"
+                placeholder="e.g. 2000"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Reference / Note</label>
+              <input
+                type="text"
+                value={transferForm.reference}
+                onChange={e => setTransferForm({ ...transferForm, reference: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs"
+                placeholder="e.g. Excess cash return to main vault"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl font-medium text-xs cursor-pointer hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs cursor-pointer shadow-xs"
+              >
+                Execute Transfer
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* --- MODAL 3: RECORD ADJUSTMENT --- */}
+      {showAdjustmentModal && (
+        <Modal isOpen={showAdjustmentModal} onClose={() => setShowAdjustmentModal(false)} title="Record Ledger Adjustment">
+          <form onSubmit={handleExecuteAdjustment} className="space-y-4 text-xs font-sans">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Adjustment Type</label>
+              <select
+                value={adjustmentForm.type}
+                onChange={e => setAdjustmentForm({ ...adjustmentForm, type: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
+              >
+                <option value="CREDIT">CREDIT (+ Add to Balance)</option>
+                <option value="DEBIT">DEBIT (- Deduct from Balance)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Adjustment Amount (₹)</label>
+              <input
+                type="number"
+                required
+                min="1"
+                value={adjustmentForm.amount}
+                onChange={e => setAdjustmentForm({ ...adjustmentForm, amount: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-mono font-bold"
+                placeholder="e.g. 500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Reason for Adjustment</label>
+              <input
+                type="text"
+                required
+                value={adjustmentForm.reason}
+                onChange={e => setAdjustmentForm({ ...adjustmentForm, reason: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs"
+                placeholder="e.g. Audit reconciliation discrepancy correction"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowAdjustmentModal(false)}
+                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl font-medium text-xs cursor-pointer hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs cursor-pointer shadow-xs"
+              >
+                Save Adjustment
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

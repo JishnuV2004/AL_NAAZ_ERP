@@ -1,164 +1,380 @@
 import React, { useState } from 'react';
-import { IoBarChartOutline, IoCalendarOutline, IoDownloadOutline, IoTrendingUpOutline, IoWarningOutline, IoTimeOutline, IoWalletOutline } from 'react-icons/io5';
-import { reportStatsMock, reportTableMock } from '../../mocks/attendance.mock';
+import { useNavigate } from 'react-router-dom';
+import {
+  IoBarChartOutline,
+  IoCalendarOutline,
+  IoDownloadOutline,
+  IoTrendingUpOutline,
+  IoWarningOutline,
+  IoTimeOutline,
+  IoWalletOutline,
+  IoSearchOutline,
+  IoFilterOutline,
+  IoDocumentTextOutline,
+  IoPersonOutline,
+  IoCheckmarkCircleOutline
+} from 'react-icons/io5';
+import toast from 'react-hot-toast';
+
+const mockReportData = [
+  {
+    id: 1,
+    empCode: 'EMP-0004',
+    employeeName: 'Test Employee cook KYLM',
+    department: 'Kitchen',
+    workingDays: 30,
+    daysPresent: 28,
+    daysAbsent: 1,
+    leaveDays: 1,
+    lateArrivals: 2,
+    otHours: 12.5,
+    attendanceRate: 93.3
+  },
+  {
+    id: 2,
+    empCode: 'EMP-0006',
+    employeeName: 'Manager Created Employee',
+    department: 'Management',
+    workingDays: 30,
+    daysPresent: 29,
+    daysAbsent: 0,
+    leaveDays: 1,
+    lateArrivals: 0,
+    otHours: 8.0,
+    attendanceRate: 96.7
+  },
+  {
+    id: 3,
+    empCode: 'EMP-0007',
+    employeeName: 'aby',
+    department: 'Service',
+    workingDays: 26,
+    daysPresent: 24,
+    daysAbsent: 2,
+    leaveDays: 0,
+    lateArrivals: 4,
+    otHours: 5.5,
+    attendanceRate: 92.3
+  },
+  {
+    id: 4,
+    empCode: 'EMP-0008',
+    employeeName: 'asif',
+    department: 'Accounts',
+    workingDays: 30,
+    daysPresent: 30,
+    daysAbsent: 0,
+    leaveDays: 0,
+    lateArrivals: 1,
+    otHours: 14.0,
+    attendanceRate: 100.0
+  }
+];
 
 const AttendanceReports = () => {
+  const navigate = useNavigate();
   const [dateRange, setDateRange] = useState('This Month');
+  const [deptFilter, setDeptFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const getAvatarColor = (name) => {
-    const colors = ['bg-blue-100 text-blue-700', 'bg-purple-100 text-purple-700', 'bg-amber-100 text-amber-700', 'bg-rose-100 text-rose-700', 'bg-emerald-100 text-emerald-700'];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-  };
+  // Filter Data
+  const filteredData = mockReportData.filter((item) => {
+    if (deptFilter !== 'All' && item.department !== deptFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const nameMatch = item.employeeName.toLowerCase().includes(q);
+      const codeMatch = item.empCode.toLowerCase().includes(q);
+      if (!nameMatch && !codeMatch) return false;
+    }
+    return true;
+  });
 
-  const getInitials = (name) => name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  // Calculate Aggregated Metrics
+  const avgRate = (
+    filteredData.reduce((sum, item) => sum + item.attendanceRate, 0) /
+    (filteredData.length || 1)
+  ).toFixed(1);
+
+  const totalAbsences = filteredData.reduce((sum, item) => sum + item.daysAbsent, 0);
+  const totalLate = filteredData.reduce((sum, item) => sum + item.lateArrivals, 0);
+  const totalOT = filteredData.reduce((sum, item) => sum + item.otHours, 0);
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50/50 min-h-[calc(100vh-64px)]">
-      {/* Header */}
+    <div className="space-y-6 pb-12 animate-in fade-in duration-300 font-sans">
+      
+      {/* Header & Module Routings */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-[#1C1F2A]">Attendance Reports</h1>
-          <p className="text-[#6B7280] mt-1">Analytics and aggregated data for workforce attendance.</p>
+          <div className="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1.5">
+            <span>Attendance</span> &gt; <span className="text-gray-700">Attendance Reports</span>
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Attendance Reports & Analytics</h1>
+          <p className="text-xs text-gray-500 font-medium mt-0.5">
+            Aggregated workforce attendance analytics, absence metrics, and payroll audit summaries.
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <IoCalendarOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" size={16} />
-            <select 
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => navigate('/attendance/dailyattendance')}
+            className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <IoCalendarOutline size={15} /> Daily Attendance
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/attendance/overtime')}
+            className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <IoTimeOutline size={15} /> Overtime
+          </button>
+          <button
+            type="button"
+            onClick={() => toast.success(`Exporting ${dateRange} Attendance Report PDF...`)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <IoDownloadOutline size={16} /> Export PDF Report
+          </button>
+        </div>
+      </div>
+
+      {/* Analytics Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Avg Attendance */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-1">Avg. Attendance Rate</p>
+            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{avgRate}%</h3>
+            <p className="text-[10px] font-medium text-emerald-600 mt-1">High Workforce Presence</p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <IoBarChartOutline size={24} />
+          </div>
+        </div>
+
+        {/* Total Absences */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-1">Total Absences</p>
+            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{totalAbsences} Days</h3>
+            <p className="text-[10px] font-medium text-rose-600 mt-1">Days Lost This Period</p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+            <IoWarningOutline size={24} />
+          </div>
+        </div>
+
+        {/* Late Arrivals */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-1">Late Arrivals</p>
+            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{totalLate} Times</h3>
+            <p className="text-[10px] font-medium text-amber-600 mt-1">Punctuality Instances</p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <IoTimeOutline size={24} />
+          </div>
+        </div>
+
+        {/* Total OT Hours */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-1">Total OT Hours</p>
+            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{totalOT.toFixed(1)} hrs</h3>
+            <p className="text-[10px] font-medium text-teal-600 mt-1">Approved Extra Shifts</p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+            <IoWalletOutline size={24} />
+          </div>
+        </div>
+
+      </div>
+
+      {/* Main Container */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+        
+        {/* Filter Toolbar */}
+        <div className="p-4 border-b border-gray-100 bg-white grid grid-cols-1 sm:grid-cols-4 gap-3">
+          
+          {/* Search Input */}
+          <div className="relative sm:col-span-2">
+            <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search employee by name or code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs bg-white text-gray-800 focus:outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+
+          {/* Department Filter */}
+          <div className="flex items-center gap-2">
+            <IoFilterOutline size={16} className="text-gray-400 shrink-0" />
+            <select
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl text-xs px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer"
+            >
+              <option value="All">All Departments</option>
+              <option value="Kitchen">Kitchen</option>
+              <option value="Management">Management</option>
+              <option value="Service">Service</option>
+              <option value="Accounts">Accounts</option>
+            </select>
+          </div>
+
+          {/* Date Range Selector */}
+          <div className="flex items-center gap-2">
+            <IoCalendarOutline size={16} className="text-gray-400 shrink-0" />
+            <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="pl-9 pr-8 py-2 bg-white border border-[#E7E8EE] rounded-xl focus:outline-none focus:border-[#C9A227] focus:ring-1 focus:ring-[#C9A227] text-sm text-[#1C1F2A] appearance-none"
+              className="w-full border border-gray-200 rounded-xl text-xs px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               <option value="This Month">This Month</option>
               <option value="Last Month">Last Month</option>
               <option value="This Quarter">This Quarter</option>
               <option value="Year to Date">Year to Date</option>
             </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[#6B7280]">
-              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-            </div>
           </div>
-          <button className="flex items-center gap-2 px-5 py-2.5 bg-[#C9A227] text-white rounded-xl font-semibold hover:bg-[#B49122] transition-colors shadow-sm">
-            <IoDownloadOutline size={18} /> Export PDF
-          </button>
-        </div>
-      </div>
 
-      {/* Analytics Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-5 rounded-[20px] border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow min-h-[140px]">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-              <IoBarChartOutline size={22} />
-            </div>
-            <div className="flex flex-col items-start pt-0.5">
-              <span className="text-[#475569] text-[13px] font-semibold leading-tight">Avg. Attendance</span>
-            </div>
-          </div>
-          <div className="mt-auto min-w-0">
-            <div className="font-sans text-[28px] font-medium text-slate-800 tracking-tighter mb-1 truncate">{reportStatsMock.averageAttendanceRate}%</div>
-            <p className="text-[13px] font-medium text-[#94a3b8] truncate">
-              <span className="text-emerald-500 font-semibold">+2.4%</span> vs last period
-            </p>
-          </div>
         </div>
 
-        <div className="bg-white p-5 rounded-[20px] border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow min-h-[140px]">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl bg-red-50 flex items-center justify-center text-red-600 shrink-0">
-              <IoWarningOutline size={22} />
-            </div>
-            <div className="flex flex-col items-start pt-0.5">
-              <span className="text-[#475569] text-[13px] font-semibold leading-tight">Total Absences</span>
-            </div>
-          </div>
-          <div className="mt-auto min-w-0">
-            <div className="font-sans text-[28px] font-medium text-slate-800 tracking-tighter mb-1 truncate">{reportStatsMock.totalAbsencesThisMonth}</div>
-            <p className="text-[13px] font-medium text-[#94a3b8] truncate">Days lost across all staff</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-[20px] border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow min-h-[140px]">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 shrink-0">
-              <IoTimeOutline size={22} />
-            </div>
-            <div className="flex flex-col items-start pt-0.5">
-              <span className="text-[#475569] text-[13px] font-semibold leading-tight">Late Arrivals</span>
-            </div>
-          </div>
-          <div className="mt-auto min-w-0">
-            <div className="font-sans text-[28px] font-medium text-slate-800 tracking-tighter mb-1 truncate">{reportStatsMock.totalLateArrivals}</div>
-            <p className="text-[13px] font-medium text-[#94a3b8] truncate">Instances this period</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-[20px] border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow min-h-[140px]">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
-              <IoWalletOutline size={22} />
-            </div>
-            <div className="flex flex-col items-start pt-0.5">
-              <span className="text-[#475569] text-[13px] font-semibold leading-tight">Total OT Hours</span>
-            </div>
-          </div>
-          <div className="mt-auto min-w-0">
-            <div className="font-sans text-[28px] font-medium text-slate-800 tracking-tighter mb-1 truncate">{reportStatsMock.totalOvertimeHours}</div>
-            <p className="text-[13px] font-medium text-[#94a3b8] truncate">Approved extra hours</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="bg-white rounded-2xl border border-[#E7E8EE] shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-[#E7E8EE]">
-          <h3 className="font-serif text-lg font-bold text-[#1C1F2A]">Employee Summary</h3>
-          <p className="text-sm text-[#6B7280]">Aggregated attendance data for {dateRange.toLowerCase()}</p>
-        </div>
-
-        {/* Table */}
+        {/* Aggregated Attendance Report Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
-              <tr className="bg-[#F4F5F8] border-b border-[#E7E8EE] text-xs uppercase tracking-wider text-[#6B7280] font-semibold">
-                <th className="p-4 pl-6">Employee</th>
-                <th className="p-4 text-center">Days Present</th>
-                <th className="p-4 text-center">Days Absent</th>
-                <th className="p-4 text-center">Late Arrivals</th>
-                <th className="p-4 text-center pr-6">OT Hours</th>
+              <tr className="bg-[#F8F9FA] border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-500 font-bold whitespace-nowrap">
+                <th className="p-3.5 pl-5">Employee</th>
+                <th className="p-3.5 text-center">Working Days</th>
+                <th className="p-3.5 text-center">Days Present</th>
+                <th className="p-3.5 text-center">Days Absent</th>
+                <th className="p-3.5 text-center">Leave Days</th>
+                <th className="p-3.5 text-center">Late Arrivals</th>
+                <th className="p-3.5 text-center">OT Hours</th>
+                <th className="p-3.5 text-center">Attendance %</th>
+                <th className="p-3.5 text-center pr-5">Actions & Routing</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E7E8EE]">
-              {reportTableMock.map((record) => (
-                <tr key={record.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="p-4 pl-6 flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm border border-white ${getAvatarColor(record.employeeName)}`}>
-                      {getInitials(record.employeeName)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[#1C1F2A]">{record.employeeName}</p>
-                      <p className="text-xs text-[#6B7280] mt-0.5">{record.department}</p>
-                    </div>
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className="font-semibold text-[#2F6F62]">{record.daysPresent}</span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className={`font-semibold ${record.daysAbsent > 0 ? 'text-[#C1443A]' : 'text-[#6B7280]'}`}>{record.daysAbsent}</span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className={`font-semibold ${record.lateArrivals > 0 ? 'text-orange-600' : 'text-[#6B7280]'}`}>{record.lateArrivals}</span>
-                  </td>
-                  <td className="p-4 pr-6 text-center">
-                    <span className="font-semibold text-[#1C1F2A]">{record.otHours}</span>
+            <tbody className="divide-y divide-gray-100 bg-white text-xs">
+              {filteredData.length > 0 ? (
+                filteredData.map((row) => {
+                  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    row.employeeName
+                  )}&background=0D8ABC&color=fff`;
+
+                  return (
+                    <tr key={row.id} className="hover:bg-gray-50/80 transition-colors">
+                      
+                      {/* Employee Info */}
+                      <td className="p-3.5 pl-5">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={avatarUrl}
+                            alt="Avatar"
+                            className="w-8.5 h-8.5 rounded-full object-cover shadow-2xs shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => navigate('/hr/employees')}
+                              className="font-bold text-gray-900 hover:text-blue-600 transition-colors text-left block truncate cursor-pointer"
+                              title="View Employee Profile"
+                            >
+                              {row.employeeName}
+                            </button>
+                            <span className="text-[11px] text-gray-400 font-mono block">
+                              {row.empCode} • {row.department}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-3.5 text-center font-semibold text-gray-700 whitespace-nowrap">
+                        {row.workingDays}
+                      </td>
+
+                      <td className="p-3.5 text-center font-bold text-emerald-600 whitespace-nowrap">
+                        {row.daysPresent} P
+                      </td>
+
+                      <td className="p-3.5 text-center font-bold text-rose-500 whitespace-nowrap">
+                        {row.daysAbsent} A
+                      </td>
+
+                      <td className="p-3.5 text-center font-semibold text-blue-600 whitespace-nowrap">
+                        {row.leaveDays} L
+                      </td>
+
+                      <td className="p-3.5 text-center font-semibold text-amber-600 whitespace-nowrap">
+                        {row.lateArrivals}
+                      </td>
+
+                      <td className="p-3.5 text-center font-mono font-bold text-gray-800 whitespace-nowrap">
+                        +{row.otHours} hrs
+                      </td>
+
+                      <td className="p-3.5 text-center whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          <div className="w-14 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                row.attendanceRate >= 95
+                                  ? 'bg-emerald-500'
+                                  : row.attendanceRate >= 90
+                                  ? 'bg-blue-500'
+                                  : 'bg-amber-500'
+                              }`}
+                              style={{ width: `${row.attendanceRate}%` }}
+                            ></div>
+                          </div>
+                          <span className="font-extrabold text-gray-900 font-mono">
+                            {row.attendanceRate}%
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="p-3.5 pr-5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => navigate('/hr/employees')}
+                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="View Employee Profile"
+                          >
+                            <IoPersonOutline size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate(`/payroll/employee-salary-history?empId=${row.empCode}`)
+                            }
+                            className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                            title="View Employee Salary History"
+                          >
+                            <IoDocumentTextOutline size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-gray-500">
+                    No attendance report records found.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
+
       </div>
+
     </div>
   );
 };

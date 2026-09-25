@@ -13,16 +13,7 @@ const MENU_GROUPS = [
     id: '00',
     name: 'Dashboard',
     icon: LayoutDashboard,
-    links: [
-      { name: 'Company Overview', path: '/dashboard/companyoverview' },
-      // { name: 'Branch Overview', path: '/dashboard/branchoverview' },
-      // { name: 'Finance', path: '/dashboard/finance' },
-      // { name: 'HR', path: '/dashboard/hr' },
-      // { name: 'Inventory', path: '/dashboard/inventory' },
-      // { name: 'Suppliers', path: '/dashboard/suppliers' },
-      // { name: 'Budgets', path: '/dashboard/budgets' },
-      // { name: 'Alerts', path: '/dashboard/alerts' }
-    ]
+    path: '/dashboard/companyoverview'
   },
   {
     id: '01',
@@ -64,7 +55,6 @@ const MENU_GROUPS = [
     icon: CalendarClock,
     links: [
       { name: 'Daily Attendance', path: '/attendance/dailyattendance' },
-      { name: 'Check In / Out', path: '/attendance/checkinout' },
       { name: 'Overtime', path: '/attendance/overtime' },
       { name: 'Attendance Reports', path: '/attendance/attendancereports' }
     ]
@@ -115,13 +105,13 @@ const MENU_GROUPS = [
       { name: 'Daily Sales', path: '/finance/dailysales' },
       { name: 'Financial Accounts', path: '/finance/financialaccounts' },
       { name: 'Workflow Reference', path: '/finance/workflowreference' },
+      { name: 'Transactions', path: '/finance/transactions' },
       { name: 'Receivables', path: '/finance/receivables' },
-      { name: 'Income', path: '/finance/income' },
       { name: 'Expenses', path: '/finance/expenses' },
       { name: 'Petty Cash', path: '/finance/pettycash' },
-      { name: 'Owner Funding', path: '/finance/ownerfunding' },
       { name: 'Cash Transfers', path: '/finance/cashtransfers' },
       { name: 'Supplier Payables', path: '/finance/supplierpayables' },
+      { name: 'Delivery Partners', path: '/finance/deliverypartners' },
       { name: 'Budgets', path: '/finance/budgets' },
       { name: 'Financial Ledger', path: '/finance/financialledger' }
     ]
@@ -190,10 +180,13 @@ const Sidebar = () => {
   const location = useLocation();
 
   // Find which group is currently active based on URL
-  const activeGroupId = MENU_GROUPS.find(group =>
-    group.links.some(link => location.pathname.startsWith(link.path)) ||
-    (group.links[0] && location.pathname.split('/')[1] === group.links[0].path.split('/')[1])
-  )?.id || '00';
+  const activeGroupId = MENU_GROUPS.find(group => {
+    if (group.path) {
+      return location.pathname === group.path || (group.path.startsWith('/dashboard') && location.pathname.startsWith('/dashboard'));
+    }
+    return group.links?.some(link => location.pathname.startsWith(link.path)) ||
+      (group.links?.[0] && location.pathname.split('/')[1] === group.links[0].path.split('/')[1]);
+  })?.id || '00';
 
   const [expandedGroup, setExpandedGroup] = useState(activeGroupId);
   const [isHovered, setIsHovered] = useState(false);
@@ -235,9 +228,32 @@ const Sidebar = () => {
       <nav className={`flex-1 overflow-y-auto py-2 space-y-1 custom-scrollbar ${isHovered ? 'px-4' : 'px-3'}`}>
         {MENU_GROUPS.map((group) => {
           const Icon = group.icon;
+
+          if (group.path) {
+            const isActive = location.pathname === group.path ||
+              (group.path.startsWith('/dashboard') && location.pathname.startsWith('/dashboard'));
+
+            return (
+              <div key={group.id} className="mb-2">
+                <NavLink
+                  to={group.path}
+                  className={`w-full flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
+                    isActive ? 'bg-[#1E2336] text-white' : 'hover:bg-[#1E2336]/50 hover:text-white text-[#94A3B8]'
+                  } ${!isHovered ? 'justify-center' : ''}`}
+                  title={!isHovered ? group.name : ''}
+                >
+                  <div className={`flex items-center gap-3 ${!isHovered ? 'justify-center w-full' : ''}`}>
+                    <Icon size={isHovered ? 18 : 22} className={isActive ? 'text-white' : 'text-[#94A3B8]'} />
+                    {isHovered && <span className="font-medium text-sm whitespace-nowrap">{group.name}</span>}
+                  </div>
+                </NavLink>
+              </div>
+            );
+          }
+
           const isExpanded = expandedGroup === group.id;
-          const hasActiveChild = group.links.some(link => location.pathname.startsWith(link.path)) ||
-            (group.links[0] && location.pathname.split('/')[1] === group.links[0].path.split('/')[1]);
+          const hasActiveChild = group.links?.some(link => location.pathname.startsWith(link.path)) ||
+            (group.links?.[0] && location.pathname.split('/')[1] === group.links[0].path.split('/')[1]);
 
           return (
             <div key={group.id} className="mb-2">
@@ -261,7 +277,7 @@ const Sidebar = () => {
               </button>
 
               {/* Sub-menu */}
-              {isHovered && isExpanded && (
+              {isHovered && isExpanded && group.links && (
                 <div className="mt-1 ml-[46px] flex flex-col space-y-1 border-l border-[#2E364F] py-2">
                   {group.links.map((link) => {
                     const isActive = location.pathname === link.path;

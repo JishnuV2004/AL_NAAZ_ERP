@@ -73,3 +73,13 @@ export const getEmployeesByDepartment = async (departmentId) => {
   }
 };
 
+/**
+ * GET /employees/:empId/salary-history/
+ * Fetches salary history revisions for a specific employee
+ */
+export const getEmployeeSalaryHistory = async (empId) => {
+  const cleanId = String(empId).replace(/\D/g, '') || empId;
+  const response = await api.get(`/employees/${cleanId}/salary-history/`);
+  return response.data;
+};
+
