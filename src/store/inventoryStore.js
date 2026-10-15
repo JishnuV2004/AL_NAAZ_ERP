@@ -84,10 +84,13 @@ export const useInventoryStore = create((set, get) => ({
 
   // Record Usage
   addUsage: (usageData) => {
-    const usageId = Date.now().toString();
+    set((state) => ({
+      usages: [usageData, ...(state.usages || [])]
+    }));
+    const usageId = usageData.id ? String(usageData.id) : Date.now().toString();
     get().addLedgerEntry({
-      date: usageData.date,
-      productId: usageData.productId,
+      date: usageData.usage_date || usageData.date,
+      productId: usageData.product || usageData.productId,
       type: 'USAGE',
       quantity: -Math.abs(Number(usageData.quantity)),
       reference: usageId,

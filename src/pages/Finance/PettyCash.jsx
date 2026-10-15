@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   IoPencilOutline,
@@ -6,10 +6,14 @@ import {
   IoWalletOutline,
   IoDownloadOutline,
   IoArrowBackOutline,
-  IoCloseOutline
+  IoCloseOutline,
+  IoArrowForwardOutline,
+  IoChevronBack,
+  IoChevronForward
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 import Modal from '../../components/common/Modal';
+import { accountService } from '../../services/accountService';
 
 const INITIAL_TRANSACTIONS = [
   {
@@ -51,17 +55,81 @@ const PettyCash = () => {
 
   // Account Metadata State
   const [account, setAccount] = useState({
-    id: 'ACC-002',
+    id: 1,
     name: 'Petty Cash',
     typeTag: 'PETTY_CASH',
     status: 'ACTIVE',
-    branch: 'Kochi — Main Mandi',
-    purposeTag: 'CASH',
+    branch: 'Al Naaz Kayamkulam',
+    purposeTag: 'GENERAL',
     currentBalance: 6180,
-    openingBalance: 10000
+    openingBalance: 10000,
+    created_by_name: 'admin',
+    opening_balance_date: '2026-09-01'
   });
 
+  const [loadingTxns, setLoadingTxns] = useState(false);
+
+  useEffect(() => {
+    const loadAccountDetails = async () => {
+      setLoadingTxns(true);
+      try {
+        const [accRes, txnsRes, balRes] = await Promise.allSettled([
+          accountService.getAccountById(1),
+          accountService.getAccountTransactions(1),
+          accountService.getAccountBalance(1)
+        ]);
+
+        if (accRes.status === 'fulfilled' && accRes.value) {
+          const data = accRes.value;
+          const liveBal = balRes.status === 'fulfilled' && balRes.value && (balRes.value.balance !== undefined && balRes.value.balance !== null)
+            ? parseFloat(balRes.value.balance)
+            : parseFloat(data.opening_balance || 10000);
+
+          setAccount({
+            id: data.id,
+            name: data.name || 'Petty Cash',
+            typeTag: data.account_type || 'PETTY_CASH',
+            status: data.is_active !== false ? 'ACTIVE' : 'INACTIVE',
+            branch: data.branch_name || 'Al Naaz Kayamkulam',
+            purposeTag: data.account_purpose || 'GENERAL',
+            currentBalance: liveBal,
+            openingBalance: parseFloat(data.opening_balance || 10000),
+            created_by_name: data.created_by_name || 'admin',
+            opening_balance_date: data.opening_balance_date || '2026-09-01'
+          });
+        }
+
+        if (txnsRes.status === 'fulfilled' && Array.isArray(txnsRes.value)) {
+          const mapped = txnsRes.value.map((tx) => {
+            const isCredit = tx.direction === 'IN';
+            return {
+              id: tx.reference || `TXN-${tx.id}`,
+              dateTime: tx.created_at ? `${tx.created_at.slice(0, 10)} ${tx.created_at.slice(11, 16)}` : (tx.transaction_date || ''),
+              description: tx.description || tx.transaction_type,
+              type: isCredit ? 'CREDIT' : 'DEBIT',
+              amount: parseFloat(tx.amount || 0),
+              created_by_name: tx.created_by_name || 'admin'
+            };
+          });
+          setTransactions(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not fetch Petty Cash details/transactions for ID 1:', err);
+      } finally {
+        setLoadingTxns(false);
+      }
+    };
+    loadAccountDetails();
+  }, []);
+
   const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
+  const TXN_PAGE_SIZE = 10;
+  const [txnPage, setTxnPage] = useState(1);
+
+  const totalTxnPages = Math.max(1, Math.ceil(transactions.length / TXN_PAGE_SIZE));
+  const indexOfLastTxn = txnPage * TXN_PAGE_SIZE;
+  const indexOfFirstTxn = indexOfLastTxn - TXN_PAGE_SIZE;
+  const currentTransactions = transactions.slice(indexOfFirstTxn, indexOfLastTxn);
 
   // Modals state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -191,14 +259,13 @@ const PettyCash = () => {
 
       {/* 2. Top 4 Metric Summary Cards Grid (Exact screenshot 4-box layout) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
         {/* Card 1: Current Available Balance */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
           <p className="text-xs font-semibold text-gray-500">Current Available Balance</p>
           <p className="text-2xl font-extrabold text-emerald-600 tabular-nums font-mono">
             ₹{account.currentBalance.toLocaleString('en-IN')}
           </p>
-          <p className="text-[11px] text-gray-400 font-medium">Reconciled real-time balance</p>
+          <p className="text-[11px] text-gray-400 font-medium">Reconciled balance</p>
         </div>
 
         {/* Card 2: Opening Balance */}
@@ -207,169 +274,191 @@ const PettyCash = () => {
           <p className="text-2xl font-extrabold text-gray-900 tabular-nums font-mono">
             ₹{account.openingBalance.toLocaleString('en-IN')}
           </p>
-          <p className="text-[11px] text-gray-400 font-medium">Initial ledger setup amount</p>
+          <p className="text-[11px] text-gray-400 font-medium">Setup amount ({account.opening_balance_date || '2026-09-01'})</p>
         </div>
 
         {/* Card 3: Net Movement */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
           <p className="text-xs font-semibold text-gray-500">Net Movement</p>
-          <p className={`text-2xl font-extrabold tabular-nums font-mono ${netMovement >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <p className={`text-2xl font-extrabold tabular-nums font-mono ${netMovement >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
             {netMovement >= 0 ? '+' : ''}₹{netMovement.toLocaleString('en-IN')}
           </p>
           <p className="text-[11px] text-gray-400 font-medium">Since account creation</p>
         </div>
 
-        {/* Card 4: Account Classification */}
+        {/* Card 4: Created By */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
-          <p className="text-xs font-semibold text-gray-500">Account Classification</p>
-          <p className="text-lg font-bold text-gray-900 uppercase truncate">
-            {account.typeTag} / {account.purposeTag}
+          <p className="text-xs font-semibold text-gray-500">Created By</p>
+          <p className="text-lg font-bold text-gray-900 truncate">
+            {account.created_by_name || 'admin'}
           </p>
-          <p className="text-[11px] text-gray-400 font-medium">System purpose configuration</p>
+          <p className="text-[11px] text-gray-400 font-medium">{account.opening_balance_date || '2026-09-01'}</p>
         </div>
       </div>
 
-      {/* 3. Main 2-Column Section (Left: Transactions Table, Right: Account Management Sidebar) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 3. Main 2-Column Section (Left: Transactions Table, Right: Account Management Box) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         
-        {/* Left Column (2 Cols): Recent Account Ledger Transactions */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
-            
-            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-serif font-bold text-gray-900">Recent Account Ledger Transactions</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Automated debit and credit activity logged to this financial account.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/finance/financialledger')}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer hover:underline"
-              >
-                View Full Audit Log
-              </button>
+        {/* Left Column (2 Cols): Recent Account Transactions */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden min-h-[580px] flex flex-col justify-between">
+          <div>
+            <div className="p-4 border-b border-gray-100 bg-slate-50/50 flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-gray-900 font-serif">Recent Account Transactions</h3>
+              <span className="text-xs text-gray-500 font-medium">Real-time ledger audit log</span>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="overflow-x-auto min-h-[480px]">
+              <table className="w-full text-left border-collapse min-w-[550px]">
                 <thead>
-                  <tr className="bg-gray-50/80 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    <th className="py-3.5 px-4">DATE & TIME</th>
-                    <th className="py-3.5 px-4">TXN ID / REF</th>
-                    <th className="py-3.5 px-4">DESCRIPTION</th>
-                    <th className="py-3.5 px-4">TYPE</th>
-                    <th className="py-3.5 px-4 text-right">AMOUNT</th>
-                    <th className="py-3.5 px-4 text-right">BALANCE</th>
+                  <tr className="bg-slate-50 border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-500 font-bold">
+                    <th className="p-3.5">Txn Ref #</th>
+                    <th className="p-3.5">Date & Time</th>
+                    <th className="p-3.5">Description</th>
+                    <th className="p-3.5 text-center">Type</th>
+                    <th className="p-3.5 text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 bg-white text-gray-700">
-                  {transactions.map((txn) => (
-                    <tr key={txn.id} className="hover:bg-gray-50/70 transition-colors h-[52px]">
-                      <td className="py-3.5 px-4 font-medium text-gray-500 font-mono whitespace-nowrap">{txn.dateTime}</td>
-                      <td className="py-3.5 px-4 font-extrabold text-gray-900 font-mono">{txn.id}</td>
-                      <td className="py-3.5 px-4 font-semibold text-gray-800">{txn.description}</td>
-                      <td className="py-3.5 px-4">
-                        {txn.type === 'CREDIT' ? (
-                          <span className="px-2.5 py-0.5 text-[10px] font-extrabold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
-                            + CREDIT
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 text-[10px] font-extrabold rounded-md bg-rose-50 text-rose-700 border border-rose-200 uppercase">
-                            - DEBIT
-                          </span>
-                        )}
-                      </td>
-                      <td className={`py-3.5 px-4 text-right font-mono font-bold tabular-nums ${txn.type === 'CREDIT' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {txn.type === 'CREDIT' ? '+' : '-'}₹{txn.amount.toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-extrabold text-gray-900 tabular-nums">
-                        ₹{txn.balance.toLocaleString('en-IN')}
+                <tbody className="divide-y divide-gray-100 text-xs bg-white">
+                  {loadingTxns ? (
+                    [...Array(10)].map((_, i) => (
+                      <tr key={i} className="animate-pulse h-[48px]">
+                        <td className="p-3.5"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                        <td className="p-3.5"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
+                        <td className="p-3.5"><div className="h-4 bg-slate-200 rounded w-48"></div></td>
+                        <td className="p-3.5 text-center"><div className="h-4 bg-slate-200 rounded w-14 mx-auto"></div></td>
+                        <td className="p-3.5 text-right"><div className="h-4 bg-slate-200 rounded w-16 ml-auto"></div></td>
+                      </tr>
+                    ))
+                  ) : currentTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-12 text-center text-slate-400 font-medium">
+                        No transactions recorded for this account.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    currentTransactions.map((txn) => (
+                      <tr key={txn.id} className="hover:bg-slate-50/70 transition-colors h-[48px]">
+                        <td className="p-3.5 font-mono font-bold text-blue-600">{txn.id}</td>
+                        <td className="p-3.5 font-medium text-slate-700">{txn.dateTime}</td>
+                        <td className="p-3.5 font-medium text-slate-900">{txn.description}</td>
+                        <td className="p-3.5 text-center">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                              txn.type === 'CREDIT' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                            }`}
+                          >
+                            {txn.type}
+                          </span>
+                        </td>
+                        <td
+                          className={`p-3.5 text-right font-mono font-bold ${
+                            txn.type === 'CREDIT' ? 'text-emerald-600' : 'text-slate-900'
+                          }`}
+                        >
+                          {txn.type === 'CREDIT' ? '+' : '-'}₹{txn.amount.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
-        </div>
 
-        {/* Right Column (1 Col Sidebar): Account Management & Audit Cards */}
-        <div className="lg:col-span-1 space-y-6">
-          
-          {/* Card 1: Account Management (Matching Screenshot Right Side) */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs space-y-4 font-sans">
-            <h3 className="text-base font-serif font-bold text-gray-900">Account Management</h3>
-            
-            <div className="space-y-2.5">
-              {/* Transfer Funds Button */}
-              <button
-                type="button"
-                onClick={() => setShowTransferModal(true)}
-                className="w-full py-3 px-4 bg-gray-50/80 hover:bg-blue-50/60 border border-gray-200/80 hover:border-blue-200 rounded-xl text-xs font-bold text-gray-800 flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
-              >
-                <span className="flex items-center gap-3">
-                  <IoSwapHorizontalOutline className="text-blue-600 group-hover:scale-110 transition-transform" size={18} />
-                  <span>Transfer Funds</span>
-                </span>
-                <span className="text-gray-400 group-hover:translate-x-1 transition-transform">&rarr;</span>
-              </button>
-
-              {/* Record Adjustment Button */}
-              <button
-                type="button"
-                onClick={() => setShowAdjustmentModal(true)}
-                className="w-full py-3 px-4 bg-gray-50/80 hover:bg-emerald-50/60 border border-gray-200/80 hover:border-emerald-200 rounded-xl text-xs font-bold text-gray-800 flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
-              >
-                <span className="flex items-center gap-3">
-                  <IoWalletOutline className="text-emerald-600 group-hover:scale-110 transition-transform" size={18} />
-                  <span>Record Adjustment</span>
-                </span>
-                <span className="text-gray-400 group-hover:translate-x-1 transition-transform">&rarr;</span>
-              </button>
-
-              {/* Download PDF Report Button */}
-              <button
-                type="button"
-                onClick={handleDownloadReport}
-                className="w-full py-3 px-4 bg-gray-50/80 hover:bg-purple-50/60 border border-gray-200/80 hover:border-purple-200 rounded-xl text-xs font-bold text-gray-800 flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
-              >
-                <span className="flex items-center gap-3">
-                  <IoDownloadOutline className="text-purple-600 group-hover:scale-110 transition-transform" size={18} />
-                  <span>Download PDF Report</span>
-                </span>
-                <span className="text-gray-400 group-hover:translate-x-1 transition-transform">&rarr;</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Card 2: System & Audit Info */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs space-y-3.5 font-sans">
-            <h3 className="text-base font-serif font-bold text-gray-900">System & Audit Info</h3>
-            
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between py-1.5 border-b border-gray-100">
-                <span className="text-gray-500 font-medium">Account ID</span>
-                <span className="font-mono font-bold text-gray-900">{account.id}</span>
-              </div>
-
-              <div className="flex justify-between py-1.5 border-b border-gray-100">
-                <span className="text-gray-500 font-medium">Branch Location</span>
-                <span className="font-bold text-gray-900">{account.branch}</span>
-              </div>
-
-              <div className="flex justify-between py-1.5 border-b border-gray-100">
-                <span className="text-gray-500 font-medium">Purpose Tag</span>
-                <span className="font-bold text-gray-900">{account.purposeTag}</span>
-              </div>
-
-              <div className="flex justify-between py-1.5">
-                <span className="text-gray-500 font-medium">Audit Status</span>
-                <span className="font-bold text-emerald-600">Reconciled & Active</span>
+          {/* Pagination Footer */}
+          {transactions.length > 0 && (
+            <div className="p-3.5 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <span className="text-slate-500 font-medium">
+                Showing <span className="font-bold text-slate-800">{indexOfFirstTxn + 1}</span> to{' '}
+                <span className="font-bold text-slate-800">
+                  {Math.min(indexOfLastTxn, transactions.length)}
+                </span>{' '}
+                of <span className="font-bold text-slate-800">{transactions.length}</span> entries
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={txnPage === 1}
+                  onClick={() => setTxnPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 font-semibold cursor-pointer"
+                >
+                  <IoChevronBack size={14} />
+                  <span>Previous</span>
+                </button>
+                {Array.from({ length: totalTxnPages }).map((_, idx) => {
+                  const pNum = idx + 1;
+                  return (
+                    <button
+                      key={pNum}
+                      type="button"
+                      onClick={() => setTxnPage(pNum)}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        txnPage === pNum
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {pNum}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  disabled={txnPage >= totalTxnPages}
+                  onClick={() => setTxnPage((p) => Math.min(totalTxnPages, p + 1))}
+                  className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 font-semibold cursor-pointer"
+                >
+                  <span>Next</span>
+                  <IoChevronForward size={14} />
+                </button>
               </div>
             </div>
-          </div>
-
+          )}
         </div>
+
+        {/* Right Column (1 Col Sidebar): Account Management Box */}
+        <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4 font-sans">
+          <h2 className="text-base font-bold text-slate-900 tracking-tight font-serif">
+            Account Management
+          </h2>
+
+          <div className="space-y-2.5">
+            {/* Transfer Funds Button */}
+            <button
+              type="button"
+              onClick={() => setShowTransferModal(true)}
+              className="w-full flex items-center justify-between p-3.5 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl transition-all cursor-pointer group shadow-2xs"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="text-blue-600 font-bold">
+                  <IoSwapHorizontalOutline size={18} />
+                </div>
+                <span className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                  Transfer Funds
+                </span>
+              </div>
+              <IoArrowForwardOutline size={14} className="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
+            </button>
+
+            {/* Record Adjustment Button */}
+            <button
+              type="button"
+              onClick={() => setShowAdjustmentModal(true)}
+              className="w-full flex items-center justify-between p-3.5 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl transition-all cursor-pointer group shadow-2xs"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="text-emerald-600 font-bold">
+                  <IoWalletOutline size={18} />
+                </div>
+                <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">
+                  Record Adjustment
+                </span>
+              </div>
+              <IoArrowForwardOutline size={14} className="text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* --- MODAL 1: EDIT ACCOUNT --- */}

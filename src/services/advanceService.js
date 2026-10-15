@@ -1,23 +1,51 @@
 import axiosInstance from '../config/axios';
-import { useAdvanceStore } from '../store/advanceStore';
 import toast from 'react-hot-toast';
 
 export const advanceService = {
-  fetchAdvances: async () => {
-    const store = useAdvanceStore.getState();
-    store.setLoading(true);
+  fetchAdvances: async (page = 1, pageSize = 10) => {
     try {
-      return store.advances;
-    } finally {
-      store.setLoading(false);
+      const response = await axiosInstance.get('/advance/', {
+        params: {
+          page,
+          page_size: pageSize
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch advances:', error);
+      throw error;
     }
   },
 
   addAdvance: async (advanceData) => {
-    const store = useAdvanceStore.getState();
-    const loadingToast = toast.loading('Recording advance...');
-    store.addAdvance(advanceData);
-    toast.success('Advance logged locally (Demo Mode)!', { id: loadingToast });
-    return advanceData;
+    try {
+      const response = await axiosInstance.post('/advance/', advanceData);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to add advance:', error);
+      throw error;
+    }
+  },
+
+  approveAdvance: async (id) => {
+    try {
+      const response = await axiosInstance.post(`/advance/${id}/approve/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to approve advance #${id}:`, error);
+      throw error;
+    }
+  },
+
+  rejectAdvance: async (id) => {
+    try {
+      const response = await axiosInstance.post(`/advance/${id}/reject/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to reject advance #${id}:`, error);
+      throw error;
+    }
   }
 };
+
+

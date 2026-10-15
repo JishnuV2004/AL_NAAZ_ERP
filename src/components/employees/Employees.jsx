@@ -129,8 +129,11 @@ const Employees = () => {
       const newStatus = action === 'activate';
       const branchId = typeof employee.branch === 'object' ? employee.branch?.id : employee.branch;
       
+      const deptId = typeof employee.department === 'object' ? employee.department?.id : employee.department;
+
       const payload = {
         branch: branchId ? parseInt(branchId, 10) : 0,
+        department: deptId ? parseInt(deptId, 10) : 0,
         name: employee.name || "",
         phone: employee.phone || "",
         address: employee.address || "",

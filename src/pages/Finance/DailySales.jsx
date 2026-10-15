@@ -12,13 +12,18 @@ import {
   IoCheckmarkCircleOutline,
   IoCalendarOutline,
   IoCashOutline,
-  IoArrowBackOutline
+  IoArrowBackOutline,
+  IoChevronBackOutline,
+  IoChevronForwardOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 import { Calendar } from '../../components/ui/calendar';
+import { dailySalesService } from '../../services/dailySalesService';
+import { accountService } from '../../services/accountService';
+import { deliveryPartnerService } from '../../services/deliveryPartnerService';
 
 // Custom Dropdown Select
-const CustomSelect = ({ value, onChange, options, className = '' }) => {
+const CustomSelect = ({ value, onChange, options, placeholder = 'Select...', className = '' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -32,6 +37,21 @@ const CustomSelect = ({ value, onChange, options, className = '' }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const formattedOptions = options.map((opt) => {
+    if (typeof opt === 'object' && opt !== null) {
+      return {
+        label: opt.label ?? opt.name ?? opt.branch_name ?? String(opt.value ?? opt.id),
+        value: opt.value ?? opt.id
+      };
+    }
+    return { label: String(opt), value: opt };
+  });
+
+  const selectedItem = formattedOptions.find((opt) => String(opt.value) === String(value));
+  const isValueEmpty = value === '' || value === null || value === undefined;
+  const displayText = selectedItem ? selectedItem.label : placeholder;
+  const isPlaceholder = isValueEmpty || (selectedItem && String(selectedItem.value) === '');
+
   return (
     <div ref={dropdownRef} className={`relative ${className}`}>
       <button
@@ -39,27 +59,32 @@ const CustomSelect = ({ value, onChange, options, className = '' }) => {
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
       >
-        <span className="truncate">{value || 'Select...'}</span>
+        <span className={`truncate ${isPlaceholder ? 'text-gray-400 font-normal' : 'text-gray-800 font-semibold'}`}>
+          {displayText}
+        </span>
         <IoChevronDownOutline className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? 'rotate-180' : ''}`} size={13} />
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 font-sans max-h-60 overflow-y-auto">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => {
-                onChange(opt);
-                setIsOpen(false);
-              }}
-              className={`w-full text-left px-3 py-1.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                value === opt ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <span>{opt}</span>
-            </button>
-          ))}
+        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 font-sans max-h-60 overflow-y-auto">
+          {formattedOptions.map((opt, idx) => {
+            const isSelected = String(value) === String(opt.value);
+            return (
+              <button
+                key={opt.value !== undefined && opt.value !== '' ? String(opt.value) : `opt-${idx}`}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                  isSelected ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <span>{opt.label}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -153,15 +178,142 @@ const INITIAL_SALES = [
   }
 ];
 
+const mapApiItemToRecord = (item) => {
+  const formattedDateStr = item.business_date
+    ? item.business_date.split('-').reverse().join('/')
+    : '';
+
+  const paymentMethodsList = [];
+  const amounts = { cash: 0, upi: 0, card: 0, foodDelivery: 0 };
+  let deliveryPartnerName = '—';
+
+  if (Array.isArray(item.payments)) {
+    item.payments.forEach((p) => {
+      const amt = parseFloat(p.amount || 0);
+      if (p.payment_method === 'CASH') {
+        amounts.cash += amt;
+        if (!paymentMethodsList.includes('Cash')) paymentMethodsList.push('Cash');
+      } else if (p.payment_method === 'UPI') {
+        amounts.upi += amt;
+        if (!paymentMethodsList.includes('UPI')) paymentMethodsList.push('UPI');
+      } else if (p.payment_method === 'CARD') {
+        amounts.card += amt;
+        if (!paymentMethodsList.includes('Card')) paymentMethodsList.push('Card');
+      } else if (p.payment_method === 'FOOD_DELIVERY') {
+        amounts.foodDelivery += amt;
+        if (!paymentMethodsList.includes('Food Delivery')) paymentMethodsList.push('Food Delivery');
+        if (p.platform) deliveryPartnerName = p.platform;
+      }
+    });
+  }
+
+  const createdTimeStr = item.created_at
+    ? item.created_at.slice(0, 16).replace('T', ' ')
+    : '';
+
+  return {
+    id: item.id,
+    saleCode: `#${item.id}`,
+    businessDate: item.business_date,
+    formattedDate: formattedDateStr || item.business_date,
+    branch: item.branch_name || 'Al Naaz Kayamkulam',
+    branch_id: item.branch,
+    totalGross: parseFloat(item.total_gross || 0),
+    paymentMethods: paymentMethodsList.length > 0 ? paymentMethodsList : ['Cash'],
+    amounts: amounts,
+    payments: item.payments || [],
+    deliveryPartner: deliveryPartnerName,
+    status: item.status || 'POSTED',
+    createdBy: item.created_by_name || 'admin',
+    createdAt: createdTimeStr
+  };
+};
+
 const DailySales = () => {
-  const [salesList, setSalesList] = useState(INITIAL_SALES);
-  const [selectedBranch, setSelectedBranch] = useState('Kochi — Main Mandi');
-  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
+  const [salesList, setSalesList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
+
+  const [selectedBranch, setSelectedBranch] = useState('All');
+  const [selectedDate, setSelectedDate] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewingSale, setViewingSale] = useState(null);
   const [editingSale, setEditingSale] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [postingSale, setPostingSale] = useState(false);
+  const [deletingSale, setDeletingSale] = useState(false);
+
+  const loadDailySales = async (page = 1) => {
+    setLoading(true);
+    try {
+      const data = await dailySalesService.fetchDailySales(page, pageSize);
+      let list = [];
+      let count = 0;
+
+      if (Array.isArray(data)) {
+        list = data;
+        count = data.length;
+      } else if (data && Array.isArray(data.results)) {
+        list = data.results;
+        count = typeof data.count === 'number' ? data.count : data.results.length;
+      }
+
+      setTotalCount(count);
+      setCurrentPage(page);
+
+      if (list.length > 0) {
+        const mapped = list.map(mapApiItemToRecord);
+        setSalesList(mapped);
+      } else {
+        setSalesList([]);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch daily sales from API, using fallback data:', err);
+      setSalesList(INITIAL_SALES);
+      setTotalCount(INITIAL_SALES.length);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [branchesList, setBranchesList] = useState([]);
+  const [deliveryPartnersList, setDeliveryPartnersList] = useState([]);
+
+  const loadBranches = async () => {
+    try {
+      const res = await accountService.fetchBranches();
+      if (Array.isArray(res)) {
+        setBranchesList(res);
+      } else if (res && Array.isArray(res.results)) {
+        setBranchesList(res.results);
+      }
+    } catch (err) {
+      console.warn('Failed to load branches from API:', err);
+    }
+  };
+
+  const loadDeliveryPartners = async () => {
+    try {
+      const res = await deliveryPartnerService.fetchDeliveryPartners(1, 100);
+      if (Array.isArray(res)) {
+        setDeliveryPartnersList(res);
+      } else if (res && Array.isArray(res.results)) {
+        setDeliveryPartnersList(res.results);
+      }
+    } catch (err) {
+      console.warn('Failed to load delivery partners from API:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadDailySales(1);
+    loadBranches();
+    loadDeliveryPartners();
+  }, []);
 
   // Calendar popover state & refs for Filter Bar and Form Modal
   const [showFilterCalendarPopover, setShowFilterCalendarPopover] = useState(false);
@@ -185,7 +337,7 @@ const DailySales = () => {
 
   // Form State for Create / Edit
   const [formData, setFormData] = useState({
-    branch: 'Kochi — Main Mandi',
+    branch: '',
     businessDate: getTodayDateString(),
     status: 'DRAFT'
   });
@@ -214,7 +366,7 @@ const DailySales = () => {
           const updated = { ...r, [field]: value };
           if (field === 'method') {
             if (value === 'FOOD_DELIVERY') {
-              updated.deliveryPartner = 'Swiggy';
+              updated.deliveryPartner = deliveryPartnersList.length > 0 ? String(deliveryPartnersList[0].id) : '';
             } else {
               updated.deliveryPartner = '—';
             }
@@ -233,23 +385,36 @@ const DailySales = () => {
   };
 
   const filteredSales = salesList.filter((sale) => {
-    if (selectedBranch && sale.branch !== selectedBranch) return false;
+    if (selectedBranch && selectedBranch !== 'All' && sale.branch !== selectedBranch) return false;
     if (selectedDate && sale.businessDate !== selectedDate) return false;
     if (selectedStatus !== 'All' && sale.status !== selectedStatus) return false;
     return true;
   });
 
-  const handlePostSale = (id) => {
-    setSalesList((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status: 'POSTED' } : s))
-    );
-    toast.success(`Daily Sale #${id} successfully posted!`);
+  const handlePostSale = async (id) => {
+    setPostingSale(true);
+    try {
+      const res = await dailySalesService.postDailySale(id);
+      toast.success(res?.message || `Daily sale #${id} posted successfully.`);
+      await loadDailySales(currentPage);
+      if (res?.daily_sales) {
+        return mapApiItemToRecord(res.daily_sales);
+      }
+      return null;
+    } catch (err) {
+      console.error('Failed to post daily sale:', err);
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || 'Failed to post daily sale';
+      toast.error(msg);
+      return null;
+    } finally {
+      setPostingSale(false);
+    }
   };
 
   const handleStartCreate = () => {
     setEditingSale(null);
     setFormData({
-      branch: 'Kochi — Main Mandi',
+      branch: '',
       businessDate: getTodayDateString(),
       status: 'DRAFT'
     });
@@ -260,7 +425,7 @@ const DailySales = () => {
   const handleStartEdit = (sale) => {
     setEditingSale(sale);
     setFormData({
-      branch: sale.branch,
+      branch: sale.branch_id ? String(sale.branch_id) : '',
       businessDate: sale.businessDate,
       status: sale.status || 'DRAFT'
     });
@@ -294,29 +459,52 @@ const DailySales = () => {
     setShowCreateModal(true);
   };
 
-  const handleDeleteSale = (id) => {
-    setSalesList((prev) => prev.filter((s) => s.id !== id));
-    toast.success(`Daily Sale #${id} deleted.`);
+  const handleDeleteSale = async (id) => {
+    setDeletingSale(true);
+    try {
+      await dailySalesService.deleteDailySale(id);
+      toast.success(`Daily Sale #${id} deleted.`);
+      await loadDailySales(currentPage);
+      return true;
+    } catch (err) {
+      console.error('Failed to delete daily sale:', err);
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || 'Failed to delete daily sale';
+      toast.error(msg);
+      return false;
+    } finally {
+      setDeletingSale(false);
+    }
   };
 
-  const handleSaveCreate = (e) => {
+  const handleSaveCreate = async (e) => {
     e.preventDefault();
+
+    if (!formData.branch) {
+      toast.error('Please select a branch');
+      return;
+    }
+
     let cash = 0, upi = 0, card = 0, foodDelivery = 0;
-    const paymentMethodsSet = new Set();
-    let deliveryPartnerVal = '—';
+    const paymentsPayload = [];
 
     paymentRows.forEach((r) => {
       const amt = parseFloat(r.amount) || 0;
-      if (r.method === 'CASH') { cash += amt; paymentMethodsSet.add('Cash'); }
-      if (r.method === 'UPI') { upi += amt; paymentMethodsSet.add('UPI'); }
-      if (r.method === 'CARD') { card += amt; paymentMethodsSet.add('Card'); }
-      if (r.method === 'FOOD_DELIVERY') {
-        foodDelivery += amt;
-        paymentMethodsSet.add('Food Delivery');
-        if (r.deliveryPartner && r.deliveryPartner !== '—') {
-          deliveryPartnerVal = r.deliveryPartner;
+      if (amt > 0) {
+        const pObj = {
+          payment_method: r.method,
+          amount: String(r.amount)
+        };
+        if (r.method === 'FOOD_DELIVERY') {
+          const selectedDp = deliveryPartnersList.find(dp => String(dp.id) === String(r.deliveryPartner));
+          pObj.delivery_partner = r.deliveryPartner ? parseInt(r.deliveryPartner, 10) : 1;
+          pObj.platform = selectedDp ? (selectedDp.name || selectedDp.platform || '') : '';
         }
+        paymentsPayload.push(pObj);
       }
+      if (r.method === 'CASH') cash += amt;
+      if (r.method === 'UPI') upi += amt;
+      if (r.method === 'CARD') card += amt;
+      if (r.method === 'FOOD_DELIVERY') foodDelivery += amt;
     });
 
     const totalGross = cash + upi + card + foodDelivery;
@@ -326,58 +514,37 @@ const DailySales = () => {
       return;
     }
 
-    if (editingSale) {
-      const updatedList = salesList.map((s) => {
-        if (s.id === editingSale.id) {
-          const updated = {
-            ...s,
-            branch: formData.branch,
-            businessDate: formData.businessDate,
-            formattedDate: formatDisplayDate(formData.businessDate),
-            totalGross: totalGross,
-            paymentMethods: Array.from(paymentMethodsSet),
-            amounts: { cash, upi, card, foodDelivery },
-            deliveryPartner: deliveryPartnerVal
-          };
-          if (viewingSale && viewingSale.id === editingSale.id) {
-            setViewingSale(updated);
-          }
-          return updated;
+    const payload = {
+      branch: parseInt(formData.branch, 10),
+      business_date: formData.businessDate || getTodayDateString(),
+      status: formData.status || 'DRAFT',
+      payments: paymentsPayload.length > 0 ? paymentsPayload : [
+        {
+          payment_method: 'CASH',
+          amount: String(totalGross)
         }
-        return s;
-      });
-      setSalesList(updatedList);
+      ]
+    };
+
+    setSubmitting(true);
+    try {
+      if (editingSale) {
+        await dailySalesService.updateDailySale(editingSale.id, payload);
+        toast.success(`Daily Sale ${editingSale.saleCode} updated successfully!`);
+      } else {
+        await dailySalesService.createDailySale(payload);
+        toast.success('Daily Sale recorded successfully!');
+      }
       setShowCreateModal(false);
       setEditingSale(null);
-      toast.success(`Daily Sale ${editingSale.saleCode} updated successfully!`);
-    } else {
-      const newId = salesList.length > 0 ? Math.max(...salesList.map((s) => s.id)) + 1 : 1;
-      const newRecord = {
-        id: newId,
-        saleCode: `#${newId}`,
-        businessDate: formData.businessDate,
-        formattedDate: formatDisplayDate(formData.businessDate),
-        branch: formData.branch,
-        totalGross: totalGross,
-        paymentMethods: Array.from(paymentMethodsSet),
-        amounts: { cash, upi, card, foodDelivery },
-        deliveryPartner: deliveryPartnerVal,
-        status: 'DRAFT',
-        createdBy: 'Sana Iqbal',
-        createdAt: `${formData.businessDate} 21:00`
-      };
-
-      setSalesList([newRecord, ...salesList]);
-      setShowCreateModal(false);
-      toast.success(`Daily Sale #${newId} recorded successfully as Draft!`);
+      await loadDailySales(currentPage);
+    } catch (err) {
+      console.error('Failed to save daily sale:', err);
+      const msg = err?.response?.data?.detail || 'Failed to save daily sale';
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
-
-    setFormData({
-      branch: 'Kochi — Main Mandi',
-      businessDate: getTodayDateString(),
-      status: 'DRAFT'
-    });
-    setPaymentRows([{ id: 1, method: 'CASH', amount: '', deliveryPartner: '—' }]);
   };
 
   if (viewingSale) {
@@ -432,29 +599,57 @@ const DailySales = () => {
             {viewingSale.status === 'DRAFT' && (
               <button
                 type="button"
-                onClick={() => {
-                  setSalesList(salesList.map((s) => (s.id === viewingSale.id ? { ...s, status: 'POSTED' } : s)));
-                  setViewingSale({ ...viewingSale, status: 'POSTED' });
-                  toast.success(`Sale ${viewingSale.saleCode} posted successfully!`);
+                disabled={postingSale || deletingSale}
+                onClick={async () => {
+                  const updatedRecord = await handlePostSale(viewingSale.id);
+                  if (updatedRecord) {
+                    setViewingSale(updatedRecord);
+                  }
                 }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer min-w-[100px]"
               >
-                <IoCheckmarkCircleOutline size={14} />
-                <span>Post Sale</span>
+                {postingSale ? (
+                  <>
+                    <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Posting...</span>
+                  </>
+                ) : (
+                  <>
+                    <IoCheckmarkCircleOutline size={14} />
+                    <span>Post Sale</span>
+                  </>
+                )}
               </button>
             )}
 
             <button
               type="button"
-              onClick={() => {
-                setSalesList(salesList.filter((s) => s.id !== viewingSale.id));
-                setViewingSale(null);
-                toast.success(`Sale ${viewingSale.saleCode} deleted.`);
+              disabled={postingSale || deletingSale}
+              onClick={async () => {
+                const success = await handleDeleteSale(viewingSale.id);
+                if (success) {
+                  setViewingSale(null);
+                }
               }}
-              className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer min-w-[85px]"
             >
-              <IoTrashOutline size={14} />
-              <span>Delete</span>
+              {deletingSale ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Deleting...</span>
+                </>
+              ) : (
+                <>
+                  <IoTrashOutline size={14} />
+                  <span>Delete</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -663,7 +858,7 @@ const DailySales = () => {
             <CustomSelect
               value={selectedBranch}
               onChange={setSelectedBranch}
-              options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
+              options={['All', ...branchesList.map(b => b.name || b.branch_name || `Branch #${b.id}`)]}
             />
           </div>
 
@@ -734,8 +929,8 @@ const DailySales = () => {
       )}
 
       {/* 4. Main Data Table */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden w-full">
-        <div className="overflow-x-auto w-full">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden min-h-[580px] flex flex-col justify-between w-full">
+        <div className="overflow-x-auto min-h-[480px] w-full">
           <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
@@ -751,7 +946,21 @@ const DailySales = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs bg-white">
-              {filteredSales.length > 0 ? (
+              {loading ? (
+                [...Array(10)].map((_, i) => (
+                  <tr key={i} className="animate-pulse h-[52px]">
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-12"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-16 mx-auto"></div></td>
+                  </tr>
+                ))
+              ) : filteredSales.length > 0 ? (
                 filteredSales.map((sale) => (
                   <tr key={sale.id} className="hover:bg-gray-50/70 transition-colors h-[52px]">
                     {/* Sale ID */}
@@ -764,8 +973,8 @@ const DailySales = () => {
                     <td className="py-3.5 px-4 font-medium text-gray-700">{sale.branch}</td>
 
                     {/* Total Gross */}
-                    <td className="py-3.5 px-4 font-extrabold text-gray-900 tabular-nums">
-                      ₹{sale.totalGross.toLocaleString('en-IN')}
+                    <td className="py-3.5 px-4 font-extrabold text-gray-900 tabular-nums font-mono">
+                      ₹{sale.totalGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
 
                     {/* Payment Methods Badges */}
@@ -809,46 +1018,15 @@ const DailySales = () => {
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center">
                         <button
                           type="button"
                           onClick={() => setViewingSale(sale)}
-                          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
+                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
                           title="View Details"
                         >
-                          <IoEyeOutline size={15} />
+                          <IoEyeOutline size={14} /> View
                         </button>
-
-                        {sale.status === 'DRAFT' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleStartEdit(sale)}
-                              className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
-                              title="Edit Sale"
-                            >
-                              <IoPencilOutline size={15} />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handlePostSale(sale.id)}
-                              className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
-                              title="Post Sale to Ledger"
-                            >
-                              <IoCheckmarkCircleOutline size={15} />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteSale(sale.id)}
-                              className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
-                              title="Delete Record"
-                            >
-                              <IoTrashOutline size={15} />
-                            </button>
-                          </>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -863,6 +1041,63 @@ const DailySales = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {(() => {
+          const totalItems = totalCount || filteredSales.length;
+          const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+          const startItem = totalItems > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+          const endItem = Math.min(currentPage * pageSize, totalItems);
+
+          return (
+            <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+              <div>
+                Showing <span className="font-bold text-gray-800">{startItem}</span> to{' '}
+                <span className="font-bold text-gray-800">{endItem}</span> of{' '}
+                <span className="font-bold text-gray-800">{totalItems}</span> daily sales
+              </div>
+
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <button
+                  type="button"
+                  disabled={currentPage === 1 || loading}
+                  onClick={() => loadDailySales(currentPage - 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  <IoChevronBackOutline size={14} />
+                </button>
+
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pageNum = idx + 1;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => loadDailySales(pageNum)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
+                        currentPage === pageNum
+                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages || loading}
+                  onClick={() => loadDailySales(currentPage + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  <IoChevronForwardOutline size={14} />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* 5. Footer API Notice */}
@@ -873,8 +1108,8 @@ const DailySales = () => {
       {/* Create New Sale Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="p-6 border-b border-gray-100 flex items-start justify-between bg-gray-50/40">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-gray-100 flex items-start justify-between bg-gray-50/40 shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-gray-900 tracking-tight">
                   {editingSale ? `Edit Daily Sale ${editingSale.saleCode}` : 'Create Daily Sale'}
@@ -896,7 +1131,7 @@ const DailySales = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveCreate} className="p-6 space-y-5">
+            <form onSubmit={handleSaveCreate} className="p-6 space-y-5 overflow-y-auto flex-1">
               {/* Row 1: Branch & Business Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -906,7 +1141,14 @@ const DailySales = () => {
                   <CustomSelect
                     value={formData.branch}
                     onChange={(val) => setFormData({ ...formData, branch: val })}
-                    options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
+                    placeholder="Select Branch"
+                    options={[
+                      { label: 'Select Branch', value: '' },
+                      ...branchesList.map((b) => ({
+                        label: b.name || b.branch_name || `Branch #${b.id}`,
+                        value: String(b.id)
+                      }))
+                    ]}
                   />
                 </div>
 
@@ -983,9 +1225,16 @@ const DailySales = () => {
                     <div className="col-span-3">
                       {row.method === 'FOOD_DELIVERY' ? (
                         <CustomSelect
-                          value={row.deliveryPartner === '—' ? 'Swiggy' : row.deliveryPartner}
+                          value={row.deliveryPartner}
                           onChange={(val) => handlePaymentRowChange(row.id, 'deliveryPartner', val)}
-                          options={['Swiggy', 'Zomato', 'MandiEats']}
+                          placeholder="Select Partner"
+                          options={[
+                            { label: 'Select Partner', value: '' },
+                            ...deliveryPartnersList.map((dp) => ({
+                              label: dp.name || dp.platform || `Partner #${dp.id}`,
+                              value: String(dp.id)
+                            }))
+                          ]}
                         />
                       ) : (
                         <div className="w-full text-xs border border-gray-100 rounded-xl px-3 py-2 bg-gray-50 text-gray-400 font-medium">
@@ -1035,19 +1284,33 @@ const DailySales = () => {
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => {
                     setShowCreateModal(false);
                     setEditingSale(null);
                   }}
-                  className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+                  disabled={submitting}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
                 >
-                  {editingSale ? 'Update Sale' : 'Save Draft'}
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Saving...</span>
+                    </span>
+                  ) : editingSale ? (
+                    'Update Sale'
+                  ) : (
+                    'Save Draft'
+                  )}
                 </button>
               </div>
 

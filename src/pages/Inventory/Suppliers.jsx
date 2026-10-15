@@ -126,11 +126,11 @@ const Suppliers = () => {
         </button>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden min-h-[580px] flex flex-col justify-between w-full">
         {loading ? (
           <PageLoader />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto min-h-[480px] w-full">
             <table className="w-full border-collapse text-left font-sans text-sm">
               <thead className="bg-white text-gray-400 text-[10px] font-bold tracking-wider uppercase border-b border-gray-200">
                 <tr>

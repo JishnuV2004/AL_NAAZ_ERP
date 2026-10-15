@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import LiveStock from './LiveStock';
 import Purchases from './Purchases';
 import StockUsage from './StockUsage';
+import StockAdjustments from './StockAdjustments';
 import StockHistory from './StockHistory';
 import Products from './Products';
 import Suppliers from './Suppliers';
@@ -58,6 +59,13 @@ const Inventory = () => {
       color: 'bg-[#fef4c7] text-[#ca8a04]'
     },
     { 
+      id: 'adjustments', 
+      title: 'Stock Adjustments', 
+      desc: 'Track manual stock adjustments and reconciliation.',
+      icon: IoCubeOutline,
+      color: 'bg-[#e0e7ff] text-[#4338ca]'
+    },
+    { 
       id: 'history', 
       title: 'Stock History', 
       desc: 'Full ledger of where stock came from and went.',
@@ -86,6 +94,7 @@ const Inventory = () => {
       case 'livestock': return <LiveStock />;
       case 'purchases': return <Purchases />;
       case 'usage': return <StockUsage />;
+      case 'adjustments': return <StockAdjustments />;
       case 'history': return <StockHistory />;
       case 'products': return <Products />;
       case 'suppliers': return <Suppliers />;

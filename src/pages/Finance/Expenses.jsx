@@ -9,12 +9,21 @@ import {
   IoWalletOutline,
   IoWarningOutline,
   IoFilterOutline,
-  IoSwapHorizontalOutline
+  IoSwapHorizontalOutline,
+  IoChevronBackOutline,
+  IoChevronForwardOutline,
+  IoCalendarOutline,
+  IoPencilOutline,
+  IoTrashOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
+import { Calendar } from '../../components/ui/calendar';
+import { expenseService } from '../../services/expenseService';
+import { accountService } from '../../services/accountService';
+import { financeService } from '../../services/financeService';
 
-// Custom Select Component for crisp filter controls
-const CustomSelect = ({ value, onChange, options, className = '' }) => {
+// Custom Select Component for crisp filter controls & form dropdowns
+const CustomSelect = ({ value, onChange, options, placeholder = 'Select...', className = '' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -28,34 +37,58 @@ const CustomSelect = ({ value, onChange, options, className = '' }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const formattedOptions = options.map((opt) => {
+    if (typeof opt === 'object' && opt !== null) {
+      return { label: opt.label || opt.name, value: opt.value ?? opt.id };
+    }
+    return { label: String(opt), value: opt };
+  });
+
+  const selectedItem = formattedOptions.find((opt) => String(opt.value) === String(value));
+  const isValueEmpty = value === '' || value === null || value === undefined;
+  const displayText = selectedItem ? selectedItem.label : (placeholder || 'Select...');
+  const isPlaceholder = isValueEmpty || (selectedItem && String(selectedItem.value) === '');
+
   return (
     <div ref={dropdownRef} className={`relative ${className}`}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+        className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
       >
-        <span className="truncate">{value || 'Select...'}</span>
+        <span className={`truncate ${isPlaceholder ? 'text-gray-400 font-normal' : 'text-gray-800 font-semibold'}`}>
+          {displayText}
+        </span>
         <IoChevronDownOutline className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? 'rotate-180' : ''}`} size={13} />
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 font-sans max-h-56 overflow-y-auto">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => {
-                onChange(opt);
-                setIsOpen(false);
-              }}
-              className={`w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                value === opt ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <span>{opt}</span>
-            </button>
-          ))}
+        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 font-sans max-h-56 overflow-y-auto">
+          {formattedOptions.map((opt) => {
+            const isSelected = String(value) === String(opt.value);
+            const isOptPlaceholder = String(opt.value) === '';
+            return (
+              <button
+                key={String(opt.value)}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                  isSelected
+                    ? isOptPlaceholder
+                      ? 'bg-gray-50 text-gray-400 font-normal'
+                      : 'bg-blue-50 text-blue-600 font-bold'
+                    : isOptPlaceholder
+                    ? 'text-gray-400 font-normal hover:bg-gray-50'
+                    : 'text-gray-700 font-semibold hover:bg-gray-50 hover:text-blue-600'
+                }`}
+              >
+                <span>{opt.label}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -173,7 +206,12 @@ const Expenses = () => {
 
   // --- Expenses View State ---
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
-  const [branchFilter, setBranchFilter] = useState('Kochi — Main Mandi');
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(INITIAL_EXPENSES.length);
+  const pageSize = 10;
+
+  const [branchFilter, setBranchFilter] = useState('All');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [accountFilter, setAccountFilter] = useState('All');
   const [dateFrom, setDateFrom] = useState('');
@@ -181,23 +219,266 @@ const Expenses = () => {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewingExpense, setViewingExpense] = useState(null);
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [deletingExpense, setDeletingExpense] = useState(null);
+
+  const [submittingAdd, setSubmittingAdd] = useState(false);
+  const [submittingUpdate, setSubmittingUpdate] = useState(false);
+  const [submittingDelete, setSubmittingDelete] = useState(false);
+
+  const [approvingAdj, setApprovingAdj] = useState(null);
+  const [rejectingAdj, setRejectingAdj] = useState(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+  const [submittingApprove, setSubmittingApprove] = useState(false);
+  const [submittingReject, setSubmittingReject] = useState(false);
+
+  const loadExpenses = async (page = 1) => {
+    setLoading(true);
+    try {
+      const data = await expenseService.fetchExpenses(page, pageSize);
+      let list = [];
+      let count = 0;
+
+      if (Array.isArray(data)) {
+        list = data;
+        count = data.length;
+      } else if (data && Array.isArray(data.results)) {
+        list = data.results;
+        count = typeof data.count === 'number' ? data.count : data.results.length;
+      }
+
+      setTotalCount(count);
+      setCurrentPage(page);
+
+      if (list.length > 0) {
+        const mapped = list.map((item) => {
+          const formattedDateStr = item.expense_date
+            ? new Date(item.expense_date).toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+              })
+            : '';
+          return {
+            id: item.id,
+            expenseCode: `#${item.id}`,
+            date: item.expense_date || (item.created_at ? item.created_at.slice(0, 10) : ''),
+            formattedDate: formattedDateStr,
+            branch: item.branch_name || 'Al Naaz Kayamkulam',
+            branch_id: item.branch,
+            category: item.category_name || 'General',
+            category_id: item.category,
+            paymentAccount: item.payment_account_name || 'Petty Cash',
+            payment_account_id: item.payment_account,
+            amount: parseFloat(item.amount || 0),
+            rawAmount: item.amount,
+            description: item.description || '',
+            createdBy: item.created_by_name || 'admin'
+          };
+        });
+        setExpenses(mapped);
+      }
+    } catch (err) {
+      console.warn('Failed to load expenses from API, using fallback data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [branchesList, setBranchesList] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [accountsList, setAccountsList] = useState([]);
+
+  const [showExpenseCalendarPopover, setShowExpenseCalendarPopover] = useState(false);
+  const expenseCalendarRef = useRef(null);
+
+  const [showEditCalendarPopover, setShowEditCalendarPopover] = useState(false);
+  const editCalendarRef = useRef(null);
+
+  const [showAdjCalendarPopover, setShowAdjCalendarPopover] = useState(false);
+  const adjCalendarRef = useRef(null);
+
+  const [submittingAdj, setSubmittingAdj] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (expenseCalendarRef.current && !expenseCalendarRef.current.contains(event.target)) {
+        setShowExpenseCalendarPopover(false);
+      }
+      if (editCalendarRef.current && !editCalendarRef.current.contains(event.target)) {
+        setShowEditCalendarPopover(false);
+      }
+      if (adjCalendarRef.current && !adjCalendarRef.current.contains(event.target)) {
+        setShowAdjCalendarPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [newExpense, setNewExpense] = useState({
-    branch: 'Kochi — Main Mandi',
-    category: 'Ice & Packaging',
-    paymentAccount: 'Petty Cash',
+    branch: '',
+    category: '',
+    payment_account: '',
     amount: '',
-    date: new Date().toISOString().split('T')[0],
+    expense_date: new Date().toISOString().slice(0, 10),
     description: ''
   });
 
+  const loadDropdownData = async () => {
+    try {
+      const [brRes, catRes, accRes] = await Promise.allSettled([
+        accountService.fetchBranches(),
+        financeService.fetchExpenseCategories(),
+        accountService.fetchAccounts()
+      ]);
+
+      let brs = [];
+      if (brRes.status === 'fulfilled' && brRes.value) {
+        brs = Array.isArray(brRes.value) ? brRes.value : (brRes.value.results || []);
+        setBranchesList(brs);
+      }
+
+      let cats = [];
+      if (catRes.status === 'fulfilled' && catRes.value) {
+        cats = Array.isArray(catRes.value) ? catRes.value : (catRes.value.results || []);
+        setCategoriesList(cats);
+      }
+
+      let accs = [];
+      if (accRes.status === 'fulfilled' && accRes.value) {
+        accs = Array.isArray(accRes.value) ? accRes.value : (accRes.value.results || []);
+        setAccountsList(accs);
+      }
+
+      // Do not auto-select any data; user will select manually
+    } catch (err) {
+      console.warn('Error loading dropdown options:', err);
+    }
+  };
+
   // --- Expense Adjustments View State ---
   const [adjustments, setAdjustments] = useState(INITIAL_ADJUSTMENTS);
+  const [loadingAdjustments, setLoadingAdjustments] = useState(false);
+  const [adjCurrentPage, setAdjCurrentPage] = useState(1);
+  const [adjTotalCount, setAdjTotalCount] = useState(INITIAL_ADJUSTMENTS.length);
   const [adjStatusFilter, setAdjStatusFilter] = useState('All');
   const [adjExpenseFilter, setAdjExpenseFilter] = useState('All');
 
+  const loadAdjustments = async (page = 1) => {
+    setLoadingAdjustments(true);
+    try {
+      const data = await expenseService.fetchExpenseAdjustments(page, pageSize);
+      let list = [];
+      let count = 0;
+
+      if (Array.isArray(data)) {
+        list = data;
+        count = data.length;
+      } else if (data && Array.isArray(data.results)) {
+        list = data.results;
+        count = typeof data.count === 'number' ? data.count : data.results.length;
+      }
+
+      setAdjTotalCount(count);
+      setAdjCurrentPage(page);
+
+      if (list.length > 0) {
+        const mapped = list.map((item) => ({
+          id: item.id,
+          adjustmentCode: `#${item.id}`,
+          expenseCode: `#${item.expense_id || item.expense || ''}`,
+          expenseId: item.expense_id || item.expense,
+          oldAmount: parseFloat(item.old_amount || 0),
+          newAmount: parseFloat(item.new_amount || 0),
+          status: item.status || 'PENDING',
+          reason: item.reason || 'Expense adjustment request',
+          requestedBy: item.requested_by_name || 'admin',
+          approvedBy: item.approved_by_name || '',
+          rejectedBy: item.rejected_by_name || '',
+          rejectionReason: item.rejection_reason || '',
+          requestedAt: item.requested_at,
+          approvedAt: item.approved_at,
+          rejectedAt: item.rejected_at,
+          oldCategoryName: item.old_category_name,
+          newCategoryName: item.new_category_name,
+          oldPaymentAccountName: item.old_payment_account_name,
+          newPaymentAccountName: item.new_payment_account_name,
+          oldExpenseDate: item.old_expense_date,
+          newExpenseDate: item.new_expense_date,
+          oldDescription: item.old_description,
+          newDescription: item.new_description
+        }));
+        setAdjustments(mapped);
+      }
+    } catch (err) {
+      console.warn('Failed to load expense adjustments from API, using fallback data:', err);
+    } finally {
+      setLoadingAdjustments(false);
+    }
+  };
+
+  useEffect(() => {
+    loadExpenses(1);
+    loadAdjustments(1);
+    loadDropdownData();
+  }, []);
+
   const [showRequestAdjModal, setShowRequestAdjModal] = useState(false);
   const [viewingAdjustment, setViewingAdjustment] = useState(null);
+  const [loadingAdjDetail, setLoadingAdjDetail] = useState(false);
+
+  const handleViewAdjustment = async (adj) => {
+    setViewingAdjustment({
+      id: adj.id,
+      adjustmentCode: adj.adjustmentCode || `#${adj.id}`,
+      expenseCode: adj.expenseCode || `#${adj.expense}`,
+      oldAmount: adj.oldAmount || 0,
+      newAmount: adj.newAmount || 0,
+      status: adj.status || 'PENDING',
+      reason: adj.reason || '',
+      requestedBy: adj.requestedBy || 'admin'
+    });
+    setLoadingAdjDetail(true);
+    try {
+      const data = await expenseService.fetchExpenseAdjustmentById(adj.id);
+      if (data) {
+        setViewingAdjustment({
+          id: data.id,
+          adjustmentCode: `#${data.id}`,
+          expenseId: data.expense || data.expense_id,
+          expenseCode: `#${data.expense || data.expense_id}`,
+          status: data.status,
+          oldAmount: parseFloat(data.old_amount || 0),
+          newAmount: parseFloat(data.new_amount || 0),
+          oldPaymentAccount: data.old_payment_account,
+          oldPaymentAccountName: data.old_payment_account_name || 'N/A',
+          newPaymentAccount: data.new_payment_account,
+          newPaymentAccountName: data.new_payment_account_name || 'N/A',
+          oldCategory: data.old_category,
+          oldCategoryName: data.old_category_name || 'N/A',
+          newCategory: data.new_category,
+          newCategoryName: data.new_category_name || 'N/A',
+          oldExpenseDate: data.old_expense_date,
+          newExpenseDate: data.new_expense_date,
+          oldDescription: data.old_description,
+          newDescription: data.new_description,
+          reason: data.reason || 'N/A',
+          rejectionReason: data.rejection_reason || '',
+          requestedBy: data.requested_by_name || 'admin',
+          approvedBy: data.approved_by_name || null,
+          rejectedBy: data.rejected_by_name || null,
+          requestedAt: data.requested_at,
+          approvedAt: data.approved_at,
+          rejectedAt: data.rejected_at
+        });
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch details for adjustment #${adj.id}:`, err);
+    } finally {
+      setLoadingAdjDetail(false);
+    }
+  };
 
   const [newAdjustment, setNewAdjustment] = useState({
     expenseCode: 'EXPENSE-2',
@@ -208,9 +489,9 @@ const Expenses = () => {
 
   // Filtering Logic
   const filteredExpenses = expenses.filter((e) => {
-    if (branchFilter && e.branch !== branchFilter) return false;
-    if (categoryFilter !== 'All' && e.category !== categoryFilter) return false;
-    if (accountFilter !== 'All' && e.paymentAccount !== accountFilter) return false;
+    if (branchFilter && branchFilter !== 'All' && e.branch !== branchFilter) return false;
+    if (categoryFilter !== 'All' && e.category.toLowerCase() !== categoryFilter.toLowerCase()) return false;
+    if (accountFilter !== 'All' && e.paymentAccount.toLowerCase() !== accountFilter.toLowerCase()) return false;
     if (dateFrom && e.date < dateFrom) return false;
     if (dateTo && e.date > dateTo) return false;
     return true;
@@ -228,84 +509,270 @@ const Expenses = () => {
   const approvedAdjCount = adjustments.filter((a) => a.status === 'APPROVED').length;
 
   // Form Submission Handlers
-  const handleAddExpense = (e) => {
+  const handleAddExpense = async (e) => {
     e.preventDefault();
+    if (!newExpense.branch) {
+      toast.error('Please select a Branch');
+      return;
+    }
+    if (!newExpense.category) {
+      toast.error('Please select a Category');
+      return;
+    }
+    if (!newExpense.payment_account) {
+      toast.error('Please select a Payment Account');
+      return;
+    }
     const amt = parseFloat(newExpense.amount) || 0;
-    if (amt <= 0) {
+    if (isNaN(amt) || amt <= 0) {
       toast.error('Please enter a valid expense amount');
       return;
     }
 
-    const newId = expenses.length > 0 ? Math.max(...expenses.map((ex) => ex.id)) + 1 : 1;
-    const record = {
-      id: newId,
-      expenseCode: `#${newId}`,
-      date: newExpense.date,
-      formattedDate: new Date(newExpense.date).toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      }),
-      branch: newExpense.branch,
-      category: newExpense.category,
-      paymentAccount: newExpense.paymentAccount,
-      amount: amt,
-      description: newExpense.description || 'Operational expense entry',
-      createdBy: 'Admin User'
+    const payload = {
+      branch: parseInt(newExpense.branch, 10),
+      category: parseInt(newExpense.category, 10),
+      payment_account: parseInt(newExpense.payment_account, 10),
+      amount: amt.toFixed(2),
+      expense_date: newExpense.expense_date || new Date().toISOString().slice(0, 10),
+      description: newExpense.description?.trim() ? newExpense.description.trim() : 'Expense entry'
     };
 
-    setExpenses([record, ...expenses]);
-    setShowAddModal(false);
-    toast.success(`Expense #${newId} recorded successfully!`);
-    setNewExpense({
-      branch: 'Kochi — Main Mandi',
-      category: 'Ice & Packaging',
-      paymentAccount: 'Petty Cash',
-      amount: '',
-      date: new Date().toISOString().split('T')[0],
-      description: ''
-    });
+    setSubmittingAdd(true);
+    try {
+      await expenseService.createExpense(payload);
+      toast.success('Expense entry added successfully!');
+      setShowAddModal(false);
+      setNewExpense({
+        branch: '',
+        category: '',
+        payment_account: '',
+        amount: '',
+        expense_date: new Date().toISOString().slice(0, 10),
+        description: ''
+      });
+      await loadExpenses(1);
+    } catch (err) {
+      console.error('Failed to create expense detailed error:', err?.response?.data || err);
+      let msg = 'Failed to create expense entry';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') {
+          msg = err.response.data;
+        } else if (err.response.data.detail) {
+          msg = err.response.data.detail;
+        } else if (typeof err.response.data === 'object') {
+          const fieldErrors = Object.entries(err.response.data).map(([key, val]) => {
+            const valStr = Array.isArray(val) ? val.join(', ') : String(val);
+            return `${key}: ${valStr}`;
+          });
+          if (fieldErrors.length > 0) {
+            msg = fieldErrors.join(' | ');
+          }
+        }
+      }
+      toast.error(msg);
+    } finally {
+      setSubmittingAdd(false);
+    }
   };
 
-  const handleRequestAdjustment = (e) => {
+  const handleUpdateExpense = async (e) => {
     e.preventDefault();
-    const newAmt = parseFloat(newAdjustment.newAmount) || 0;
-    if (newAmt <= 0) {
-      toast.error('Please enter a valid new amount');
+    if (!editingExpense) return;
+
+    if (!editingExpense.branch) {
+      toast.error('Please select a Branch');
+      return;
+    }
+    if (!editingExpense.category) {
+      toast.error('Please select a Category');
+      return;
+    }
+    if (!editingExpense.payment_account) {
+      toast.error('Please select a Payment Account');
+      return;
+    }
+    const amt = parseFloat(editingExpense.amount) || 0;
+    if (isNaN(amt) || amt <= 0) {
+      toast.error('Please enter a valid expense amount');
       return;
     }
 
-    const newId = adjustments.length > 0 ? Math.max(...adjustments.map((a) => a.id)) + 1 : 1;
-    const record = {
-      id: newId,
-      adjustmentCode: `#${newId}`,
-      expenseCode: newAdjustment.expenseCode,
-      oldAmount: newAdjustment.oldAmount,
-      newAmount: newAmt,
-      status: 'PENDING',
-      reason: newAdjustment.reason || 'Expense amount adjustment request',
-      requestedBy: 'Admin User'
+    const payload = {
+      branch: parseInt(editingExpense.branch, 10),
+      category: parseInt(editingExpense.category, 10),
+      payment_account: parseInt(editingExpense.payment_account, 10),
+      amount: amt.toFixed(2),
+      expense_date: editingExpense.expense_date || new Date().toISOString().slice(0, 10),
+      description: editingExpense.description?.trim() ? editingExpense.description.trim() : 'Expense entry'
     };
 
-    setAdjustments([record, ...adjustments]);
-    setShowRequestAdjModal(false);
-    toast.success(`Adjustment Request #${newId} submitted!`);
-    setNewAdjustment({
-      expenseCode: 'EXPENSE-2',
-      oldAmount: 6400,
-      newAmount: '',
-      reason: ''
-    });
+    setSubmittingUpdate(true);
+    try {
+      await expenseService.updateExpense(editingExpense.id, payload);
+      toast.success('Expense entry updated successfully!');
+      setEditingExpense(null);
+      await loadExpenses(currentPage);
+    } catch (err) {
+      console.error('Failed to update expense detailed error:', err?.response?.data || err);
+      let msg = 'Failed to update expense entry';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') {
+          msg = err.response.data;
+        } else if (err.response.data.detail) {
+          msg = err.response.data.detail;
+        } else if (typeof err.response.data === 'object') {
+          const fieldErrors = Object.entries(err.response.data).map(([key, val]) => {
+            const valStr = Array.isArray(val) ? val.join(', ') : String(val);
+            return `${key}: ${valStr}`;
+          });
+          if (fieldErrors.length > 0) {
+            msg = fieldErrors.join(' | ');
+          }
+        }
+      }
+      toast.error(msg);
+    } finally {
+      setSubmittingUpdate(false);
+    }
   };
 
-  const handleUpdateAdjStatus = (id, newStatus) => {
-    setAdjustments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a))
-    );
-    if (viewingAdjustment && viewingAdjustment.id === id) {
-      setViewingAdjustment({ ...viewingAdjustment, status: newStatus });
+  const handleConfirmDelete = async () => {
+    if (!deletingExpense) return;
+    setSubmittingDelete(true);
+    try {
+      await expenseService.deleteExpense(deletingExpense.id);
+      toast.success('Expense entry deleted successfully!');
+      setDeletingExpense(null);
+      await loadExpenses(currentPage);
+    } catch (err) {
+      console.error('Failed to delete expense:', err);
+      const msg = err?.response?.data?.detail || err?.userMessage || 'Failed to delete expense entry';
+      toast.error(msg);
+    } finally {
+      setSubmittingDelete(false);
     }
-    toast.success(`Adjustment #${id} ${newStatus.toLowerCase()}`);
+  };
+
+  const handleRequestAdjustment = async (e) => {
+    e.preventDefault();
+    if (!newAdjustment.expense) {
+      toast.error('Please select an Expense to adjust');
+      return;
+    }
+    const amt = parseFloat(newAdjustment.new_amount) || 0;
+    if (isNaN(amt) || amt <= 0) {
+      toast.error('Please enter a valid new amount');
+      return;
+    }
+    if (!newAdjustment.new_payment_account) {
+      toast.error('Please select a Payment Account');
+      return;
+    }
+    if (!newAdjustment.new_category) {
+      toast.error('Please select a Category');
+      return;
+    }
+    if (!newAdjustment.reason?.trim()) {
+      toast.error('Please enter a reason for adjustment');
+      return;
+    }
+
+    const payload = {
+      expense: parseInt(newAdjustment.expense, 10),
+      new_amount: amt.toFixed(2),
+      new_payment_account: parseInt(newAdjustment.new_payment_account, 10),
+      new_expense_date: newAdjustment.new_expense_date || new Date().toISOString().slice(0, 10),
+      new_category: parseInt(newAdjustment.new_category, 10),
+      new_description: newAdjustment.new_description?.trim() ? newAdjustment.new_description.trim() : 'Expense adjustment',
+      reason: newAdjustment.reason.trim()
+    };
+
+    setSubmittingAdj(true);
+    try {
+      await expenseService.createExpenseAdjustment(payload);
+      toast.success('Expense adjustment request submitted successfully!');
+      setShowRequestAdjModal(false);
+      setNewAdjustment({
+        expense: '',
+        new_amount: '',
+        new_payment_account: '',
+        new_expense_date: new Date().toISOString().slice(0, 10),
+        new_category: '',
+        new_description: '',
+        reason: ''
+      });
+      await loadAdjustments(1);
+    } catch (err) {
+      console.error('Failed to submit adjustment request detailed error:', err?.response?.data || err);
+      let msg = 'Failed to submit adjustment request';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') {
+          msg = err.response.data;
+        } else if (err.response.data.detail) {
+          msg = err.response.data.detail;
+        } else if (typeof err.response.data === 'object') {
+          const fieldErrors = Object.entries(err.response.data).map(([key, val]) => {
+            const valStr = Array.isArray(val) ? val.join(', ') : String(val);
+            return `${key}: ${valStr}`;
+          });
+          if (fieldErrors.length > 0) {
+            msg = fieldErrors.join(' | ');
+          }
+        }
+      }
+      toast.error(msg);
+    } finally {
+      setSubmittingAdj(false);
+    }
+  };
+
+  const handleConfirmApproveAdj = async () => {
+    if (!approvingAdj) return;
+    setSubmittingApprove(true);
+    try {
+      await expenseService.approveExpenseAdjustment(approvingAdj.id);
+      toast.success(`Adjustment #${approvingAdj.id} approved successfully!`);
+      setApprovingAdj(null);
+      if (viewingAdjustment && viewingAdjustment.id === approvingAdj.id) {
+        setViewingAdjustment(null);
+      }
+      await loadAdjustments(adjCurrentPage);
+      await loadExpenses(currentPage);
+    } catch (err) {
+      console.error('Failed to approve adjustment:', err);
+      const msg = err?.response?.data?.detail || err?.userMessage || 'Failed to approve adjustment';
+      toast.error(msg);
+    } finally {
+      setSubmittingApprove(false);
+    }
+  };
+
+  const handleConfirmRejectAdj = async () => {
+    if (!rejectingAdj) return;
+    if (!rejectionReasonInput.trim()) {
+      toast.error('Please enter a rejection reason');
+      return;
+    }
+    setSubmittingReject(true);
+    try {
+      await expenseService.rejectExpenseAdjustment(rejectingAdj.id, {
+        rejection_reason: rejectionReasonInput.trim()
+      });
+      toast.success(`Adjustment #${rejectingAdj.id} rejected successfully!`);
+      setRejectingAdj(null);
+      setRejectionReasonInput('');
+      if (viewingAdjustment && viewingAdjustment.id === rejectingAdj.id) {
+        setViewingAdjustment(null);
+      }
+      await loadAdjustments(adjCurrentPage);
+    } catch (err) {
+      console.error('Failed to reject adjustment:', err);
+      const msg = err?.response?.data?.detail || err?.userMessage || 'Failed to reject adjustment';
+      toast.error(msg);
+    } finally {
+      setSubmittingReject(false);
+    }
   };
 
   return (
@@ -332,36 +799,22 @@ const Expenses = () => {
           </p>
         </div>
 
-        {/* Top Right Action Button & View Switcher */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Page Switcher Navigation Tabs */}
-          <div className="bg-gray-100 p-1 rounded-xl border border-gray-200 flex items-center">
-            <button
-              onClick={() => setActiveTab('expenses')}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                activeTab === 'expenses'
-                  ? 'bg-white text-blue-600 shadow-xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Expenses View
-            </button>
-            <button
-              onClick={() => setActiveTab('adjustments')}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                activeTab === 'adjustments'
-                  ? 'bg-white text-blue-600 shadow-xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Adjustments View
-            </button>
-          </div>
-
+        {/* Top Right Action Button */}
+        <div className="flex items-center gap-3 shrink-0">
           {activeTab === 'expenses' ? (
             <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
+              onClick={() => {
+                setNewExpense({
+                  branch: '',
+                  category: '',
+                  payment_account: '',
+                  amount: '',
+                  expense_date: new Date().toISOString().slice(0, 10),
+                  description: ''
+                });
+                setShowAddModal(true);
+              }}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
             >
               <IoAddOutline size={16} />
               <span>+ Add Expense</span>
@@ -369,12 +822,37 @@ const Expenses = () => {
           ) : (
             <button
               onClick={() => setShowRequestAdjModal(true)}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
             >
               <IoAddOutline size={16} />
               <span>+ Request Adjustment</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* 2. Underlined Tab Navigation Switcher */}
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden">
+        <div className="flex px-6 border-b border-gray-200 bg-white overflow-x-auto">
+          {[
+            { id: 'expenses', label: 'Expenses View' },
+            { id: 'adjustments', label: 'Expense Adjustments' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`whitespace-nowrap px-6 py-4 text-sm transition-colors relative cursor-pointer ${
+                activeTab === tab.id
+                  ? 'text-blue-600 font-bold'
+                  : 'text-gray-500 font-semibold hover:text-gray-900'
+              }`}
+            >
+              {tab.label}
+              {activeTab === tab.id && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full"></div>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -427,7 +905,7 @@ const Expenses = () => {
                 <CustomSelect
                   value={branchFilter}
                   onChange={setBranchFilter}
-                  options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
+                  options={['All', 'Al Naaz Kayamkulam', 'Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
                 />
               </div>
 
@@ -472,8 +950,8 @@ const Expenses = () => {
           </div>
 
           {/* Expenses Table */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden min-h-[580px] flex flex-col justify-between">
+            <div className="overflow-x-auto min-h-[480px]">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-50/90 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
@@ -488,29 +966,70 @@ const Expenses = () => {
                     <th className="py-3.5 px-4 text-center">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 text-gray-700">
-                  {filteredExpenses.length > 0 ? (
+                <tbody className="divide-y divide-gray-100 text-gray-700 bg-white">
+                  {loading ? (
+                    [...Array(10)].map((_, i) => (
+                      <tr key={i} className="animate-pulse h-[48px]">
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-12"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-36"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
+                        <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-8 mx-auto"></div></td>
+                      </tr>
+                    ))
+                  ) : filteredExpenses.length > 0 ? (
                     filteredExpenses.map((exp) => (
-                      <tr key={exp.id} className="hover:bg-gray-50/60 transition-colors">
+                      <tr key={exp.id} className="hover:bg-gray-50/60 transition-colors h-[48px]">
                         <td className="py-3.5 px-4 font-bold text-gray-900">{exp.expenseCode}</td>
-                        <td className="py-3.5 px-4 font-medium text-gray-800">{exp.formattedDate}</td>
+                        <td className="py-3.5 px-4 font-medium text-gray-800">{exp.formattedDate || exp.date}</td>
                         <td className="py-3.5 px-4 font-medium text-gray-700">{exp.branch}</td>
                         <td className="py-3.5 px-4 font-semibold text-gray-800">{exp.category}</td>
                         <td className="py-3.5 px-4 font-medium text-gray-700">{exp.paymentAccount}</td>
                         <td className="py-3.5 px-4 font-bold text-rose-600 tabular-nums font-mono">
-                          - ₹{exp.amount.toLocaleString('en-IN')}
+                          - ₹{exp.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3.5 px-4 font-medium text-gray-600">{exp.description}</td>
                         <td className="py-3.5 px-4 font-medium text-gray-700">{exp.createdBy}</td>
                         <td className="py-3.5 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setViewingExpense(exp)}
-                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-gray-200 transition-colors cursor-pointer"
-                            title="View Expense Details"
-                          >
-                            <IoEyeOutline size={15} />
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setViewingExpense(exp)}
+                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-gray-200 transition-colors cursor-pointer"
+                              title="View Expense Details"
+                            >
+                              <IoEyeOutline size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingExpense({
+                                id: exp.id,
+                                expenseCode: exp.expenseCode,
+                                branch: exp.branch_id ?? '',
+                                category: exp.category_id ?? '',
+                                payment_account: exp.payment_account_id ?? '',
+                                amount: exp.rawAmount || exp.amount || '',
+                                expense_date: exp.date || new Date().toISOString().slice(0, 10),
+                                description: exp.description || ''
+                              })}
+                              className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg border border-gray-200 transition-colors cursor-pointer"
+                              title="Edit Expense"
+                            >
+                              <IoPencilOutline size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingExpense(exp)}
+                              className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-gray-200 transition-colors cursor-pointer"
+                              title="Delete Expense"
+                            >
+                              <IoTrashOutline size={15} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -524,11 +1043,63 @@ const Expenses = () => {
                 </tbody>
               </table>
             </div>
-          </div>
 
-          {/* Footer API Notice (Matching Screenshot 1) */}
-          <div className="inline-block px-3.5 py-2 bg-gray-100/90 text-gray-500 text-[11px] font-medium rounded-xl border border-gray-200/80 shadow-2xs">
-            ExpenseViewSet currently exposes CRUD only — category / account / date filters shown here are frontend-only until the backend adds query parameters.
+            {/* Pagination Controls */}
+            {(() => {
+              const totalItems = totalCount || filteredExpenses.length;
+              const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+              const startItem = totalItems > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+              const endItem = Math.min(currentPage * pageSize, totalItems);
+
+              return (
+                <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+                  <div>
+                    Showing <span className="font-bold text-gray-800">{startItem}</span> to{' '}
+                    <span className="font-bold text-gray-800">{endItem}</span> of{' '}
+                    <span className="font-bold text-gray-800">{totalItems}</span> expenses
+                  </div>
+
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      disabled={currentPage === 1 || loading}
+                      onClick={() => loadExpenses(currentPage - 1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <IoChevronBackOutline size={14} />
+                    </button>
+
+                    {Array.from({ length: totalPages }).map((_, idx) => {
+                      const pageNum = idx + 1;
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          disabled={loading}
+                          onClick={() => loadExpenses(pageNum)}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white shadow-xs font-bold'
+                              : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={currentPage >= totalPages || loading}
+                      onClick={() => loadExpenses(currentPage + 1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <IoChevronForwardOutline size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -560,8 +1131,8 @@ const Expenses = () => {
           </div>
 
           {/* Expense Adjustments Table */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden min-h-[580px] flex flex-col justify-between">
+            <div className="overflow-x-auto min-h-[480px]">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-50/90 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
@@ -576,16 +1147,29 @@ const Expenses = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700">
-                  {filteredAdjustments.length > 0 ? (
+                  {loadingAdjustments ? (
+                    [...Array(5)].map((_, i) => (
+                      <tr key={i} className="animate-pulse h-[48px]">
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-12"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-36"></div></td>
+                        <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                        <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-10 mx-auto"></div></td>
+                      </tr>
+                    ))
+                  ) : filteredAdjustments.length > 0 ? (
                     filteredAdjustments.map((adj) => (
                       <tr key={adj.id} className="hover:bg-gray-50/60 transition-colors">
                         <td className="py-3.5 px-4 font-bold text-gray-900">{adj.adjustmentCode}</td>
                         <td className="py-3.5 px-4 font-bold text-blue-600 font-mono">{adj.expenseCode}</td>
                         <td className="py-3.5 px-4 font-bold text-gray-900 tabular-nums font-mono">
-                          ₹{adj.oldAmount.toLocaleString('en-IN')}
+                          ₹{adj.oldAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3.5 px-4 font-extrabold text-gray-900 tabular-nums font-mono">
-                          ₹{adj.newAmount.toLocaleString('en-IN')}
+                          ₹{adj.newAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
 
                         {/* Status Badges Matching Screenshot 2 */}
@@ -613,13 +1197,36 @@ const Expenses = () => {
                         </td>
                         <td className="py-3.5 px-4 font-medium text-gray-700">{adj.requestedBy}</td>
                         <td className="py-3.5 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setViewingAdjustment(adj)}
-                            className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer shadow-2xs"
-                          >
-                            View
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleViewAdjustment(adj)}
+                              className="px-2.5 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer shadow-2xs"
+                            >
+                              View
+                            </button>
+                            {adj.status === 'PENDING' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setApprovingAdj(adj)}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRejectingAdj(adj);
+                                    setRejectionReasonInput('');
+                                  }}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -633,101 +1240,431 @@ const Expenses = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Expense Adjustments Pagination Controls */}
+            {(() => {
+              const totalItems = adjTotalCount || filteredAdjustments.length;
+              const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+              const startItem = totalItems > 0 ? (adjCurrentPage - 1) * pageSize + 1 : 0;
+              const endItem = Math.min(adjCurrentPage * pageSize, totalItems);
+
+              return (
+                <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+                  <div>
+                    Showing <span className="font-bold text-gray-800">{startItem}</span> to{' '}
+                    <span className="font-bold text-gray-800">{endItem}</span> of{' '}
+                    <span className="font-bold text-gray-800">{totalItems}</span> adjustments
+                  </div>
+
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      disabled={adjCurrentPage === 1 || loadingAdjustments}
+                      onClick={() => loadAdjustments(adjCurrentPage - 1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <IoChevronBackOutline size={14} />
+                    </button>
+
+                    {Array.from({ length: totalPages }).map((_, idx) => {
+                      const pageNum = idx + 1;
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          disabled={loadingAdjustments}
+                          onClick={() => loadAdjustments(pageNum)}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
+                            adjCurrentPage === pageNum
+                              ? 'bg-blue-600 text-white shadow-xs font-bold'
+                              : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={adjCurrentPage >= totalPages || loadingAdjustments}
+                      onClick={() => loadAdjustments(adjCurrentPage + 1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <IoChevronForwardOutline size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
 
       {/* --- MODAL 1: ADD EXPENSE --- */}
-      {showAddModal && (
+      {showAddModal && (() => {
+        const branchOptions = [
+          { label: 'Select Branch', value: '' },
+          ...(branchesList.length > 0
+            ? branchesList.map((b) => ({ label: b.name, value: b.id }))
+            : [{ label: 'Al Naaz Kayamkulam', value: 1 }])
+        ];
+
+        const categoryOptions = [
+          { label: 'Select Category', value: '' },
+          ...(categoriesList.length > 0
+            ? categoriesList.map((c) => ({ label: c.name, value: c.id }))
+            : [
+                { label: 'purchase', value: 6 },
+                { label: 'others', value: 3 },
+                { label: 'utilities', value: 1 }
+              ])
+        ];
+
+        const accountOptions = [
+          { label: 'Select Payment Account', value: '' },
+          ...(accountsList.length > 0
+            ? accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
+            : [
+                { label: 'Petty Cash', value: 1 },
+                { label: 'Bank', value: 6 }
+              ])
+        ];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md relative font-sans">
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-2xl">
+                <h3 className="text-sm font-bold text-gray-900">+ Add Expense Entry</h3>
+                <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                  <IoCloseOutline size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddExpense} className="p-5 space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Branch <span className="text-red-500">*</span>
+                  </label>
+                  <CustomSelect
+                    value={newExpense.branch}
+                    onChange={(val) => setNewExpense({ ...newExpense, branch: val })}
+                    options={branchOptions}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      Category <span className="text-red-500">*</span>
+                    </label>
+                    <CustomSelect
+                      value={newExpense.category}
+                      onChange={(val) => setNewExpense({ ...newExpense, category: val })}
+                      options={categoryOptions}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      Payment Account <span className="text-red-500">*</span>
+                    </label>
+                    <CustomSelect
+                      value={newExpense.payment_account}
+                      onChange={(val) => setNewExpense({ ...newExpense, payment_account: val })}
+                      options={accountOptions}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      Amount (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="e.g. 2000"
+                      value={newExpense.amount}
+                      onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                      className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-mono font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div className="relative" ref={expenseCalendarRef}>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      Expense Date <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowExpenseCalendarPopover(!showExpenseCalendarPopover)}
+                      className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none hover:border-blue-400 font-medium cursor-pointer"
+                    >
+                      <span>
+                        {newExpense.expense_date
+                          ? newExpense.expense_date.split('-').reverse().join('/')
+                          : '02/10/2026'}
+                      </span>
+                      <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
+                    </button>
+
+                    {showExpenseCalendarPopover && (
+                      <div className="absolute right-0 bottom-full mb-1.5 z-[70] shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 animate-in fade-in zoom-in-95 duration-100">
+                        <Calendar
+                          value={newExpense.expense_date || new Date().toISOString().slice(0, 10)}
+                          onChange={(newDate) => {
+                            setNewExpense({ ...newExpense, expense_date: newDate });
+                            setShowExpenseCalendarPopover(false);
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">Description</label>
+                  <textarea
+                    rows="2"
+                    placeholder="Enter expense details..."
+                    value={newExpense.description}
+                    onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  />
+                </div>
+
+                <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingAdd}
+                    className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center gap-2"
+                  >
+                    {submittingAdd ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <span>Save Expense</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- MODAL 1.5: EDIT EXPENSE --- */}
+      {editingExpense && (() => {
+        const branchOptions = [
+          { label: 'Select Branch', value: '' },
+          ...(branchesList.length > 0
+            ? branchesList.map((b) => ({ label: b.name, value: b.id }))
+            : [{ label: 'Al Naaz Kayamkulam', value: 1 }])
+        ];
+
+        const categoryOptions = [
+          { label: 'Select Category', value: '' },
+          ...(categoriesList.length > 0
+            ? categoriesList.map((c) => ({ label: c.name, value: c.id }))
+            : [
+                { label: 'purchase', value: 6 },
+                { label: 'others', value: 3 },
+                { label: 'utilities', value: 1 }
+              ])
+        ];
+
+        const accountOptions = [
+          { label: 'Select Payment Account', value: '' },
+          ...(accountsList.length > 0
+            ? accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
+            : [
+                { label: 'Petty Cash', value: 1 },
+                { label: 'Bank', value: 6 }
+              ])
+        ];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md relative font-sans">
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-2xl">
+                <h3 className="text-sm font-bold text-gray-900">Edit Expense Entry {editingExpense.expenseCode}</h3>
+                <button onClick={() => setEditingExpense(null)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                  <IoCloseOutline size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateExpense} className="p-5 space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Branch <span className="text-red-500">*</span>
+                  </label>
+                  <CustomSelect
+                    value={editingExpense.branch}
+                    onChange={(val) => setEditingExpense({ ...editingExpense, branch: val })}
+                    options={branchOptions}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      Category <span className="text-red-500">*</span>
+                    </label>
+                    <CustomSelect
+                      value={editingExpense.category}
+                      onChange={(val) => setEditingExpense({ ...editingExpense, category: val })}
+                      options={categoryOptions}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      Payment Account <span className="text-red-500">*</span>
+                    </label>
+                    <CustomSelect
+                      value={editingExpense.payment_account}
+                      onChange={(val) => setEditingExpense({ ...editingExpense, payment_account: val })}
+                      options={accountOptions}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      Amount (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="e.g. 2000"
+                      value={editingExpense.amount}
+                      onChange={(e) => setEditingExpense({ ...editingExpense, amount: e.target.value })}
+                      className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-mono font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div className="relative" ref={editCalendarRef}>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      Expense Date <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowEditCalendarPopover(!showEditCalendarPopover)}
+                      className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none hover:border-blue-400 font-medium cursor-pointer"
+                    >
+                      <span>
+                        {editingExpense.expense_date
+                          ? editingExpense.expense_date.split('-').reverse().join('/')
+                          : '02/10/2026'}
+                      </span>
+                      <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
+                    </button>
+
+                    {showEditCalendarPopover && (
+                      <div className="absolute right-0 bottom-full mb-1.5 z-[70] shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 animate-in fade-in zoom-in-95 duration-100">
+                        <Calendar
+                          value={editingExpense.expense_date || new Date().toISOString().slice(0, 10)}
+                          onChange={(newDate) => {
+                            setEditingExpense({ ...editingExpense, expense_date: newDate });
+                            setShowEditCalendarPopover(false);
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">Description</label>
+                  <textarea
+                    rows="2"
+                    placeholder="Enter expense details..."
+                    value={editingExpense.description}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, description: e.target.value })}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  />
+                </div>
+
+                <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingExpense(null)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingUpdate}
+                    className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center gap-2"
+                  >
+                    {submittingUpdate ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Updating...</span>
+                      </>
+                    ) : (
+                      <span>Update Expense</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- MODAL 1.6: DELETE CONFIRMATION --- */}
+      {deletingExpense && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <h3 className="text-sm font-bold text-gray-900">+ Add Expense Entry</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
-                <IoCloseOutline size={20} />
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-sm overflow-hidden p-6 text-center font-sans">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-100">
+              <IoTrashOutline size={22} />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-1">Delete Expense Entry</h3>
+            <p className="text-xs text-gray-500 font-medium mb-6">
+              Are you sure you want to delete expense voucher <span className="font-bold text-gray-800">{deletingExpense.expenseCode}</span>? This action will remove the record from the database.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                disabled={submittingDelete}
+                onClick={() => setDeletingExpense(null)}
+                className="w-1/2 py-2.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingDelete}
+                onClick={handleConfirmDelete}
+                className="w-1/2 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-2"
+              >
+                {submittingDelete ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Delete Entry</span>
+                )}
               </button>
             </div>
-
-            <form onSubmit={handleAddExpense} className="p-5 space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Branch</label>
-                <CustomSelect
-                  value={newExpense.branch}
-                  onChange={(val) => setNewExpense({ ...newExpense, branch: val })}
-                  options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 uppercase mb-1">Category</label>
-                  <CustomSelect
-                    value={newExpense.category}
-                    onChange={(val) => setNewExpense({ ...newExpense, category: val })}
-                    options={['Ice & Packaging', 'Transport & Logistics', 'Utilities', 'Maintenance', 'Staff Welfare']}
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-gray-700 uppercase mb-1">Payment Account</label>
-                  <CustomSelect
-                    value={newExpense.paymentAccount}
-                    onChange={(val) => setNewExpense({ ...newExpense, paymentAccount: val })}
-                    options={['Petty Cash', 'Main Cash Drawer', 'HDFC Current A/C']}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Amount (₹)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 1800"
-                  value={newExpense.amount}
-                  onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-mono"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Date</label>
-                <input
-                  type="date"
-                  value={newExpense.date}
-                  onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Description</label>
-                <textarea
-                  rows="2"
-                  placeholder="Enter expense details..."
-                  value={newExpense.description}
-                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
-                >
-                  Save Expense
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -788,62 +1725,435 @@ const Expenses = () => {
       )}
 
       {/* --- MODAL 3: REQUEST ADJUSTMENT --- */}
-      {showRequestAdjModal && (
+      {showRequestAdjModal && (() => {
+        const expenseSelectOptions = [
+          { label: 'Select Expense to Adjust', value: '' },
+          ...expenses.map((e) => ({
+            label: `${e.expenseCode} — ${e.category} (₹${e.amount.toLocaleString('en-IN')})`,
+            value: e.id
+          }))
+        ];
+
+        const categoryOptions = [
+          { label: 'Select Category', value: '' },
+          ...(categoriesList.length > 0
+            ? categoriesList.map((c) => ({ label: c.name, value: c.id }))
+            : [
+                { label: 'purchase', value: 6 },
+                { label: 'others', value: 3 },
+                { label: 'utilities', value: 1 }
+              ])
+        ];
+
+        const accountOptions = [
+          { label: 'Select Payment Account', value: '' },
+          ...(accountsList.length > 0
+            ? accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
+            : [
+                { label: 'Petty Cash', value: 1 },
+                { label: 'Bank', value: 6 }
+              ])
+        ];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md relative font-sans">
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-2xl">
+                <h3 className="text-sm font-bold text-gray-900">+ Request Expense Adjustment</h3>
+                <button onClick={() => setShowRequestAdjModal(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                  <IoCloseOutline size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleRequestAdjustment} className="p-5 space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Select Expense <span className="text-red-500">*</span>
+                  </label>
+                  <CustomSelect
+                    value={newAdjustment.expense}
+                    onChange={(val) => {
+                      const selected = expenses.find((e) => String(e.id) === String(val));
+                      if (selected) {
+                        setNewAdjustment({
+                          ...newAdjustment,
+                          expense: val,
+                          new_amount: selected.rawAmount || String(selected.amount),
+                          new_payment_account: selected.payment_account_id || '',
+                          new_expense_date: selected.date || new Date().toISOString().slice(0, 10),
+                          new_category: selected.category_id || '',
+                          new_description: selected.description || '',
+                          reason: newAdjustment.reason
+                        });
+                      } else {
+                        setNewAdjustment({ ...newAdjustment, expense: val });
+                      }
+                    }}
+                    options={expenseSelectOptions}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      New Category <span className="text-red-500">*</span>
+                    </label>
+                    <CustomSelect
+                      value={newAdjustment.new_category}
+                      onChange={(val) => setNewAdjustment({ ...newAdjustment, new_category: val })}
+                      options={categoryOptions}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      New Payment Account <span className="text-red-500">*</span>
+                    </label>
+                    <CustomSelect
+                      value={newAdjustment.new_payment_account}
+                      onChange={(val) => setNewAdjustment({ ...newAdjustment, new_payment_account: val })}
+                      options={accountOptions}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      New Amount (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="e.g. 900"
+                      value={newAdjustment.new_amount}
+                      onChange={(e) => setNewAdjustment({ ...newAdjustment, new_amount: e.target.value })}
+                      className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-mono font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div className="relative" ref={adjCalendarRef}>
+                    <label className="block font-bold text-gray-700 uppercase mb-1">
+                      New Expense Date <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdjCalendarPopover(!showAdjCalendarPopover)}
+                      className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none hover:border-blue-400 font-medium cursor-pointer"
+                    >
+                      <span>
+                        {newAdjustment.new_expense_date
+                          ? newAdjustment.new_expense_date.split('-').reverse().join('/')
+                          : '02/10/2026'}
+                      </span>
+                      <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
+                    </button>
+
+                    {showAdjCalendarPopover && (
+                      <div className="absolute right-0 bottom-full mb-1.5 z-[70] shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 animate-in fade-in zoom-in-95 duration-100">
+                        <Calendar
+                          value={newAdjustment.new_expense_date || new Date().toISOString().slice(0, 10)}
+                          onChange={(newDate) => {
+                            setNewAdjustment({ ...newAdjustment, new_expense_date: newDate });
+                            setShowAdjCalendarPopover(false);
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">New Description</label>
+                  <textarea
+                    rows="2"
+                    placeholder="Enter revised description..."
+                    value={newAdjustment.new_description}
+                    onChange={(e) => setNewAdjustment({ ...newAdjustment, new_description: e.target.value })}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Reason for Adjustment <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows="2"
+                    placeholder="Explain why adjustment is required..."
+                    value={newAdjustment.reason}
+                    onChange={(e) => setNewAdjustment({ ...newAdjustment, reason: e.target.value })}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                    required
+                  />
+                </div>
+
+                <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRequestAdjModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingAdj}
+                    className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center gap-2"
+                  >
+                    {submittingAdj ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <span>Submit Request</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- MODAL 4: VIEW ADJUSTMENT DETAILS --- */}
+      {viewingAdjustment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-lg overflow-hidden font-sans">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <h3 className="text-sm font-bold text-gray-900">+ Request Expense Adjustment</h3>
-              <button onClick={() => setShowRequestAdjModal(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-900">Adjustment Request {viewingAdjustment.adjustmentCode}</h3>
+                  {loadingAdjDetail && (
+                    <span className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></span>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-500">Expense Voucher: <span className="font-bold text-blue-600">{viewingAdjustment.expenseCode}</span></p>
+              </div>
+              <div className="flex items-center gap-3">
+                {viewingAdjustment.status === 'PENDING' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    <span>PENDING</span>
+                  </span>
+                )}
+                {viewingAdjustment.status === 'APPROVED' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider">
+                    <span>✓ APPROVED</span>
+                  </span>
+                )}
+                {viewingAdjustment.status === 'REJECTED' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider">
+                    <span>✕ REJECTED</span>
+                  </span>
+                )}
+                <button onClick={() => setViewingAdjustment(null)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+                  <IoCloseOutline size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+              {/* Amounts Comparison Box */}
+              <div className="grid grid-cols-2 gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-center">
+                <div>
+                  <p className="text-[11px] text-gray-500 font-semibold">Old Amount</p>
+                  <p className="text-base font-bold text-gray-800 tabular-nums font-mono">
+                    ₹{typeof viewingAdjustment.oldAmount === 'number' ? viewingAdjustment.oldAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : viewingAdjustment.oldAmount}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 font-semibold">New Revised Amount</p>
+                  <p className="text-base font-bold text-blue-600 tabular-nums font-mono">
+                    ₹{typeof viewingAdjustment.newAmount === 'number' ? viewingAdjustment.newAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : viewingAdjustment.newAmount}
+                  </p>
+                </div>
+              </div>
+
+              {/* Revision Comparison Fields */}
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                {(viewingAdjustment.oldPaymentAccountName || viewingAdjustment.newPaymentAccountName) && (
+                  <div className="flex justify-between py-1 text-gray-700">
+                    <span className="text-gray-500 font-semibold">Payment Account:</span>
+                    <span className="font-bold text-gray-900">
+                      {viewingAdjustment.oldPaymentAccountName || 'N/A'} <span className="text-gray-400 font-normal">→</span> <span className="text-blue-600">{viewingAdjustment.newPaymentAccountName || 'N/A'}</span>
+                    </span>
+                  </div>
+                )}
+
+                {(viewingAdjustment.oldCategoryName || viewingAdjustment.newCategoryName) && (
+                  <div className="flex justify-between py-1 text-gray-700">
+                    <span className="text-gray-500 font-semibold">Category:</span>
+                    <span className="font-bold text-gray-900">
+                      {viewingAdjustment.oldCategoryName || 'N/A'} <span className="text-gray-400 font-normal">→</span> <span className="text-blue-600">{viewingAdjustment.newCategoryName || 'N/A'}</span>
+                    </span>
+                  </div>
+                )}
+
+                {(viewingAdjustment.oldExpenseDate || viewingAdjustment.newExpenseDate) && (
+                  <div className="flex justify-between py-1 text-gray-700">
+                    <span className="text-gray-500 font-semibold">Expense Date:</span>
+                    <span className="font-bold text-gray-900">
+                      {viewingAdjustment.oldExpenseDate ? viewingAdjustment.oldExpenseDate.split('-').reverse().join('/') : 'N/A'} <span className="text-gray-400 font-normal">→</span> <span className="text-blue-600">{viewingAdjustment.newExpenseDate ? viewingAdjustment.newExpenseDate.split('-').reverse().join('/') : 'N/A'}</span>
+                    </span>
+                  </div>
+                )}
+
+                {(viewingAdjustment.oldDescription || viewingAdjustment.newDescription) && (
+                  <div className="py-1 text-gray-700 space-y-1">
+                    <span className="text-gray-500 font-semibold block">Description Revision:</span>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="p-2 bg-gray-50 rounded-lg border border-gray-100 text-gray-600">
+                        <span className="block text-[10px] font-bold text-gray-400 uppercase">Old</span>
+                        {viewingAdjustment.oldDescription || 'N/A'}
+                      </div>
+                      <div className="p-2 bg-blue-50/50 rounded-lg border border-blue-100 text-blue-900">
+                        <span className="block text-[10px] font-bold text-blue-500 uppercase">New</span>
+                        {viewingAdjustment.newDescription || 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {viewingAdjustment.reason && (
+                  <div className="space-y-1 pt-1 text-gray-700">
+                    <p className="font-semibold text-gray-500">Adjustment Reason:</p>
+                    <p className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-gray-800 leading-relaxed font-medium">
+                      {viewingAdjustment.reason}
+                    </p>
+                  </div>
+                )}
+
+                {viewingAdjustment.rejectionReason && (
+                  <div className="space-y-1 pt-1 text-gray-700">
+                    <p className="font-semibold text-rose-600">Rejection Reason:</p>
+                    <p className="p-2.5 bg-rose-50/80 rounded-xl border border-rose-100 text-rose-900 leading-relaxed font-medium">
+                      {viewingAdjustment.rejectionReason}
+                    </p>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[11px] text-gray-500">
+                  <div>
+                    <span className="font-semibold text-gray-700">Requested By:</span>{' '}
+                    {viewingAdjustment.requestedBy}
+                    {viewingAdjustment.requestedAt && (
+                      <span className="block text-[10px] text-gray-400">
+                        {new Date(viewingAdjustment.requestedAt).toLocaleString('en-GB')}
+                      </span>
+                    )}
+                  </div>
+                  {viewingAdjustment.approvedBy && (
+                    <div>
+                      <span className="font-semibold text-emerald-700">Approved By:</span>{' '}
+                      {viewingAdjustment.approvedBy}
+                      {viewingAdjustment.approvedAt && (
+                        <span className="block text-[10px] text-gray-400">
+                          {new Date(viewingAdjustment.approvedAt).toLocaleString('en-GB')}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {viewingAdjustment.rejectedBy && (
+                    <div>
+                      <span className="font-semibold text-rose-700">Rejected By:</span>{' '}
+                      {viewingAdjustment.rejectedBy}
+                      {viewingAdjustment.rejectedAt && (
+                        <span className="block text-[10px] text-gray-400">
+                          {new Date(viewingAdjustment.rejectedAt).toLocaleString('en-GB')}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setViewingAdjustment(null)}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* --- MODAL 5: APPROVE ADJUSTMENT CONFIRMATION --- */}
+      {approvingAdj && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-sm overflow-hidden p-6 text-center font-sans">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-100">
+              <IoCheckmarkCircleOutline size={26} />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-1">Approve Adjustment Request</h3>
+            <p className="text-xs text-gray-500 font-medium mb-6 leading-relaxed">
+              Are you sure you want to approve adjustment <span className="font-bold text-gray-800">#{approvingAdj.id}</span> for expense <span className="font-bold text-blue-600">{approvingAdj.expenseCode}</span>? Amount will be revised from <span className="font-bold text-gray-800">₹{approvingAdj.oldAmount}</span> to <span className="font-bold text-emerald-600">₹{approvingAdj.newAmount}</span>.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                disabled={submittingApprove}
+                onClick={() => setApprovingAdj(null)}
+                className="w-1/2 py-2.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingApprove}
+                onClick={handleConfirmApproveAdj}
+                className="w-1/2 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-2"
+              >
+                {submittingApprove ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Approving...</span>
+                  </>
+                ) : (
+                  <span>Approve Request</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL 6: REJECT ADJUSTMENT CONFIRMATION --- */}
+      {rejectingAdj && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden font-sans">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-2xl">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100 shrink-0">
+                  <IoWarningOutline size={18} />
+                </div>
+                <h3 className="text-sm font-bold text-gray-900">Reject Adjustment #{rejectingAdj.id}</h3>
+              </div>
+              <button onClick={() => setRejectingAdj(null)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
                 <IoCloseOutline size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleRequestAdjustment} className="p-5 space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Expense ID</label>
-                <CustomSelect
-                  value={newAdjustment.expenseCode}
-                  onChange={(val) => {
-                    const match = expenses.find((e) => e.expenseCode === val || `EXPENSE-${e.id}` === val);
-                    const oldAmt = match ? match.amount : 6400;
-                    setNewAdjustment({ ...newAdjustment, expenseCode: val, oldAmount: oldAmt });
-                  }}
-                  options={['EXPENSE-1', 'EXPENSE-2', 'EXPENSE-3', 'EXPENSE-4']}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 uppercase mb-1">Old Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={newAdjustment.oldAmount}
-                    disabled
-                    className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-gray-100 text-gray-600 font-bold font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-gray-700 uppercase mb-1">New Amount (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 6800"
-                    value={newAdjustment.newAmount}
-                    onChange={(e) => setNewAdjustment({ ...newAdjustment, newAmount: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-mono"
-                    required
-                  />
-                </div>
-              </div>
+            <div className="p-5 space-y-4 text-xs">
+              <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                You are about to reject adjustment request <span className="font-bold text-gray-800">#{rejectingAdj.id}</span> for expense <span className="font-bold text-blue-600">{rejectingAdj.expenseCode}</span>. Please provide a reason below.
+              </p>
 
               <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Reason for Adjustment</label>
+                <label className="block font-bold text-gray-700 uppercase mb-1">
+                  Rejection Reason <span className="text-red-500">*</span>
+                </label>
                 <textarea
                   rows="3"
-                  placeholder="Explain why adjustment is required..."
-                  value={newAdjustment.reason}
-                  onChange={(e) => setNewAdjustment({ ...newAdjustment, reason: e.target.value })}
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  placeholder="Enter rejection reason..."
+                  value={rejectionReasonInput}
+                  onChange={(e) => setRejectionReasonInput(e.target.value)}
+                  className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-rose-500 font-medium"
                   required
                 />
               </div>
@@ -851,101 +2161,28 @@ const Expenses = () => {
               <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowRequestAdjModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                  disabled={submittingReject}
+                  onClick={() => setRejectingAdj(null)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+                  type="button"
+                  disabled={submittingReject}
+                  onClick={handleConfirmRejectAdj}
+                  className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-2"
                 >
-                  Submit Request
+                  {submittingReject ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Rejecting...</span>
+                    </>
+                  ) : (
+                    <span>Confirm Rejection</span>
+                  )}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- MODAL 4: VIEW ADJUSTMENT DETAILS --- */}
-      {viewingAdjustment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900">Adjustment Request {viewingAdjustment.adjustmentCode}</h3>
-                <p className="text-[11px] text-gray-500">Target: {viewingAdjustment.expenseCode}</p>
-              </div>
-              <button onClick={() => setViewingAdjustment(null)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
-                <IoCloseOutline size={20} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-center">
-                <div>
-                  <p className="text-[11px] text-gray-500 font-semibold">Old Amount</p>
-                  <p className="text-base font-bold text-gray-800 tabular-nums font-mono">₹{viewingAdjustment.oldAmount.toLocaleString('en-IN')}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-gray-500 font-semibold">New Revised Amount</p>
-                  <p className="text-base font-bold text-blue-600 tabular-nums font-mono">₹{viewingAdjustment.newAmount.toLocaleString('en-IN')}</p>
-                </div>
-              </div>
-
-              <div className="space-y-2 border-t border-gray-100 pt-3">
-                <div className="flex justify-between py-1 text-gray-700">
-                  <span>Current Status:</span>
-                  <span className="font-bold text-gray-900">{viewingAdjustment.status}</span>
-                </div>
-                <div className="flex justify-between py-1 text-gray-700">
-                  <span>Requested By:</span>
-                  <span className="font-bold text-gray-900">{viewingAdjustment.requestedBy}</span>
-                </div>
-                <div className="space-y-1 pt-1 text-gray-700">
-                  <p className="font-semibold text-gray-500">Adjustment Reason:</p>
-                  <p className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-gray-800 leading-relaxed font-medium">
-                    {viewingAdjustment.reason}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-              {viewingAdjustment.status === 'PENDING' ? (
-                <div className="flex items-center gap-2 w-full justify-between">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleUpdateAdjStatus(viewingAdjustment.id, 'APPROVED')}
-                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer shadow-xs"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleUpdateAdjStatus(viewingAdjustment.id, 'REJECTED')}
-                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors cursor-pointer shadow-xs"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => setViewingAdjustment(null)}
-                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded-xl cursor-pointer"
-                  >
-                    Close
-                  </button>
-                </div>
-              ) : (
-                <div className="flex justify-end w-full">
-                  <button
-                    onClick={() => setViewingAdjustment(null)}
-                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
-                  >
-                    Close
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>

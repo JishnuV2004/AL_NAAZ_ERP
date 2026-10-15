@@ -1,152 +1,166 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useInventoryStore } from '../../store/inventoryStore';
-import { inventoryService } from '../../services/inventoryService';
-import { PageLoader, ButtonLoader } from '../../components/common/Loader';
-import Modal from '../../components/common/Modal';
+import {
+  IoSearchOutline,
+  IoAddOutline,
+  IoTrashOutline,
+  IoChevronBackOutline,
+  IoChevronForwardOutline,
+  IoCubeOutline
+} from 'react-icons/io5';
 import { FiEdit } from 'react-icons/fi';
-import { IoAddOutline, IoSearchOutline, IoTrashOutline } from 'react-icons/io5';
+import toast from 'react-hot-toast';
+import Modal from '../../components/common/Modal';
+import { inventoryService } from '../../services/inventoryService';
 
 const defaultForm = {
   name: '',
   category: 'Vegetables',
   unit: 'KG',
-  minStock: 10,
-  status: 'Active'
+  minStock: '10.00',
+  is_active: true
 };
-
-const initialMockProducts = [
-  { id: 1, name: 'Basmati Rice 1121', category: 'Grains', unit: 'KG', minStock: 100, is_active: true, status: 'Active' },
-  { id: 2, name: 'Sunflower Cooking Oil', category: 'Cooking', unit: 'L', minStock: 50, is_active: true, status: 'Active' },
-  { id: 3, name: 'Fresh Chicken Whole', category: 'Meat & Poultry', unit: 'KG', minStock: 30, is_active: true, status: 'Active' },
-  { id: 4, name: 'Red Onions Nashik', category: 'Vegetables', unit: 'KG', minStock: 40, is_active: true, status: 'Active' },
-  { id: 5, name: 'Whole Milk 1L', category: 'Beverages', unit: 'Pack', minStock: 25, is_active: true, status: 'Active' },
-  { id: 6, name: 'Mutton Curry Cut', category: 'Meat & Poultry', unit: 'KG', minStock: 15, is_active: true, status: 'Active' },
-  { id: 7, name: 'Tomato Hybrid', category: 'Vegetables', unit: 'KG', minStock: 35, is_active: true, status: 'Active' }
-];
 
 const Products = () => {
   const navigate = useNavigate();
-  const { products: storeProducts, loading: storeLoading, fetchProducts, addProduct, updateProduct, deleteProduct } = useInventoryStore();
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
 
-  const [productsList, setProductsList] = useState(initialMockProducts);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
 
+  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState(defaultForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loading, setLoading] = useState(false);
+
+  // Delete Modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const loadProducts = async (pageToLoad = 1) => {
+    setLoading(true);
+    try {
+      const response = await inventoryService.fetchProducts(pageToLoad, pageSize);
+      let list = [];
+      let count = 0;
+
+      if (Array.isArray(response)) {
+        list = response;
+        count = response.length;
+      } else if (response && Array.isArray(response.results)) {
+        list = response.results;
+        count = typeof response.count === 'number' ? response.count : response.results.length;
+      }
+
+      setProducts(list);
+      setTotalCount(count);
+      setPage(pageToLoad);
+    } catch (err) {
+      console.error('Failed to load products list from API:', err);
+      toast.error('Failed to load products');
+      setProducts([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    const load = async () => {
-      try {
-        setLoading(true);
-        if (fetchProducts) {
-          const res = await fetchProducts();
-          if (isMounted && res && res.length > 0) {
-            setProductsList(res);
-          }
-        }
-      } catch (e) {
-        console.warn('API error fetching products, using mock:', e);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-    load();
-    return () => { isMounted = false; };
+    loadProducts(1);
   }, []);
 
-  const activeProducts = (storeProducts && storeProducts.length > 0) ? storeProducts : productsList;
+  const handleOpenAdd = () => {
+    setEditingProduct(null);
+    setFormData(defaultForm);
+    setIsModalOpen(true);
+  };
 
-  const filteredProducts = activeProducts.filter(p => {
-    const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (p.category || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCat = selectedCategory === 'All' || p.category === selectedCategory;
-    return matchesSearch && matchesCat;
-  });
-
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
-  const currentProducts = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const openEditModal = (product) => {
-    setEditingId(product.id);
+  const handleOpenEdit = (product) => {
+    setEditingProduct(product);
     setFormData({
       name: product.name || '',
       category: product.category || 'Vegetables',
       unit: product.unit || 'KG',
-      minStock: product.minimum_stock || product.minStock || 10,
-      status: product.is_active || product.status === 'Active' ? 'Active' : 'Inactive'
+      minStock: product.minimum_stock !== undefined ? product.minimum_stock : '10.00',
+      is_active: product.is_active !== undefined ? product.is_active : true
     });
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.name.trim()) {
+      toast.error('Product name is required');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      if (editingId) {
-        if (updateProduct) {
-          await updateProduct(editingId, formData);
-        }
-        setProductsList(prev => prev.map(p => p.id === editingId ? {
-          ...p,
-          name: formData.name,
-          category: formData.category,
-          unit: formData.unit,
-          minStock: parseFloat(formData.minStock),
-          minimum_stock: parseFloat(formData.minStock),
-          status: formData.status,
-          is_active: formData.status === 'Active'
-        } : p));
+      const payload = {
+        name: formData.name.trim(),
+        category: formData.category,
+        unit: formData.unit,
+        minStock: formData.minStock,
+        status: formData.is_active ? 'Active' : 'Inactive'
+      };
+
+      if (editingProduct) {
+        await inventoryService.updateProduct(editingProduct.id, payload);
       } else {
-        const newProd = {
-          id: Date.now(),
-          name: formData.name,
-          category: formData.category,
-          unit: formData.unit,
-          minStock: parseFloat(formData.minStock),
-          minimum_stock: parseFloat(formData.minStock),
-          status: formData.status,
-          is_active: formData.status === 'Active'
-        };
-        if (addProduct) {
-          await addProduct(formData);
-        }
-        setProductsList(prev => [newProd, ...prev]);
+        await inventoryService.addProduct(payload);
       }
+
       setIsModalOpen(false);
-      setFormData(defaultForm);
+      loadProducts(page);
     } catch (err) {
-      console.error('Error saving product:', err);
+      console.error('Failed to save product:', err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const confirmDelete = async () => {
-    if (!deletingId) return;
-    setIsSubmitting(true);
+  const handleOpenDelete = (product) => {
+    setProductToDelete(product);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!productToDelete) return;
+    setIsDeleting(true);
     try {
-      if (deleteProduct) {
-        await deleteProduct(deletingId);
-      }
-      setProductsList(prev => prev.filter(p => p.id !== deletingId));
-      setIsDeleteModalOpen(false);
-      setDeletingId(null);
+      await inventoryService.deleteProduct(productToDelete.id);
+      setDeleteModalOpen(false);
+      setProductToDelete(null);
+      loadProducts(page);
     } catch (err) {
-      console.error('Error deleting product:', err);
+      console.error('Failed to delete product:', err);
     } finally {
-      setIsSubmitting(false);
+      setIsDeleting(false);
     }
   };
+
+  // Client side filtering over loaded page results
+  const filteredProducts = products.filter((p) => {
+    const nameStr = (p.name || '').toLowerCase();
+    const catStr = (p.category || '').toLowerCase();
+    const query = searchTerm.toLowerCase();
+
+    const matchesSearch = !query || nameStr.includes(query) || catStr.includes(query);
+    const matchesCat = categoryFilter === 'All' || catStr === categoryFilter.toLowerCase();
+    const matchesStatus =
+      statusFilter === 'All' ||
+      (statusFilter === 'Active' && p.is_active) ||
+      (statusFilter === 'Inactive' && !p.is_active);
+
+    return matchesSearch && matchesCat && matchesStatus;
+  });
 
   return (
     <div className="space-y-6 pb-12 font-sans">
@@ -154,7 +168,7 @@ const Products = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1.5">
-            <span>Inventory</span> &gt; <span className="text-gray-700">Products Catalog</span>
+            <span>Inventory</span> &gt; <span className="text-gray-700 font-bold">Products Catalog</span>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Products Catalog</h1>
           <p className="text-xs text-gray-500 font-medium mt-0.5">
@@ -185,248 +199,356 @@ const Products = () => {
             Low Stock Alerts
           </button>
           <button
-            onClick={() => {
-              setEditingId(null);
-              setFormData(defaultForm);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center justify-center space-x-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors shadow-2xs cursor-pointer"
+            type="button"
+            onClick={handleOpenAdd}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
           >
-            <IoAddOutline className="h-4 w-4" />
-            <span>Add Product</span>
+            <IoAddOutline size={16} /> Add Product
           </button>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white border border-gray-200 rounded-2xl p-4 shadow-xs gap-4">
-        <div className="relative w-full sm:max-w-xs">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
-            <IoSearchOutline className="h-4 w-4" />
-          </div>
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-2xl border border-gray-200 shadow-xs gap-4">
+        <div className="relative w-full sm:w-80">
+          <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
             type="text"
-            placeholder="Search products by name or category..."
+            placeholder="Search product name or category..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-4 text-xs text-gray-800 outline-none focus:border-blue-500"
+            className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:bg-white focus:border-blue-500 outline-none font-medium"
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-gray-500">Category:</span>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 font-medium outline-none focus:border-blue-500"
-          >
-            <option value="All">All Categories</option>
-            <option value="Vegetables">Vegetables</option>
-            <option value="Grains">Grains</option>
-            <option value="Meat & Poultry">Meat & Poultry</option>
-            <option value="Cooking">Cooking</option>
-            <option value="Beverages">Beverages</option>
-          </select>
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <span className="font-medium">Category:</span>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="bg-gray-50 border border-gray-200 text-gray-700 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:border-blue-500"
+            >
+              <option value="All">All Categories</option>
+              <option value="Vegetable">Vegetables</option>
+              <option value="Grains">Grains</option>
+              <option value="Meat & Poultry">Meat & Poultry</option>
+              <option value="Cooking">Cooking</option>
+              <option value="Beverages">Beverages</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <span className="font-medium">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-gray-50 border border-gray-200 text-gray-700 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:border-blue-500"
+            >
+              <option value="All">All Status</option>
+              <option value="Active">Active Only</option>
+              <option value="Inactive">Inactive Only</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Table & Pagination */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
-          <PageLoader />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left font-sans text-sm">
-              <thead className="bg-white text-gray-400 text-[10px] font-bold tracking-wider uppercase border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4">Product Name</th>
-                  <th className="px-6 py-4">Category</th>
-                  <th className="px-6 py-4 text-center">Unit</th>
-                  <th className="px-6 py-4 text-center">Min Stock Alert</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {currentProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-xs text-gray-400">
-                      No products found matching criteria.
+      {/* Products Table - Fixed Height Container for 10 Items */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden min-h-[580px] flex flex-col justify-between w-full">
+        <div className="overflow-x-auto min-h-[480px] w-full">
+          <table className="w-full text-left border-collapse min-w-[850px]">
+            <thead>
+              <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
+                <th className="py-3.5 px-4">Product Name</th>
+                <th className="py-3.5 px-4">Category</th>
+                <th className="py-3.5 px-4 text-center">Unit</th>
+                <th className="py-3.5 px-4 text-center">Minimum Stock</th>
+                <th className="py-3.5 px-4 text-center">Status</th>
+                <th className="py-3.5 px-4 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-xs bg-white">
+              {loading ? (
+                [...Array(10)].map((_, i) => (
+                  <tr key={i} className="animate-pulse h-[54px]">
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-36"></div></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-12 mx-auto"></div></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-16 mx-auto"></div></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-16 mx-auto"></div></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-16 mx-auto"></div></td>
+                  </tr>
+                ))
+              ) : filteredProducts.length > 0 ? (
+                filteredProducts.map((product) => (
+                  <tr key={product.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
+                    {/* Name */}
+                    <td className="py-3.5 px-4 font-bold text-gray-900 capitalize">
+                      <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                          <IoCubeOutline size={15} />
+                        </span>
+                        <span>{product.name}</span>
+                      </div>
+                    </td>
+
+                    {/* Category */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700 capitalize">
+                      <span className="inline-block px-2.5 py-0.5 rounded-md bg-gray-100 text-gray-700 font-semibold text-[11px]">
+                        {product.category || 'General'}
+                      </span>
+                    </td>
+
+                    {/* Unit */}
+                    <td className="py-3.5 px-4 text-center font-mono font-bold text-gray-800">
+                      {product.unit}
+                    </td>
+
+                    {/* Minimum Stock */}
+                    <td className="py-3.5 px-4 text-center font-mono font-semibold text-gray-800">
+                      {parseFloat(product.minimum_stock || 0).toFixed(2)}
+                    </td>
+
+                    {/* Status Badge */}
+                    <td className="py-3.5 px-4 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-extrabold rounded-full ${
+                        product.is_active
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-gray-100 text-gray-500 border border-gray-200'
+                      }`}>
+                        {product.is_active && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>}
+                        <span>{product.is_active ? 'Active' : 'Inactive'}</span>
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(product)}
+                          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          title="Edit Product"
+                        >
+                          <FiEdit size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDelete(product)}
+                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete Product"
+                        >
+                          <IoTrashOutline size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ) : (
-                  currentProducts.map(product => (
-                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-gray-900">{product.name}</td>
-                      <td className="px-6 py-4 text-gray-500">{product.category}</td>
-                      <td className="px-6 py-4 text-center font-bold text-gray-900">{product.unit}</td>
-                      <td className="px-6 py-4 text-center text-gray-500">{product.minimum_stock || product.minStock || 0}</td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`px-2.5 py-1 rounded text-xs font-bold ${product.is_active || product.status === 'Active' ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
-                          {product.is_active || product.status === 'Active' ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-3">
-                        <button onClick={() => openEditModal(product)} className="text-gray-900 font-bold hover:text-blue-600 transition-colors cursor-pointer p-1" title="Edit Product">
-                          <FiEdit className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => {
-                          setDeletingId(product.id);
-                          setIsDeleteModalOpen(true);
-                        }} className="text-red-500 font-bold hover:text-red-700 transition-colors cursor-pointer p-1" title="Delete Product">
-                          <IoTrashOutline className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="py-12 text-center text-gray-400 font-medium">
+                    No products found matching current filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        {!loading && filteredProducts.length > 0 && (
-          <div className="border-t border-gray-100 p-4 flex flex-col sm:flex-row items-center justify-between bg-gray-50/50 gap-4">
-            <span className="text-xs font-medium text-gray-500">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredProducts.length)} of {filteredProducts.length} entries (Page {currentPage} of {totalPages})
-            </span>
-            <div className="flex items-center space-x-1">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(p => p - 1)}
-                className="px-3 py-1.5 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Prev
-              </button>
+        {/* Pagination Controls */}
+        {(() => {
+          const totalItems = totalCount || products.length;
+          const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+          const startItem = totalItems > 0 ? (page - 1) * pageSize + 1 : 0;
+          const endItem = Math.min(page * pageSize, totalItems);
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+          return (
+            <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+              <div>
+                Showing <span className="font-bold text-gray-800">{startItem}</span> to{' '}
+                <span className="font-bold text-gray-800">{endItem}</span> of{' '}
+                <span className="font-bold text-gray-800">{totalItems}</span> products
+              </div>
+
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
                 <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                    currentPage === pageNum
-                      ? 'bg-blue-600 border-blue-600 text-white font-bold'
-                      : 'bg-white border-gray-200 text-gray-900 hover:bg-gray-100'
-                  }`}
+                  type="button"
+                  disabled={page === 1 || loading}
+                  onClick={() => loadProducts(page - 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                 >
-                  {pageNum}
+                  <IoChevronBackOutline size={14} />
                 </button>
-              ))}
 
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(p => p + 1)}
-                className="px-3 py-1.5 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-              </button>
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pageNum = idx + 1;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => loadProducts(pageNum)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
+                        page === pageNum
+                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  disabled={page >= totalPages || loading}
+                  onClick={() => loadProducts(page + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  <IoChevronForwardOutline size={14} />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
-      {/* Add / Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Edit Product" : "Add New Product"}>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Add / Edit Product Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingProduct ? 'Edit Product Details' : 'Add New Product'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4 font-sans text-xs">
           <div>
-            <label className="block text-xs font-bold text-gray-900 uppercase mb-1.5">Product Name</label>
+            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Product Name *</label>
             <input
               type="text"
               required
               value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2 text-xs focus:border-blue-500 outline-none"
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-medium"
+              placeholder="e.g. Tomato"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-gray-900 uppercase mb-1.5">Category</label>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Category</label>
               <select
-                required
                 value={formData.category}
-                onChange={e => setFormData({ ...formData, category: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2 text-xs focus:border-blue-500 outline-none bg-white"
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium capitalize"
               >
-                <option>Vegetables</option>
-                <option>Grains</option>
-                <option>Meat & Poultry</option>
-                <option>Cooking</option>
-                <option>Beverages</option>
-                <option>Other</option>
+                <option value="vegetable">Vegetables</option>
+                <option value="grains">Grains</option>
+                <option value="meat & poultry">Meat & Poultry</option>
+                <option value="cooking">Cooking</option>
+                <option value="beverages">Beverages</option>
+                <option value="other">Other</option>
               </select>
             </div>
+
             <div>
-              <label className="block text-xs font-bold text-gray-900 uppercase mb-1.5">Unit</label>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Measurement Unit</label>
               <select
-                required
                 value={formData.unit}
-                onChange={e => setFormData({ ...formData, unit: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2 text-xs focus:border-blue-500 outline-none bg-white"
+                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
               >
-                <option>KG</option>
-                <option>L</option>
-                <option>Pack</option>
-                <option>Piece</option>
+                <option value="KG">KG</option>
+                <option value="L">LITER (L)</option>
+                <option value="Pack">Pack</option>
+                <option value="Piece">Piece / PCS</option>
+                <option value="BOX">BOX</option>
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+
+          <div>
+            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Minimum Stock Alert Threshold</label>
+            <input
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              value={formData.minStock}
+              onChange={(e) => setFormData({ ...formData, minStock: e.target.value })}
+              className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-medium font-mono"
+              placeholder="e.g. 15.00"
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
             <div>
-              <label className="block text-xs font-bold text-gray-900 uppercase mb-1.5">Minimum Stock Alert</label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                value={formData.minStock}
-                onChange={e => setFormData({ ...formData, minStock: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2 text-xs focus:border-blue-500 outline-none"
+              <label className="block text-xs font-bold text-gray-700 uppercase">Active Status</label>
+              <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                {formData.is_active ? 'Product is active in inventory catalog' : 'Product is inactive / disabled'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                formData.is_active ? 'bg-emerald-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  formData.is_active ? 'translate-x-5' : 'translate-x-0'
+                }`}
               />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-900 uppercase mb-1.5">Status</label>
-              <select
-                required
-                value={formData.status}
-                onChange={e => setFormData({ ...formData, status: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2 text-xs focus:border-blue-500 outline-none bg-white"
-              >
-                <option>Active</option>
-                <option>Inactive</option>
-              </select>
-            </div>
+            </button>
           </div>
-          <div className="flex justify-end pt-4">
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors font-medium text-xs cursor-pointer"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-semibold transition-colors text-xs cursor-pointer shadow-xs"
             >
-              {isSubmitting ? <ButtonLoader /> : (editingId ? 'Update Product' : 'Save Product')}
+              {isSubmitting ? 'Saving...' : editingProduct ? 'Save Changes' : 'Create Product'}
             </button>
           </div>
         </form>
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Product">
-        <div className="space-y-6">
-          <p className="text-gray-500 text-xs">
-            Are you sure you want to delete this product? This action cannot be undone and may affect your stock ledger.
+      <Modal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Confirm Product Deletion"
+      >
+        <div className="space-y-4 font-sans text-xs">
+          <p className="text-gray-600 font-medium">
+            Are you sure you want to delete the product <span className="font-bold text-gray-900">"{productToDelete?.name}"</span>?
           </p>
-          <div className="flex justify-end gap-3">
+          <p className="text-gray-400 text-[11px]">
+            This action will remove the product record from the inventory catalog.
+          </p>
+          <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
             <button
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+              type="button"
+              onClick={() => setDeleteModalOpen(false)}
+              className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors font-medium text-xs cursor-pointer"
             >
               Cancel
             </button>
             <button
-              onClick={confirmDelete}
-              disabled={isSubmitting}
-              className="rounded-xl bg-red-600 px-5 py-2 text-xs font-semibold text-white hover:bg-red-700 shadow-xs disabled:opacity-50 transition-all cursor-pointer"
+              type="button"
+              disabled={isDeleting}
+              onClick={handleDeleteConfirm}
+              className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-semibold transition-colors text-xs cursor-pointer shadow-xs"
             >
-              {isSubmitting ? <ButtonLoader /> : 'Yes, Delete'}
+              {isDeleting ? 'Deleting...' : 'Delete Product'}
             </button>
           </div>
         </div>

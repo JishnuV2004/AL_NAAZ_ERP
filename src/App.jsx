@@ -41,6 +41,7 @@ import Products from './pages/Inventory/Products';
 import Categories from './pages/Inventory/Categories';
 import Stock from './pages/Inventory/Stock';
 import StockUsage from './pages/Inventory/StockUsage';
+import StockAdjustments from './pages/Inventory/StockAdjustments';
 import StockLedger from './pages/Inventory/StockLedger';
 import LowStock from './pages/Inventory/LowStock';
 import Suppliers from './pages/Procurement/Suppliers';
@@ -156,6 +157,8 @@ function App() {
           <Route path="/inventory/categories" element={<Layout><Categories /></Layout>} />
           <Route path="/inventory/stock" element={<Layout><Stock /></Layout>} />
           <Route path="/inventory/stockusage" element={<Layout><StockUsage /></Layout>} />
+          <Route path="/inventory/stockadjustments" element={<Layout><StockAdjustments /></Layout>} />
+          <Route path="/inventory/adjustments" element={<Layout><StockAdjustments /></Layout>} />
           <Route path="/inventory/stockledger" element={<Layout><StockLedger /></Layout>} />
           <Route path="/inventory/lowstock" element={<Layout><LowStock /></Layout>} />
           <Route path="/procurement/suppliers" element={<Layout><Suppliers /></Layout>} />
@@ -172,7 +175,7 @@ function App() {
           <Route path="/finance/receivables" element={<Layout><Receivables /></Layout>} />
           <Route path="/finance/expenses" element={<Layout><Expenses /></Layout>} />
           <Route path="/finance/pettycash" element={<Layout><PettyCash /></Layout>} />
-          <Route path="/finance/transactions" element={<Layout><Transactions /></Layout>} />
+          <Route path="/finance/transactions" element={<Navigate to="/finance/overview" replace />} />
           <Route path="/finance/cashtransfers" element={<Layout><Transactions /></Layout>} />
           <Route path="/finance/supplierpayables" element={<Layout><SupplierPayables /></Layout>} />
           <Route path="/finance/deliverypartners" element={<Layout><DeliveryPartners /></Layout>} />

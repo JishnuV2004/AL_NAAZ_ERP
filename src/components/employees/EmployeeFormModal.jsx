@@ -1,8 +1,92 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IoCloseOutline, IoAlertCircleOutline } from 'react-icons/io5';
+import { IoCloseOutline, IoAlertCircleOutline, IoChevronDownOutline, IoCalendarOutline } from 'react-icons/io5';
+import { getDepartments } from '../../api/departments.api';
+import { Calendar } from '../ui/calendar';
+
+// Custom Dropdown Select with form theme background
+const CustomSelect = ({ value, onChange, options, placeholder = 'Select...', error = false, disabled = false, className = '' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const formattedOptions = options.map((opt) => {
+    if (typeof opt === 'object' && opt !== null) {
+      return {
+        label: opt.label ?? opt.name ?? String(opt.value ?? opt.id),
+        value: opt.value ?? opt.id
+      };
+    }
+    return { label: String(opt), value: opt };
+  });
+
+  const selectedItem = formattedOptions.find((opt) => String(opt.value) === String(value));
+  const isValueEmpty = value === '' || value === null || value === undefined || value === 0;
+  const displayText = selectedItem ? selectedItem.label : placeholder;
+  const isPlaceholder = isValueEmpty || !selectedItem;
+
+  return (
+    <div ref={dropdownRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between text-sm border rounded-xl px-4 py-2.5 bg-white text-[#1C1F2A] focus:outline-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+          error
+            ? 'border-[#C1443A] focus:ring-1 focus:ring-[#C1443A]'
+            : isOpen
+            ? 'border-[#C9A227] ring-1 ring-[#C9A227]'
+            : 'border-[#E7E8EE] hover:border-[#C9A227]'
+        }`}
+      >
+        <span className={`truncate ${isPlaceholder ? 'text-gray-400 font-normal' : 'text-[#1C1F2A] font-medium'}`}>
+          {displayText}
+        </span>
+        <IoChevronDownOutline className={`text-gray-400 transition-transform duration-200 shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} size={16} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-[#E7E8EE] py-1.5 z-50 font-sans max-h-60 overflow-y-auto">
+          {formattedOptions.length === 0 ? (
+            <div className="px-4 py-2 text-sm text-gray-400">No options available</div>
+          ) : (
+            formattedOptions.map((opt, idx) => {
+              const isSelected = String(value) === String(opt.value);
+              return (
+                <button
+                  key={opt.value !== undefined && opt.value !== '' ? String(opt.value) : `opt-${idx}`}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm font-medium flex items-center justify-between transition-colors cursor-pointer ${
+                    isSelected ? 'bg-[#C9A227]/10 text-[#C9A227]' : 'text-[#1C1F2A] hover:bg-[#F4F5F8]'
+                  }`}
+                >
+                  <span className="truncate">{opt.label}</span>
+                  {isSelected && <span className="text-[#C9A227] font-bold">✓</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const initialForm = {
   branch: '',
+  department: '',
   name: '',
   phone: '',
   address: '',
@@ -19,16 +103,38 @@ const initialForm = {
 
 const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBranches, onSubmit }) => {
   const [form, setForm] = useState(initialForm);
+  const [departmentsList, setDepartmentsList] = useState([]);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCalendarPopover, setShowCalendarPopover] = useState(false);
   const modalRef = useRef(null);
+  const datePickerRef = useRef(null);
+
+  // Fetch departments for current branch or all
+  useEffect(() => {
+    if (isOpen) {
+      const fetchDeps = async () => {
+        try {
+          const deps = await getDepartments(form.branch || null);
+          setDepartmentsList(deps || []);
+        } catch (err) {
+          console.error('Failed to load departments in modal:', err);
+        }
+      };
+      fetchDeps();
+    }
+  }, [isOpen, form.branch]);
 
   useEffect(() => {
     if (isOpen) {
       if (mode === 'edit' && employeeData) {
+        const deptVal = employeeData.department
+          ? (typeof employeeData.department === 'object' ? employeeData.department?.id?.toString() : employeeData.department?.toString())
+          : '';
         setForm({
           branch: typeof employeeData.branch === 'object' ? employeeData.branch?.id?.toString() : employeeData.branch?.toString() || '',
+          department: deptVal || '',
           name: employeeData.name || '',
           phone: employeeData.phone || '',
           address: employeeData.address || '',
@@ -47,6 +153,7 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
       }
       setErrors({});
       setApiError(null);
+      setShowCalendarPopover(false);
     }
   }, [isOpen, mode, employeeData]);
 
@@ -58,6 +165,17 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose, isSubmitting]);
+
+  // Close calendar popover on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target)) {
+        setShowCalendarPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const validate = () => {
     const newErrors = {};
@@ -85,10 +203,18 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
     if (!form.joining_date) {
       newErrors.joining_date = 'Joining date is required';
     } else {
-      const selected = new Date(form.joining_date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (selected > today) newErrors.joining_date = 'Joining date cannot be in the future';
+      const parts = form.joining_date.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        const selectedDate = new Date(y, m, d, 0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (selectedDate > today) {
+          newErrors.joining_date = 'Joining date cannot be in the future';
+        }
+      }
     }
 
     if (form.document && !form.document_type) {
@@ -120,6 +246,7 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
       const payload = {
         name: form.name.trim(),
         branch: parseInt(form.branch, 10),
+        department: form.department ? parseInt(form.department, 10) : 0,
         phone: form.phone.trim(),
         address: form.address.trim(),
         designation: form.designation.trim(),
@@ -183,26 +310,41 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
           <form id="employee-form" onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Branch */}
-              <div className="col-span-1 md:col-span-2">
+              <div className="col-span-1">
                 <label className="block text-sm font-semibold text-[#1C1F2A] mb-2" htmlFor="branch">
                   Branch <span className="text-[#C1443A]">*</span>
                 </label>
-                <select
-                  id="branch"
-                  name="branch"
+                <CustomSelect
+                  options={accessibleBranches.map(b => ({ value: b.id.toString(), label: b.code || b.name }))}
                   value={form.branch}
-                  onChange={handleChange}
+                  onChange={(val) => {
+                    setForm(prev => ({ ...prev, branch: val, department: '' }));
+                    if (errors.branch) setErrors(prev => ({ ...prev, branch: undefined }));
+                  }}
+                  placeholder="Select a branch"
+                  error={!!errors.branch}
                   disabled={isSubmitting}
-                  className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-1 bg-white text-sm transition-colors ${
-                    errors.branch ? 'border-[#C1443A] focus:border-[#C1443A] focus:ring-[#C1443A]' : 'border-[#E7E8EE] focus:border-[#C9A227] focus:ring-[#C9A227]'
-                  }`}
-                >
-                  <option value="" disabled>Select a branch</option>
-                  {accessibleBranches.map(b => (
-                    <option key={b.id} value={b.id}>{b.code}</option>
-                  ))}
-                </select>
+                />
                 {errors.branch && <p className="mt-1 text-xs text-[#C1443A]">{errors.branch}</p>}
+              </div>
+
+              {/* Department */}
+              <div className="col-span-1">
+                <label className="block text-sm font-semibold text-[#1C1F2A] mb-2" htmlFor="department">
+                  Department
+                </label>
+                <CustomSelect
+                  options={departmentsList.map(d => ({ value: d.id.toString(), label: d.name }))}
+                  value={form.department}
+                  onChange={(val) => {
+                    setForm(prev => ({ ...prev, department: val }));
+                    if (errors.department) setErrors(prev => ({ ...prev, department: undefined }));
+                  }}
+                  placeholder="Select department"
+                  error={!!errors.department}
+                  disabled={isSubmitting}
+                />
+                {errors.department && <p className="mt-1 text-xs text-[#C1443A]">{errors.department}</p>}
               </div>
 
               {/* Name */}
@@ -349,23 +491,51 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
                 )}
               </div>
 
-              {/* Joining Date */}
-              <div className="col-span-1">
+              {/* Joining Date with Custom Calendar Model */}
+              <div className="col-span-1 relative" ref={datePickerRef}>
                 <label className="block text-sm font-semibold text-[#1C1F2A] mb-2" htmlFor="joining_date">
                   Joining Date <span className="text-[#C1443A]">*</span>
                 </label>
-                <input
-                  id="joining_date"
-                  name="joining_date"
-                  type="date"
-                  value={form.joining_date}
-                  onChange={handleChange}
+                <button
+                  type="button"
                   disabled={isSubmitting}
-                  max={new Date().toISOString().split('T')[0]} // Cannot be future
-                  className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-1 bg-white text-sm transition-colors ${
-                    errors.joining_date ? 'border-[#C1443A] focus:border-[#C1443A] focus:ring-[#C1443A]' : 'border-[#E7E8EE] focus:border-[#C9A227] focus:ring-[#C9A227]'
+                  onClick={() => !isSubmitting && setShowCalendarPopover(!showCalendarPopover)}
+                  className={`w-full flex items-center justify-between text-sm border rounded-xl px-4 py-2.5 bg-white text-[#1C1F2A] focus:outline-none transition-colors cursor-pointer disabled:opacity-50 ${
+                    errors.joining_date
+                      ? 'border-[#C1443A] focus:ring-1 focus:ring-[#C1443A]'
+                      : showCalendarPopover
+                      ? 'border-[#C9A227] ring-1 ring-[#C9A227]'
+                      : 'border-[#E7E8EE] hover:border-[#C9A227]'
                   }`}
-                />
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <IoCalendarOutline size={18} className="text-[#C9A227] shrink-0" />
+                    <span className={form.joining_date ? 'text-[#1C1F2A] font-medium' : 'text-gray-400 font-normal'}>
+                      {form.joining_date || 'Select Joining Date'}
+                    </span>
+                  </div>
+                  <IoChevronDownOutline
+                    className={`text-gray-400 transition-transform duration-200 shrink-0 ml-2 ${
+                      showCalendarPopover ? 'rotate-180 text-[#C9A227]' : ''
+                    }`}
+                    size={16}
+                  />
+                </button>
+
+                {showCalendarPopover && (
+                  <div className="absolute left-0 mt-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <Calendar
+                      value={form.joining_date}
+                      onChange={(newDate) => {
+                        setForm(prev => ({ ...prev, joining_date: newDate }));
+                        setShowCalendarPopover(false);
+                        if (errors.joining_date) {
+                          setErrors(prev => ({ ...prev, joining_date: undefined }));
+                        }
+                      }}
+                    />
+                  </div>
+                )}
                 {errors.joining_date && <p className="mt-1 text-xs text-[#C1443A]">{errors.joining_date}</p>}
               </div>
 
@@ -379,23 +549,23 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
                     <label className="block text-sm font-semibold text-[#1C1F2A] mb-2" htmlFor="document_type">
                       Document Type {form.document && <span className="text-[#C1443A]">*</span>}
                     </label>
-                    <select
-                      id="document_type"
-                      name="document_type"
+                    <CustomSelect
+                      options={[
+                        { value: 'Aadhaar', label: 'Aadhaar' },
+                        { value: 'PAN', label: 'PAN' },
+                        { value: 'Driving License', label: 'Driving License' },
+                        { value: 'Passport', label: 'Passport' },
+                        { value: 'Other', label: 'Other' }
+                      ]}
                       value={form.document_type}
-                      onChange={handleChange}
+                      onChange={(val) => {
+                        setForm(prev => ({ ...prev, document_type: val }));
+                        if (errors.document_type) setErrors(prev => ({ ...prev, document_type: undefined }));
+                      }}
+                      placeholder="Select Document Type"
+                      error={!!errors.document_type}
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-1 bg-white text-sm transition-colors ${
-                        errors.document_type ? 'border-[#C1443A] focus:border-[#C1443A] focus:ring-[#C1443A]' : 'border-[#E7E8EE] focus:border-[#C9A227] focus:ring-[#C9A227]'
-                      }`}
-                    >
-                      <option value="" disabled>Select Document Type</option>
-                      <option value="Aadhaar">Aadhaar</option>
-                      <option value="PAN">PAN</option>
-                      <option value="Driving License">Driving License</option>
-                      <option value="Passport">Passport</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    />
                     {errors.document_type && <p className="mt-1 text-xs text-[#C1443A]">{errors.document_type}</p>}
                   </div>
 
@@ -421,8 +591,6 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
                 </div>
               </div>
               )}
-
-              {/* Active Toggle removed as status editing is handled via a dedicated API */}
 
             </div>
           </form>

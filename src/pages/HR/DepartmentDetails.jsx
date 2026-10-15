@@ -17,7 +17,7 @@ const DepartmentDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 5;
+  const ITEMS_PER_PAGE = 10;
 
   const loadData = async () => {
     setLoading(true);
@@ -214,14 +214,14 @@ const DepartmentDetails = () => {
                       );
                     })
                   ) : (
-                    <tr>
+                    <tr className="h-[65px]">
                       <td colSpan="6" className="p-8 text-center text-gray-500 font-medium">
                         No employees currently assigned to this department.
                       </td>
                     </tr>
                   )}
-                  {emptyRowsCount > 0 && paginatedStaff.length > 0 && (
-                    Array.from({ length: emptyRowsCount }).map((_, index) => (
+                  {emptyRowsCount > 0 && (
+                    Array.from({ length: paginatedStaff.length === 0 ? Math.max(0, emptyRowsCount - 1) : emptyRowsCount }).map((_, index) => (
                       <tr key={`empty-${index}`} className="h-[65px]">
                         <td colSpan="6"></td>
                       </tr>
@@ -231,45 +231,48 @@ const DepartmentDetails = () => {
               </table>
             </div>
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50 mt-auto">
-                <span className="text-sm text-gray-500">
-                  Showing {startIndex + 1} to {Math.min(startIndex + ITEMS_PER_PAGE, staffList.length)} of {staffList.length} entries
+            {/* Pagination Controls & Current Page Indicator */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 mt-auto">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-500">
+                  Showing <span className="font-bold text-gray-900">{staffList.length > 0 ? startIndex + 1 : 0}</span> to <span className="font-bold text-gray-900">{Math.min(startIndex + ITEMS_PER_PAGE, staffList.length)}</span> of <span className="font-bold text-gray-900">{staffList.length}</span> entries
                 </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Previous
-                  </button>
-                  <div className="flex items-center gap-1">
-                    {[...Array(totalPages)].map((_, i) => (
-                      <button
-                        key={i + 1}
-                        onClick={() => setCurrentPage(i + 1)}
-                        className={`w-8 h-8 flex items-center justify-center text-sm font-medium rounded-md transition-colors ${
-                          currentPage === i + 1 
-                            ? 'bg-[#1E5E45] text-white border border-[#1E5E45]' 
-                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        {i + 1}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
+                <span className="px-2.5 py-0.5 text-xs font-bold bg-[#1E5E45]/10 text-[#1E5E45] rounded-full">
+                  Page {currentPage} of {totalPages}
+                </span>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3.5 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-xs"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-1">
+                  {[...Array(totalPages)].map((_, i) => (
+                    <button
+                      key={i + 1}
+                      onClick={() => setCurrentPage(i + 1)}
+                      className={`w-8 h-8 flex items-center justify-center text-sm font-bold rounded-lg transition-colors shadow-xs ${
+                        currentPage === i + 1 
+                          ? 'bg-[#1E5E45] text-white border border-[#1E5E45]' 
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-3.5 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-xs"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

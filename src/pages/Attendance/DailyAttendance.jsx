@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   IoSearchOutline,
   IoFilterOutline,
-  IoDownloadOutline,
   IoAddOutline,
   IoEyeOutline,
   IoChevronBackOutline,
@@ -160,7 +159,6 @@ const getTodayDateString = () => {
 
 const DailyAttendance = () => {
   const [employees, setEmployees] = useState([]);
-  const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [showCalendarPopover, setShowCalendarPopover] = useState(false);
   const datePickerRef = useRef(null);
@@ -176,7 +174,8 @@ const DailyAttendance = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isMarkingPresent, setIsMarkingPresent] = useState(false);
   const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
   const [activeRemarkInputId, setActiveRemarkInputId] = useState(null);
   const [remarkInputText, setRemarkInputText] = useState('');
@@ -280,6 +279,7 @@ const DailyAttendance = () => {
           return {
             ...updatedEmp,
             status: updatedEmp.status,
+            is_paid: updatedEmp.is_paid !== undefined ? Boolean(updatedEmp.is_paid) : true,
             presentAbsent: { present, absent },
             leaveHalf: { leave, half },
             remarks: updatedEmp.remarks || '-'
@@ -289,6 +289,65 @@ const DailyAttendance = () => {
       })
     );
     toast.success(`Updated record for ${updatedEmp.name}`);
+  };
+
+  const toggleEmployeePaid = (id) => {
+    let empName = '';
+    let nextPaidVal = true;
+    setEmployees((prev) =>
+      prev.map((emp) => {
+        if (String(emp.id) === String(id)) {
+          nextPaidVal = emp.is_paid === false ? true : false;
+          empName = emp.name;
+          return {
+            ...emp,
+            is_paid: nextPaidVal
+          };
+        }
+        return emp;
+      })
+    );
+    toast.success(`${empName || 'Employee'}: set to ${nextPaidVal ? 'Paid' : 'Unpaid'}`);
+  };
+
+  const handleSaveModalRecord = async () => {
+    if (!editingEmployee) return;
+
+    const rawStatus = editingEmployee.status ? String(editingEmployee.status).trim().toUpperCase() : '';
+    const formattedStatus =
+      rawStatus === 'HALF DAY' || rawStatus === 'HALFDAY' || rawStatus === 'HALF_DAY'
+        ? 'HALF_DAY'
+        : rawStatus;
+
+    const cleanRemark =
+      editingEmployee.remarks && editingEmployee.remarks !== '-' ? String(editingEmployee.remarks).trim() : '';
+
+    const empIdNum = parseInt(editingEmployee.id, 10);
+
+    if (
+      formattedStatus &&
+      formattedStatus !== 'NOT MARKED' &&
+      formattedStatus !== 'PENDING' &&
+      !isNaN(empIdNum) &&
+      empIdNum > 0
+    ) {
+      const payload = {
+        employee: empIdNum,
+        date: selectedDate || new Date().toISOString().split('T')[0],
+        status: formattedStatus,
+        is_paid: editingEmployee.is_paid !== undefined ? Boolean(editingEmployee.is_paid) : true,
+        remarks: cleanRemark
+      };
+
+      try {
+        await axiosInstance.post('/attendance/', payload);
+      } catch (err) {
+        console.warn('Individual /attendance/ POST notice:', err);
+      }
+    }
+
+    updateEmployeeRecord(editingEmployee);
+    setEditingEmployee(null);
   };
 
   const saveEmployeeRemark = (empId, newRemark) => {
@@ -347,22 +406,7 @@ const DailyAttendance = () => {
     startIndex,
     startIndex + itemsPerPage
   );
-
-  const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedEmployees(filteredEmployees.map((emp) => emp.id));
-    } else {
-      setSelectedEmployees([]);
-    }
-  };
-
-  const handleSelectEmployee = (id) => {
-    if (selectedEmployees.some((empId) => String(empId) === String(id))) {
-      setSelectedEmployees(selectedEmployees.filter((empId) => String(empId) !== String(id)));
-    } else {
-      setSelectedEmployees([...selectedEmployees, id]);
-    }
-  };
+  const emptyRowsCount = loading ? 0 : Math.max(0, itemsPerPage - paginatedEmployees.length);
 
   const updateEmployeeStatus = (id, newStatus) => {
     setEmployees((prev) =>
@@ -397,26 +441,36 @@ const DailyAttendance = () => {
   };
 
   const handleBulkMarkPresent = () => {
-    if (selectedEmployees.length === 0) {
-      toast.error('Please select at least one employee');
+    if (isMarkingPresent) return;
+    if (filteredEmployees.length === 0) {
+      toast.error('No employees available to mark present');
       return;
     }
-    setEmployees((prev) =>
-      prev.map((emp) =>
-        selectedEmployees.some((selId) => String(selId) === String(emp.id))
-          ? {
-            ...emp,
-            status: 'PRESENT',
-            presentAbsent: { present: 1, absent: 0 },
-            leaveHalf: { leave: 0, half: 0 }
-          }
-          : emp
-      )
-    );
-    toast.success(`Marked ${selectedEmployees.length} employee(s) Present`);
+
+    setIsMarkingPresent(true);
+    setTimeout(() => {
+      setEmployees((prev) =>
+        prev.map((emp) => {
+          const isTarget = filteredEmployees.some((f) => String(f.id) === String(emp.id));
+          return isTarget
+            ? {
+              ...emp,
+              status: 'PRESENT',
+              is_paid: true,
+              presentAbsent: { present: 1, absent: 0 },
+              leaveHalf: { leave: 0, half: 0 }
+            }
+            : emp;
+        })
+      );
+      setIsMarkingPresent(false);
+      toast.success(`Marked all ${filteredEmployees.length} employee(s) Present`);
+    }, 350);
   };
 
   const handleSaveAttendance = async () => {
+    if (isSaving) return;
+
     // Check if any employee has a remark but no status assigned
     const unassignedWithRemark = employees.find(
       (emp) =>
@@ -433,6 +487,7 @@ const DailyAttendance = () => {
       return;
     }
 
+    setIsSaving(true);
     const loadingToast = toast.loading('Saving attendance...');
     try {
       const records = employees
@@ -462,7 +517,9 @@ const DailyAttendance = () => {
 
           return {
             employee: empIdNum,
+            date: selectedDate || new Date().toISOString().split('T')[0],
             status: formattedStatus,
+            is_paid: emp.is_paid !== undefined ? Boolean(emp.is_paid) : true,
             remarks: cleanRemark
           };
         })
@@ -472,6 +529,7 @@ const DailyAttendance = () => {
         toast.error('Please select or change at least one employee status before saving.', {
           id: loadingToast
         });
+        setIsSaving(false);
         return;
       }
 
@@ -498,7 +556,7 @@ const DailyAttendance = () => {
                 ...emp,
                 status: normalizeStatus(ret.status),
                 remarks: ret.remarks || '-',
-                is_paid: ret.is_paid !== undefined ? ret.is_paid : emp.is_paid
+                is_paid: ret.is_paid !== undefined ? Boolean(ret.is_paid) : (emp.is_paid !== undefined ? Boolean(emp.is_paid) : true)
               };
             }
             return emp;
@@ -547,6 +605,8 @@ const DailyAttendance = () => {
         }
       }
       toast.error(errMsg, { id: loadingToast });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -861,52 +921,86 @@ const DailyAttendance = () => {
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={handleSaveAttendance}
-              className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
+              disabled={isSaving}
+              className={`px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl flex items-center gap-2 transition-all shadow-sm ${isSaving
+                  ? 'opacity-75 cursor-not-allowed'
+                  : 'hover:bg-blue-700 cursor-pointer active:scale-98'
+                }`}
             >
-              <IoAddOutline size={16} /> Save Attendance
+              {isSaving ? (
+                <>
+                  <svg
+                    className="animate-spin h-3.5 w-3.5 text-white shrink-0"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  <span>Saving Attendance...</span>
+                </>
+              ) : (
+                <>
+                  <IoAddOutline size={16} />
+                  <span>Save Attendance</span>
+                </>
+              )}
             </button>
             <button
               onClick={handleBulkMarkPresent}
-              className="px-3.5 py-2 bg-white border border-gray-200 text-blue-600 text-xs font-semibold rounded-xl flex items-center gap-1.5 hover:bg-blue-50 transition-colors shadow-sm cursor-pointer"
+              disabled={isSaving || isMarkingPresent}
+              className={`px-3.5 py-2 bg-white border border-gray-200 text-blue-600 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-sm ${isMarkingPresent
+                  ? 'opacity-75 cursor-not-allowed bg-blue-50/50'
+                  : 'hover:bg-blue-50 cursor-pointer active:scale-98'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              <IoCheckmarkCircleOutline size={16} /> Mark All Present
-            </button>
-
-            <div className="relative">
-              <button
-                onClick={() => setShowExportDropdown(!showExportDropdown)}
-                className="px-3.5 py-2 bg-white border border-gray-200 text-blue-600 text-xs font-semibold rounded-xl flex items-center gap-1.5 hover:bg-blue-50 transition-colors shadow-sm cursor-pointer"
-              >
-                <IoDownloadOutline size={16} /> Export <IoChevronDownOutline size={13} />
-              </button>
-
-              {showExportDropdown && (
-                <div className="absolute left-0 mt-2 w-40 bg-white border border-gray-100 rounded-xl shadow-lg py-1 z-20">
-                  <button
-                    onClick={() => {
-                      toast.success('Exporting CSV...');
-                      setShowExportDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+              {isMarkingPresent ? (
+                <>
+                  <svg
+                    className="animate-spin h-3.5 w-3.5 text-blue-600 shrink-0"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
                   >
-                    Export CSV
-                  </button>
-                  <button
-                    onClick={() => {
-                      toast.success('Exporting PDF...');
-                      setShowExportDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
-                  >
-                    Export PDF
-                  </button>
-                </div>
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  <span>Marking Present...</span>
+                </>
+              ) : (
+                <>
+                  <IoCheckmarkCircleOutline size={16} />
+                  <span>Mark All Present</span>
+                </>
               )}
-            </div>
+            </button>
           </div>
 
           <span className="text-xs font-semibold text-gray-500">
-            Selected: <span className="font-bold text-gray-900">{selectedEmployees.length}</span> employee(s)
+            Total: <span className="font-bold text-gray-900">{filteredEmployees.length}</span> employee(s)
           </span>
         </div>
       </div>
@@ -917,18 +1011,7 @@ const DailyAttendance = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
-                <th className="py-4 px-4 w-12 text-center">
-                  <input
-                    type="checkbox"
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4"
-                    onChange={handleSelectAll}
-                    checked={
-                      selectedEmployees.length === filteredEmployees.length &&
-                      filteredEmployees.length > 0
-                    }
-                  />
-                </th>
-                <th className="py-4 px-4 text-left">Employee</th>
+                <th className="py-4 pl-6 pr-4 text-left">Employee</th>
                 <th className="py-4 px-4 text-left">Designation</th>
                 <th className="py-4 px-4 text-center">
                   <div className="inline-flex items-center justify-center gap-1">
@@ -936,17 +1019,15 @@ const DailyAttendance = () => {
                   </div>
                 </th>
                 <th className="py-4 px-4 text-center">Status</th>
+                <th className="py-4 px-4 text-center">Type</th>
                 <th className="py-4 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white text-sm">
               {loading ? (
-                Array.from({ length: 5 }).map((_, idx) => (
-                  <tr key={idx} className="animate-pulse">
-                    <td className="py-4 px-4 text-center">
-                      <div className="h-4 w-4 bg-gray-200 rounded mx-auto"></div>
-                    </td>
-                    <td className="py-4 px-4">
+                Array.from({ length: itemsPerPage }).map((_, idx) => (
+                  <tr key={idx} className="animate-pulse h-[73px]">
+                    <td className="py-4 pl-6 pr-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0"></div>
                         <div className="space-y-1.5 w-36">
@@ -965,6 +1046,9 @@ const DailyAttendance = () => {
                       <div className="h-6 bg-gray-200 rounded-lg w-24 mx-auto"></div>
                     </td>
                     <td className="py-4 px-4 text-center">
+                      <div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div>
+                    </td>
+                    <td className="py-4 px-4 text-center">
                       <div className="h-7 w-20 bg-gray-200 rounded-lg mx-auto"></div>
                     </td>
                   </tr>
@@ -972,17 +1056,8 @@ const DailyAttendance = () => {
               ) : paginatedEmployees.length > 0 ? (
                 paginatedEmployees.map((row) => (
                   <tr key={row.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-4 text-center">
-                      <input
-                        type="checkbox"
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4"
-                        checked={selectedEmployees.includes(row.id)}
-                        onChange={() => handleSelectEmployee(row.id)}
-                      />
-                    </td>
-
                     {/* Employee Column with Letter Avatar + Name + ID + Remarks Badge */}
-                    <td className="py-4 px-4 text-left">
+                    <td className="py-4 pl-6 pr-4 text-left">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 border shadow-xs ${getAvatarColor(row.name)}`}>
                           {getInitials(row.name)}
@@ -1105,6 +1180,40 @@ const DailyAttendance = () => {
                       </div>
                     </td>
 
+                    {/* Paid Field with Toggle Button */}
+                    <td className="py-4 px-4 text-center">
+                      <div className="inline-flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={row.is_paid !== false}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleEmployeePaid(row.id);
+                          }}
+                          className={`relative inline-flex h-6 w-11 p-0.5 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out outline-none focus:outline-none focus:ring-0 shadow-2xs ${row.is_paid !== false ? 'bg-emerald-500' : 'bg-gray-300'
+                            }`}
+                          title={
+                            row.is_paid !== false
+                              ? 'Paid (Click to toggle Unpaid leave)'
+                              : 'Unpaid (Click to toggle Paid leave)'
+                          }
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${row.is_paid !== false ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                          />
+                        </button>
+                        <span
+                          className={`text-xs font-bold select-none min-w-[42px] text-left transition-colors ${row.is_paid !== false ? 'text-emerald-700' : 'text-gray-500'
+                            }`}
+                        >
+                          {row.is_paid !== false ? 'Paid' : 'Unpaid'}
+                        </span>
+                      </div>
+                    </td>
+
                     {/* Actions Column */}
                     <td className="py-4 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -1155,6 +1264,13 @@ const DailyAttendance = () => {
                     No employees found matching the filters.
                   </td>
                 </tr>
+              )}
+              {paginatedEmployees.length > 0 && emptyRowsCount > 0 && (
+                Array.from({ length: emptyRowsCount }).map((_, idx) => (
+                  <tr key={`empty-${idx}`} className="h-[73px] border-b border-gray-100/40">
+                    <td colSpan="6">&nbsp;</td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -1245,6 +1361,47 @@ const DailyAttendance = () => {
                 </div>
               </div>
 
+              {/* Paid Status Toggle */}
+              <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
+                <div>
+                  <label className="block text-xs font-bold text-gray-800">
+                    Paid Status
+                  </label>
+                  <p className="text-[11px] text-gray-500 font-medium">
+                    {editingEmployee.is_paid !== false
+                      ? 'Paid attendance / Paid leave'
+                      : 'Unpaid attendance / Loss of pay (LOP)'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={editingEmployee.is_paid !== false}
+                    onClick={() =>
+                      setEditingEmployee({
+                        ...editingEmployee,
+                        is_paid: editingEmployee.is_paid === false ? true : false
+                      })
+                    }
+                    className={`relative inline-flex h-6 w-11 p-0.5 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out outline-none focus:outline-none focus:ring-0 ${editingEmployee.is_paid !== false ? 'bg-emerald-500' : 'bg-gray-300'
+                      }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${editingEmployee.is_paid !== false ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                    />
+                  </button>
+                  <span
+                    className={`text-xs font-bold select-none min-w-[42px] ${editingEmployee.is_paid !== false ? 'text-emerald-700' : 'text-gray-500'
+                      }`}
+                  >
+                    {editingEmployee.is_paid !== false ? 'Paid' : 'Unpaid'}
+                  </span>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                   Remarks / Notes
@@ -1269,10 +1426,7 @@ const DailyAttendance = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  updateEmployeeRecord(editingEmployee);
-                  setEditingEmployee(null);
-                }}
+                onClick={handleSaveModalRecord}
                 className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm cursor-pointer"
               >
                 Save Record

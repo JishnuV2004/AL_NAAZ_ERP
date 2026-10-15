@@ -5,9 +5,12 @@ import {
   IoCloseOutline,
   IoArrowForwardOutline,
   IoSwapHorizontalOutline,
-  IoInformationCircleOutline
+  IoInformationCircleOutline,
+  IoChevronBackOutline,
+  IoChevronForwardOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
+import axiosInstance from '../../config/axios';
 
 // Custom Dropdown Select
 const CustomSelect = ({ value, onChange, options, className = '' }) => {
@@ -58,165 +61,67 @@ const CustomSelect = ({ value, onChange, options, className = '' }) => {
   );
 };
 
-// Initial Data for Financial Transactions Ledger
+// Initial Fallback Data for Financial Transactions Ledger
 const INITIAL_TRANSACTIONS = [
   {
-    id: 34,
-    txCode: '#34',
-    date: '19 Sep 2026',
-    rawDate: '2026-09-19',
-    type: 'REVENUE',
-    account: 'Main Cash Drawer',
-    direction: 'IN',
-    amount: 21000,
-    reference: 'DAILY-SALES-3',
-    description: 'Cash revenue — Daily Sale #3',
-    createdBy: 'System',
-    branch: 'Kochi — Main Mandi'
-  },
-  {
-    id: 33,
-    txCode: '#33',
-    date: '19 Sep 2026',
-    rawDate: '2026-09-19',
-    type: 'REVENUE',
-    account: 'UPI Collections',
-    direction: 'IN',
-    amount: 11400,
-    reference: 'DAILY-SALES-3',
-    description: 'UPI revenue — Daily Sale #3',
-    createdBy: 'System',
-    branch: 'Kochi — Main Mandi'
-  },
-  {
-    id: 32,
-    txCode: '#32',
-    date: '19 Sep 2026',
-    rawDate: '2026-09-19',
-    type: 'REVENUE',
-    account: 'Food Delivery Receivable',
-    direction: 'IN',
-    amount: 4600,
-    reference: 'DAILY-SALES-3',
-    description: 'Food delivery revenue — Zomato',
-    createdBy: 'System',
-    branch: 'Kochi — Main Mandi'
-  },
-  {
-    id: 31,
-    txCode: '#31',
-    date: '20 Sep 2026',
-    rawDate: '2026-09-20',
-    type: 'EXPENSE',
+    id: 64,
+    txCode: '#64',
+    date: '2026-10-09',
+    rawDate: '2026-10-09',
+    type: 'SUPPLIER PAYMENT',
     account: 'Petty Cash',
-    direction: 'OUT',
-    amount: 1800,
-    reference: 'EXPENSE-4',
-    description: 'Ice blocks — evening batch',
-    createdBy: 'Sana Iqbal',
-    branch: 'Kochi — Main Mandi'
-  },
-  {
-    id: 30,
-    txCode: '#30',
-    date: '15 Sep 2026',
-    rawDate: '2026-09-15',
-    type: 'EXPENSE',
-    account: 'HDFC Current A/C',
-    direction: 'OUT',
-    amount: 6400,
-    reference: 'EXPENSE-2',
-    description: 'Electricity bill — Aug cycle',
-    createdBy: 'Farhan Rasheed',
-    branch: 'Kochi — Main Mandi'
-  },
-  {
-    id: 29,
-    txCode: '#29',
-    date: '12 Sep 2026',
-    rawDate: '2026-09-12',
-    type: 'EXPENSE',
-    account: 'Main Cash Drawer',
-    direction: 'OUT',
-    amount: 950,
-    reference: 'EXPENSE-1',
-    description: 'Weighing scale repair',
-    createdBy: 'Rahim K.',
-    branch: 'Kochi — Main Mandi'
-  },
-  {
-    id: 28,
-    txCode: '#28',
-    date: '13 Sep 2026',
-    rawDate: '2026-09-13',
-    type: 'ADJUSTMENT',
-    account: 'Main Cash Drawer',
     direction: 'OUT',
     amount: 200,
-    reference: 'EXPENSE-1-ADJUSTMENT-2',
-    description: 'Adjustment — added spare part',
-    createdBy: 'System',
-    branch: 'Kochi — Main Mandi'
+    reference: 'PURCHASE-26-BALANCE',
+    description: 'Supplier payment - ABC traders',
+    createdBy: 'admin',
+    branch: 'Al Naaz Kayamkulam'
   },
   {
-    id: 27,
-    txCode: '#27',
-    date: '11 Sep 2026',
-    rawDate: '2026-09-11',
-    type: 'TRANSFER OUT',
+    id: 63,
+    txCode: '#63',
+    date: '2026-10-09',
+    rawDate: '2026-10-09',
+    type: 'SUPPLIER PAYMENT',
     account: 'Petty Cash',
     direction: 'OUT',
-    amount: 5000,
-    reference: 'TRANSFER-GRP-9',
-    description: 'Transfer to HDFC Current A/C',
-    createdBy: 'Farhan Rasheed',
-    branch: 'Kochi — Main Mandi'
+    amount: 100,
+    reference: 'PURCHASE-26-INITIAL',
+    description: 'Supplier payment - ABC traders',
+    createdBy: 'admin',
+    branch: 'Al Naaz Kayamkulam'
   },
   {
-    id: 26,
-    txCode: '#26',
-    date: '11 Sep 2026',
-    rawDate: '2026-09-11',
-    type: 'TRANSFER IN',
-    account: 'HDFC Current A/C',
-    direction: 'IN',
-    amount: 5000,
-    reference: 'TRANSFER-GRP-9',
-    description: 'Transfer from Petty Cash',
-    createdBy: 'Farhan Rasheed',
-    branch: 'Kochi — Main Mandi'
-  },
-  {
-    id: 25,
-    txCode: '#25',
-    date: '08 Sep 2026',
-    rawDate: '2026-09-08',
+    id: 62,
+    txCode: '#62',
+    date: '2026-10-09',
+    rawDate: '2026-10-09',
     type: 'SUPPLIER PAYMENT',
-    account: 'HDFC Current A/C',
+    account: 'Petty Cash',
     direction: 'OUT',
-    amount: 4000,
-    reference: 'SUPPLIER-PAYMENT-7',
-    description: 'Payment to ABC Traders',
-    createdBy: 'Farhan Rasheed',
-    branch: 'Kochi — Main Mandi'
+    amount: 200,
+    reference: 'testing',
+    description: 'Supplier payment - RRR',
+    createdBy: 'admin',
+    branch: 'Al Naaz Kayamkulam'
   },
   {
-    id: 1,
-    txCode: '#1',
-    date: '01 Jan 2026',
-    rawDate: '2026-01-01',
-    type: 'OPENING BALANCE',
-    account: 'HDFC Current A/C',
+    id: 61,
+    txCode: '#61',
+    date: '2026-10-07',
+    rawDate: '2026-10-07',
+    type: 'REVENUE',
+    account: 'Cash',
     direction: 'IN',
-    amount: 200000,
-    reference: 'OPENING-4',
-    description: 'Opening balance',
-    createdBy: 'Farhan Rasheed',
-    branch: 'Kochi — Main Mandi'
+    amount: 300,
+    reference: 'DAILY-SALES-5',
+    description: 'Daily sales - CASH',
+    createdBy: 'admin',
+    branch: 'Al Naaz Kayamkulam'
   }
 ];
 
-// Initial Data for Transfers
+// Initial Fallback Data for Transfers
 const INITIAL_TRANSFERS = [
   {
     id: 9,
@@ -235,31 +140,70 @@ const INITIAL_TRANSFERS = [
     toAccount: 'Petty Cash',
     amount: 3500,
     createdBy: 'Farhan Rasheed'
-  },
-  {
-    id: 7,
-    transferGroup: 'TRANSFER-GRP-7',
-    date: '28 Aug 2026',
-    fromAccount: 'Main Cash Drawer',
-    toAccount: 'HDFC Current A/C',
-    amount: 12000,
-    createdBy: 'Rahim K.'
   }
 ];
 
 const Transactions = () => {
   const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'transfers'
 
-  // Transactions Tab Filter State
-  const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
-  const [branchFilter, setBranchFilter] = useState('Kochi — Main Mandi');
+  // Transactions State
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [branchFilter, setBranchFilter] = useState('All');
   const [accountFilter, setAccountFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
   const [directionFilter, setDirectionFilter] = useState('All');
+  const [page, setPage] = useState(1);
 
   // Transfers Tab State
   const [transfers, setTransfers] = useState(INITIAL_TRANSFERS);
+  const [transfersPage, setTransfersPage] = useState(1);
   const [showTransferModal, setShowTransferModal] = useState(false);
+
+  const pageSize = 10;
+
+  // Fetch Transactions from API
+  const loadTransactions = async () => {
+    setLoading(true);
+    try {
+      const response = await axiosInstance.get('/transactions/');
+      const rawData = Array.isArray(response.data)
+        ? response.data
+        : response.data.results || [];
+      
+      if (rawData && rawData.length > 0) {
+        const mapped = rawData.map((item) => ({
+          id: item.id,
+          txCode: `#${item.id}`,
+          date: item.transaction_date || (item.created_at ? item.created_at.split('T')[0] : '-'),
+          rawDate: item.transaction_date || item.created_at || '',
+          type: (item.transaction_type || '').replace(/_/g, ' '),
+          rawType: item.transaction_type,
+          account: item.account_name || (item.account ? `Account #${item.account}` : '-'),
+          accountId: item.account,
+          direction: item.direction || 'IN',
+          amount: parseFloat(item.amount) || 0,
+          reference: item.reference || '-',
+          description: item.description || '-',
+          createdBy: item.created_by_name || (item.created_by ? `User #${item.created_by}` : '-'),
+          branch: item.branch_name || (item.branch ? `Branch #${item.branch}` : '-'),
+          transferGroupId: item.transfer_group_id
+        }));
+        setTransactions(mapped);
+      } else {
+        setTransactions(INITIAL_TRANSACTIONS);
+      }
+    } catch (error) {
+      console.error('Failed to fetch transactions API:', error);
+      setTransactions(INITIAL_TRANSACTIONS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTransactions();
+  }, []);
 
   // New Transfer Form State
   const [newTransfer, setNewTransfer] = useState({
@@ -270,14 +214,49 @@ const Transactions = () => {
     description: ''
   });
 
+  // Unique filter lists
+  const availableBranches = [
+    'All',
+    ...Array.from(new Set(transactions.map((t) => t.branch).filter(Boolean)))
+  ];
+  const availableAccounts = [
+    'All',
+    ...Array.from(new Set(transactions.map((t) => t.account).filter(Boolean)))
+  ];
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [branchFilter, accountFilter, typeFilter, directionFilter]);
+
   // Filtered Financial Transactions
   const filteredTransactions = transactions.filter((tx) => {
-    if (branchFilter && tx.branch !== branchFilter) return false;
+    if (branchFilter !== 'All' && tx.branch !== branchFilter) return false;
     if (accountFilter !== 'All' && tx.account !== accountFilter) return false;
-    if (typeFilter !== 'All' && tx.type !== typeFilter) return false;
+    if (typeFilter !== 'All') {
+      const formattedFilter = typeFilter.replace(/_/g, ' ').toUpperCase();
+      const formattedTxType = (tx.type || '').toUpperCase();
+      if (formattedTxType !== formattedFilter) return false;
+    }
     if (directionFilter !== 'All' && tx.direction !== directionFilter) return false;
     return true;
   });
+
+  // Pagination calculation for Transactions
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const indexOfLast = currentPage * pageSize;
+  const indexOfFirst = (currentPage - 1) * pageSize;
+  const currentTransactions = filteredTransactions.slice(indexOfFirst, indexOfLast);
+  const emptyRowsCount = pageSize - currentTransactions.length;
+
+  // Pagination calculation for Transfers
+  const totalTransfersPages = Math.max(1, Math.ceil(transfers.length / pageSize));
+  const currentTransfersPage = Math.min(transfersPage, totalTransfersPages);
+  const indexOfLastTransfer = currentTransfersPage * pageSize;
+  const indexOfFirstTransfer = (currentTransfersPage - 1) * pageSize;
+  const currentTransfers = transfers.slice(indexOfFirstTransfer, indexOfLastTransfer);
+  const emptyTransfersRowsCount = pageSize - currentTransfers.length;
 
   // Handle Submit New Money Transfer
   const handleCreateTransfer = (e) => {
@@ -311,8 +290,7 @@ const Transactions = () => {
       createdBy: 'Admin User'
     };
 
-    // Create corresponding TRANSFER OUT & TRANSFER IN ledger transactions
-    const nextTxId = Math.max(...transactions.map((t) => t.id)) + 1;
+    const nextTxId = transactions.length > 0 ? Math.max(...transactions.map((t) => t.id)) + 1 : 1;
     const txOut = {
       id: nextTxId + 1,
       txCode: `#${nextTxId + 1}`,
@@ -325,7 +303,7 @@ const Transactions = () => {
       reference: grpCode,
       description: `Transfer to ${newTransfer.toAccount}`,
       createdBy: 'Admin User',
-      branch: branchFilter
+      branch: branchFilter !== 'All' ? branchFilter : 'Main Branch'
     };
 
     const txIn = {
@@ -340,7 +318,7 @@ const Transactions = () => {
       reference: grpCode,
       description: `Transfer from ${newTransfer.fromAccount}`,
       createdBy: 'Admin User',
-      branch: branchFilter
+      branch: branchFilter !== 'All' ? branchFilter : 'Main Branch'
     };
 
     setTransfers([transferRecord, ...transfers]);
@@ -359,7 +337,8 @@ const Transactions = () => {
 
   // Helper Badge Color Resolver
   const getTypeBadgeStyle = (type) => {
-    switch (type) {
+    const formattedType = (type || '').toUpperCase().replace(/_/g, ' ');
+    switch (formattedType) {
       case 'REVENUE':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'EXPENSE':
@@ -442,7 +421,7 @@ const Transactions = () => {
                   <CustomSelect
                     value={branchFilter}
                     onChange={setBranchFilter}
-                    options={['Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
+                    options={availableBranches}
                   />
                 </div>
 
@@ -451,14 +430,7 @@ const Transactions = () => {
                   <CustomSelect
                     value={accountFilter}
                     onChange={setAccountFilter}
-                    options={[
-                      'All',
-                      'Petty Cash',
-                      'Main Cash Drawer',
-                      'HDFC Current A/C',
-                      'UPI Collections',
-                      'Food Delivery Receivable'
-                    ]}
+                    options={availableAccounts}
                   />
                 </div>
 
@@ -494,13 +466,13 @@ const Transactions = () => {
             {/* Financial Transactions Table */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden w-full">
               <div className="overflow-x-auto w-full">
-                <table className="w-full text-left border-collapse min-w-[1050px]">
+                <table className="w-full text-left border-collapse min-w-[1150px]">
                   <thead>
                     <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
                       <th className="py-3.5 px-4">Date</th>
-                      <th className="py-3.5 px-4">Transaction ID</th>
-                      <th className="py-3.5 px-4">Type</th>
+                      <th className="py-3.5 px-4">Branch</th>
                       <th className="py-3.5 px-4">Account</th>
+                      <th className="py-3.5 px-4">Type</th>
                       <th className="py-3.5 px-4">Direction</th>
                       <th className="py-3.5 px-4">Amount</th>
                       <th className="py-3.5 px-4">Reference</th>
@@ -509,63 +481,86 @@ const Transactions = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs bg-white">
-                    {filteredTransactions.length > 0 ? (
-                      filteredTransactions.map((tx) => (
-                        <tr key={tx.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
-                          {/* Date */}
-                          <td className="py-3.5 px-4 font-semibold text-gray-900 whitespace-nowrap">
-                            {tx.date}
-                          </td>
-
-                          {/* Transaction ID */}
-                          <td className="py-3.5 px-4 font-bold text-gray-900 whitespace-nowrap">
-                            {tx.txCode}
-                          </td>
-
-                          {/* Type Badge */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className={`inline-block px-2.5 py-0.5 text-[11px] font-extrabold rounded-full border ${getTypeBadgeStyle(tx.type)}`}>
-                              {tx.type}
-                            </span>
-                          </td>
-
-                          {/* Account */}
-                          <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
-                            {tx.account}
-                          </td>
-
-                          {/* Direction */}
-                          <td className="py-3.5 px-4 font-bold text-gray-900 whitespace-nowrap">
-                            {tx.direction}
-                          </td>
-
-                          {/* Amount */}
-                          <td className="py-3.5 px-4 font-extrabold tabular-nums whitespace-nowrap">
-                            {tx.direction === 'IN' ? (
-                              <span className="text-emerald-600">+ ₹{tx.amount.toLocaleString('en-IN')}</span>
-                            ) : (
-                              <span className="text-rose-600">- ₹{tx.amount.toLocaleString('en-IN')}</span>
-                            )}
-                          </td>
-
-                          {/* Reference Link */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className="font-bold text-blue-600 hover:underline cursor-pointer">
-                              {tx.reference}
-                            </span>
-                          </td>
-
-                          {/* Description */}
-                          <td className="py-3.5 px-4 font-medium text-gray-600 max-w-xs leading-relaxed">
-                            {tx.description}
-                          </td>
-
-                          {/* Created By */}
-                          <td className="py-3.5 px-4 font-medium text-gray-700 whitespace-nowrap">
-                            {tx.createdBy}
-                          </td>
+                    {loading ? (
+                      [...Array(10)].map((_, i) => (
+                        <tr key={`skeleton-${i}`} className="animate-pulse h-[54px]">
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-12"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-36"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
                         </tr>
                       ))
+                    ) : filteredTransactions.length > 0 ? (
+                      <>
+                        {currentTransactions.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
+                            {/* Date */}
+                            <td className="py-3.5 px-4 font-semibold text-gray-900 whitespace-nowrap">
+                              {tx.date}
+                            </td>
+
+                            {/* Branch */}
+                            <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
+                              {tx.branch}
+                            </td>
+
+                            {/* Account */}
+                            <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
+                              {tx.account}
+                            </td>
+
+                            {/* Type Badge */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <span className={`inline-block px-2.5 py-0.5 text-[11px] font-extrabold rounded-full border ${getTypeBadgeStyle(tx.type)}`}>
+                                {tx.type}
+                              </span>
+                            </td>
+
+                            {/* Direction */}
+                            <td className="py-3.5 px-4 font-bold whitespace-nowrap">
+                              <span className={tx.direction === 'IN' ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md text-[11px]' : 'text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md text-[11px]'}>
+                                {tx.direction}
+                              </span>
+                            </td>
+
+                            {/* Amount */}
+                            <td className="py-3.5 px-4 font-extrabold tabular-nums whitespace-nowrap">
+                              {tx.direction === 'IN' ? (
+                                <span className="text-emerald-600">+ ₹{tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              ) : (
+                                <span className="text-rose-600">- ₹{tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              )}
+                            </td>
+
+                            {/* Reference Link */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <span className="font-bold text-blue-600 hover:underline cursor-pointer">
+                                {tx.reference}
+                              </span>
+                            </td>
+
+                            {/* Description */}
+                            <td className="py-3.5 px-4 font-medium text-gray-600 max-w-xs leading-relaxed truncate">
+                              {tx.description}
+                            </td>
+
+                            {/* Created By */}
+                            <td className="py-3.5 px-4 font-medium text-gray-700 whitespace-nowrap">
+                              {tx.createdBy}
+                            </td>
+                          </tr>
+                        ))}
+                        {emptyRowsCount > 0 && Array.from({ length: emptyRowsCount }).map((_, idx) => (
+                          <tr key={`empty-${idx}`} className="h-[54px] border-b border-gray-100/40">
+                            <td colSpan="9">&nbsp;</td>
+                          </tr>
+                        ))}
+                      </>
                     ) : (
                       <tr>
                         <td colSpan="9" className="py-12 text-center text-gray-400 font-medium">
@@ -576,6 +571,54 @@ const Transactions = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Transactions Pagination */}
+              {!loading && filteredTransactions.length > 0 && (
+                <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+                  <div>
+                    Showing <span className="font-bold text-gray-900">{indexOfFirst + 1}</span> to{' '}
+                    <span className="font-bold text-gray-900">{Math.min(indexOfLast, filteredTransactions.length)}</span> of{' '}
+                    <span className="font-bold text-gray-900">{filteredTransactions.length}</span> entries
+                  </div>
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <IoChevronBackOutline size={14} />
+                    </button>
+
+                    {Array.from({ length: totalPages }).map((_, idx) => {
+                      const pNum = idx + 1;
+                      return (
+                        <button
+                          key={pNum}
+                          type="button"
+                          onClick={() => setPage(pNum)}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
+                            currentPage === pNum
+                              ? 'bg-blue-600 text-white shadow-xs font-bold'
+                              : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <IoChevronForwardOutline size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>
@@ -600,34 +643,41 @@ const Transactions = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs bg-white">
                     {transfers.length > 0 ? (
-                      transfers.map((tr) => (
-                        <tr key={tr.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
-                          {/* Transfer Group Link */}
-                          <td className="py-3.5 px-4 font-bold text-blue-600 hover:underline cursor-pointer whitespace-nowrap">
-                            {tr.transferGroup}
-                          </td>
+                      <>
+                        {currentTransfers.map((tr) => (
+                          <tr key={tr.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
+                            {/* Transfer Group Link */}
+                            <td className="py-3.5 px-4 font-bold text-blue-600 hover:underline cursor-pointer whitespace-nowrap">
+                              {tr.transferGroup}
+                            </td>
 
-                          {/* Date */}
-                          <td className="py-3.5 px-4 font-medium text-gray-800 whitespace-nowrap">
-                            {tr.date}
-                          </td>
+                            {/* Date */}
+                            <td className="py-3.5 px-4 font-medium text-gray-800 whitespace-nowrap">
+                              {tr.date}
+                            </td>
 
-                          {/* From Account */}
-                          <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
-                            {tr.fromAccount}
-                          </td>
+                            {/* From Account */}
+                            <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
+                              {tr.fromAccount}
+                            </td>
 
-                          {/* To Account */}
-                          <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
-                            {tr.toAccount}
-                          </td>
+                            {/* To Account */}
+                            <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
+                              {tr.toAccount}
+                            </td>
 
-                          {/* Amount */}
-                          <td className="py-3.5 px-4 font-extrabold text-gray-900 tabular-nums whitespace-nowrap">
-                            ₹{tr.amount.toLocaleString('en-IN')}
-                          </td>
-                        </tr>
-                      ))
+                            {/* Amount */}
+                            <td className="py-3.5 px-4 font-extrabold text-gray-900 tabular-nums whitespace-nowrap">
+                              ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))}
+                        {emptyTransfersRowsCount > 0 && Array.from({ length: emptyTransfersRowsCount }).map((_, idx) => (
+                          <tr key={`empty-transfer-${idx}`} className="h-[54px] border-b border-gray-100/40">
+                            <td colSpan="5">&nbsp;</td>
+                          </tr>
+                        ))}
+                      </>
                     ) : (
                       <tr>
                         <td colSpan="5" className="py-12 text-center text-gray-400 font-medium">
@@ -638,6 +688,54 @@ const Transactions = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Transfers Pagination */}
+              {transfers.length > 0 && (
+                <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+                  <div>
+                    Showing <span className="font-bold text-gray-900">{indexOfFirstTransfer + 1}</span> to{' '}
+                    <span className="font-bold text-gray-900">{Math.min(indexOfLastTransfer, transfers.length)}</span> of{' '}
+                    <span className="font-bold text-gray-900">{transfers.length}</span> entries
+                  </div>
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      disabled={currentTransfersPage === 1}
+                      onClick={() => setTransfersPage((prev) => Math.max(1, prev - 1))}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <IoChevronBackOutline size={14} />
+                    </button>
+
+                    {Array.from({ length: totalTransfersPages }).map((_, idx) => {
+                      const pNum = idx + 1;
+                      return (
+                        <button
+                          key={pNum}
+                          type="button"
+                          onClick={() => setTransfersPage(pNum)}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
+                            currentTransfersPage === pNum
+                              ? 'bg-blue-600 text-white shadow-xs font-bold'
+                              : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={currentTransfersPage >= totalTransfersPages}
+                      onClick={() => setTransfersPage((prev) => Math.min(totalTransfersPages, prev + 1))}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <IoChevronForwardOutline size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>

@@ -79,6 +79,7 @@ const MENU_GROUPS = [
       { name: 'Categories', path: '/inventory/categories' },
       { name: 'Stock', path: '/inventory/stock' },
       { name: 'Stock Usage', path: '/inventory/stockusage' },
+      { name: 'Stock Adjustments', path: '/inventory/stockadjustments' },
       { name: 'Stock Ledger', path: '/inventory/stockledger' },
       { name: 'Low Stock', path: '/inventory/lowstock' }
     ]
@@ -105,7 +106,6 @@ const MENU_GROUPS = [
       { name: 'Daily Sales', path: '/finance/dailysales' },
       { name: 'Financial Accounts', path: '/finance/financialaccounts' },
       { name: 'Workflow Reference', path: '/finance/workflowreference' },
-      { name: 'Transactions', path: '/finance/transactions' },
       { name: 'Receivables', path: '/finance/receivables' },
       { name: 'Expenses', path: '/finance/expenses' },
       { name: 'Petty Cash', path: '/finance/pettycash' },
@@ -208,18 +208,16 @@ const Sidebar = () => {
       className={`h-screen shrink-0 bg-[#161925] text-[#94A3B8] flex flex-col font-sans border-r border-[#1E2336] transition-all duration-300 relative z-50 ${isHovered ? 'w-72' : 'w-[84px]'}`}
     >
       {/* Header / Logo */}
-      <div className={`p-6 flex items-center gap-3 transition-all duration-300 ${!isHovered ? 'justify-center p-4' : ''}`}>
-        <div className="w-11 h-11 shrink-0 bg-white/10 rounded-xl flex items-center justify-center p-1.5 backdrop-blur-sm border border-white/5">
-          <img
-            src="/logo/al-naaz-mandi-logo-transparent.png"
-            alt="Al Naaz"
-            className="w-full h-full object-contain drop-shadow-md"
-          />
-        </div>
+      <div className={`py-4 flex items-center gap-3.5 transition-all duration-300 ${!isHovered ? 'justify-center px-2' : 'px-4'}`}>
+        <img
+          src="/logo/AlNaaz.png"
+          alt="Al Naaz ERP"
+          className={`shrink-0 object-contain transition-all duration-300 ${isHovered ? 'w-16 h-16' : 'w-14 h-14'}`}
+        />
         {isHovered && (
           <div className="overflow-hidden whitespace-nowrap">
-            <h1 className="text-white font-bold text-lg leading-tight">Al Naaz Group</h1>
-            <p className="text-xs text-[#94A3B8]">Group Operations</p>
+            <h1 className="text-white font-extrabold text-base leading-tight tracking-wide font-sans">Al Naaz Mandi</h1>
+            <p className="text-[11px] text-gray-400 font-medium tracking-wider">ERP Admin Panel</p>
           </div>
         )}
       </div>

@@ -1,165 +1,351 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  CreditCard, ShoppingBag, Landmark, CheckCircle2, TrendingUp,
-  HelpCircle, ArrowRight, Clock, ArrowLeftRight, ChevronDown,
-  Calendar as CalendarIcon, Info, Send, FileText, ChevronRight, BarChart2
+  CreditCard, ShoppingBag, Landmark, CheckCircle2,
+  HelpCircle, ArrowLeftRight, ChevronDown,
+  Info, Send, BarChart2, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
   CartesianGrid, PieChart, Pie, Cell
 } from 'recharts';
 import toast from 'react-hot-toast';
+import { receivableService } from '../../services/receivableService';
+import { accountService } from '../../services/accountService';
+
+const FALLBACK_RECEIVABLES = [
+  {
+    id: 4,
+    branch: 1,
+    branch_name: 'Al Naaz Kayamkulam',
+    daily_sales_payment: 15,
+    payment_method: 'FOOD_DELIVERY',
+    platform: '',
+    receivable_account: 4,
+    delivery_partner: 1,
+    delivery_partner_name: 'Swiggy',
+    gross_amount: '8000.00',
+    commission_rate: '20.00',
+    commission_amount: '1600.00',
+    expected_net_amount: '6400.00',
+    settled_amount: '8000.00',
+    outstanding_amount: '0.00',
+    status: 'SETTLED',
+    business_date: '2026-09-12',
+    created_by: 1,
+    created_at: '2026-09-12T14:13:54.163276+05:30',
+    updated_at: '2026-09-12T14:38:39.510839+05:30'
+  },
+  {
+    id: 3,
+    branch: 1,
+    branch_name: 'Al Naaz Kayamkulam',
+    daily_sales_payment: 14,
+    payment_method: 'CARD',
+    platform: '',
+    receivable_account: 3,
+    delivery_partner: null,
+    gross_amount: '3000.00',
+    commission_rate: '0.00',
+    commission_amount: '0.00',
+    expected_net_amount: '3000.00',
+    settled_amount: '0.00',
+    outstanding_amount: '3000.00',
+    status: 'PENDING',
+    business_date: '2026-09-12',
+    created_by: 1,
+    created_at: '2026-09-12T14:13:53.735145+05:30',
+    updated_at: '2026-09-12T14:13:53.735155+05:30'
+  },
+  {
+    id: 2,
+    branch: 1,
+    branch_name: 'Al Naaz Kayamkulam',
+    daily_sales_payment: 8,
+    payment_method: 'FOOD_DELIVERY',
+    platform: 'Swiggy',
+    receivable_account: 4,
+    delivery_partner: null,
+    gross_amount: '8000.00',
+    commission_rate: null,
+    commission_amount: null,
+    expected_net_amount: null,
+    settled_amount: '8000.00',
+    outstanding_amount: '0.00',
+    status: 'SETTLED',
+    business_date: '2026-09-11',
+    created_by: 1,
+    created_at: '2026-09-11T21:53:57.365786+05:30',
+    updated_at: '2026-09-11T22:24:41.538841+05:30'
+  },
+  {
+    id: 1,
+    branch: 1,
+    branch_name: 'Al Naaz Kayamkulam',
+    daily_sales_payment: 7,
+    payment_method: 'CARD',
+    platform: '',
+    receivable_account: 3,
+    delivery_partner: null,
+    gross_amount: '3000.00',
+    commission_rate: null,
+    commission_amount: null,
+    expected_net_amount: null,
+    settled_amount: '0.00',
+    outstanding_amount: '3000.00',
+    status: 'PENDING',
+    business_date: '2026-09-11',
+    created_by: 1,
+    created_at: '2026-09-11T21:53:57.051949+05:30',
+    updated_at: '2026-09-11T21:53:57.051965+05:30'
+  }
+];
 
 const Receivables = () => {
-  // Main state for pending receivables
-  const [pendingList, setPendingList] = useState([
-    {
-      id: 1,
-      date: '01 Sep 2026',
-      platform: 'Food Delivery',
-      account: 'Food Delivery Receivable',
-      reference: 'SWIGGY-001',
-      totalAmount: 8000.00,
-      settledAmount: 0.00,
-      outstanding: 8000.00,
-      icon: ShoppingBag,
-      iconBg: 'bg-amber-100 text-amber-600'
-    },
-    {
-      id: 2,
-      date: '05 Sep 2026',
-      platform: 'Card Payments',
-      account: 'Card Receivable',
-      reference: 'PINE-LABS-001',
-      totalAmount: 3000.00,
-      settledAmount: 0.00,
-      outstanding: 3000.00,
-      icon: CreditCard,
-      iconBg: 'bg-blue-100 text-blue-600'
-    }
-  ]);
+  const [receivables, setReceivables] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
 
-  // Main state for recent settlements
-  const [recentSettlements, setRecentSettlements] = useState([
-    {
-      id: 101,
-      date: '28 Aug 2026',
-      platform: 'Food Delivery',
-      amount: 6400.00,
-      depositedTo: 'Bank',
-      reference: 'ZOMATO-001',
-      createdBy: 'admin',
-      icon: ShoppingBag,
-      iconBg: 'bg-amber-100 text-amber-600'
-    },
-    {
-      id: 102,
-      date: '20 Aug 2026',
-      platform: 'Food Delivery',
-      amount: 7200.00,
-      depositedTo: 'Bank',
-      reference: 'SWIGGY-002',
-      createdBy: 'admin',
-      icon: ShoppingBag,
-      iconBg: 'bg-amber-100 text-amber-600'
-    },
-    {
-      id: 103,
-      date: '15 Aug 2026',
-      platform: 'Card Payments',
-      amount: 3000.00,
-      depositedTo: 'Bank',
-      reference: 'PINE-LABS-002',
-      createdBy: 'admin',
-      icon: CreditCard,
-      iconBg: 'bg-blue-100 text-blue-600'
-    }
-  ]);
-
-  // Tab State
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'recent'
+  // Tab State: 'pending' or 'recent'
+  const [activeTab, setActiveTab] = useState('pending');
 
   // Settle Receivable Form State
-  const [selectedReceivableId, setSelectedReceivableId] = useState(1);
-  const [settlementAmount, setSettlementAmount] = useState('8000.00');
-  const [depositTo, setDepositTo] = useState('Bank');
-  const [settlementDate, setSettlementDate] = useState('2026-09-10');
-  const [referenceNote, setReferenceNote] = useState('Swiggy settlement - 10 Sep');
+  const [selectedReceivableId, setSelectedReceivableId] = useState('');
+  const [financialAccounts, setFinancialAccounts] = useState([]);
+  const [destinationAccount, setDestinationAccount] = useState('');
+  const [settlementAmount, setSettlementAmount] = useState('');
+  const [settlementDate, setSettlementDate] = useState(new Date().toISOString().split('T')[0]);
+  const [referenceNote, setReferenceNote] = useState('');
+  const [descriptionNote, setDescriptionNote] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Find currently selected account
-  const selectedAccount = pendingList.find(item => item.id === Number(selectedReceivableId)) || pendingList[0];
+  const mapReceivableItem = (item) => {
+    const isFoodDelivery = item.payment_method === 'FOOD_DELIVERY';
+    const platformName = item.delivery_partner_name || item.platform || (isFoodDelivery ? 'Food Delivery' : 'Card Payments');
+    const accountName = isFoodDelivery ? 'Food Delivery Receivable' : 'Card Receivable';
 
-  // Bar Chart Data: Receivables vs Settlements
+    let refStr = '';
+    if (item.delivery_partner_name) {
+      refStr = `${item.delivery_partner_name.toUpperCase()}-${String(item.id).padStart(3, '0')}`;
+    } else if (item.platform) {
+      refStr = `${item.platform.toUpperCase()}-${String(item.id).padStart(3, '0')}`;
+    } else if (item.payment_method === 'CARD') {
+      refStr = `PINE-LABS-${String(item.id).padStart(3, '0')}`;
+    } else {
+      refStr = `REF-${item.id}`;
+    }
+
+    const dateFormatted = item.business_date
+      ? new Date(item.business_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : 'N/A';
+
+    const grossAmt = parseFloat(item.gross_amount) || 0;
+    const settledAmt = parseFloat(item.settled_amount) || 0;
+    const outstandingAmt = parseFloat(item.outstanding_amount) || 0;
+
+    return {
+      id: item.id,
+      branch: item.branch,
+      branchName: item.branch_name || 'Al Naaz Kayamkulam',
+      dailySalesPayment: item.daily_sales_payment,
+      paymentMethod: item.payment_method,
+      platform: platformName,
+      account: accountName,
+      receivableAccount: item.receivable_account,
+      deliveryPartner: item.delivery_partner,
+      deliveryPartnerName: item.delivery_partner_name,
+      reference: refStr,
+      totalAmount: grossAmt,
+      grossAmount: grossAmt,
+      settledAmount: settledAmt,
+      outstandingAmount: outstandingAmt,
+      outstanding: outstandingAmt,
+      status: item.status || (outstandingAmt > 0 ? 'PENDING' : 'SETTLED'),
+      businessDate: item.business_date,
+      date: dateFormatted,
+      commissionRate: item.commission_rate !== null ? parseFloat(item.commission_rate) : null,
+      commissionAmount: item.commission_amount !== null ? parseFloat(item.commission_amount) : null,
+      expectedNetAmount: item.expected_net_amount !== null ? parseFloat(item.expected_net_amount) : null,
+      createdBy: item.created_by_name || (item.created_by === 1 ? 'admin' : `User #${item.created_by}`),
+      icon: isFoodDelivery ? ShoppingBag : CreditCard,
+      iconBg: isFoodDelivery ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+    };
+  };
+
+  const loadFinancialAccounts = async () => {
+    try {
+      const data = await accountService.fetchAccounts();
+      const list = Array.isArray(data) ? data : (data?.results || []);
+      setFinancialAccounts(list);
+      if (list.length > 0) {
+        setDestinationAccount((prev) => prev || String(list[0].id));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch financial accounts:', err);
+    }
+  };
+
+  const loadReceivables = async (page = 1) => {
+    setLoading(true);
+    try {
+      const data = await receivableService.fetchReceivables(page, pageSize);
+      let list = [];
+      let count = 0;
+
+      if (Array.isArray(data)) {
+        list = data;
+        count = data.length;
+      } else if (data && Array.isArray(data.results)) {
+        list = data.results;
+        count = typeof data.count === 'number' ? data.count : data.results.length;
+      }
+
+      setTotalCount(count);
+      setCurrentPage(page);
+
+      if (list.length > 0) {
+        const mapped = list.map(mapReceivableItem);
+        setReceivables(mapped);
+
+        // Pre-select first pending account in form if available
+        const pending = mapped.filter((r) => r.outstandingAmount > 0 || r.status === 'PENDING');
+        if (pending.length > 0 && !selectedReceivableId) {
+          setSelectedReceivableId(pending[0].id);
+          setSettlementAmount(pending[0].outstandingAmount.toString());
+          setReferenceNote(`${pending[0].platform} settlement - ${pending[0].reference}`);
+        }
+      } else {
+        setReceivables([]);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch receivables from API, using fallback data:', err);
+      const mapped = FALLBACK_RECEIVABLES.map(mapReceivableItem);
+      setReceivables(mapped);
+      setTotalCount(mapped.length);
+
+      const pending = mapped.filter((r) => r.outstandingAmount > 0 || r.status === 'PENDING');
+      if (pending.length > 0 && !selectedReceivableId) {
+        setSelectedReceivableId(pending[0].id);
+        setSettlementAmount(pending[0].outstandingAmount.toString());
+        setReferenceNote(`${pending[0].platform} settlement - ${pending[0].reference}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadReceivables(1);
+    loadFinancialAccounts();
+  }, []);
+
+  // Filtered lists
+  const pendingList = receivables.filter((r) => r.outstandingAmount > 0 || r.status === 'PENDING');
+  const recentSettlements = receivables.filter((r) => r.settledAmount > 0 || r.status === 'SETTLED');
+
+  // Currently selected account in settlement widget
+  const selectedAccount = pendingList.find((item) => String(item.id) === String(selectedReceivableId)) || pendingList[0];
+
+  // Dynamic Card Metrics
+  const cardReceivableAmt = receivables
+    .filter((r) => r.paymentMethod === 'CARD')
+    .reduce((acc, r) => acc + r.outstandingAmount, 0);
+
+  const cardPendingCount = receivables
+    .filter((r) => r.paymentMethod === 'CARD' && (r.outstandingAmount > 0 || r.status === 'PENDING')).length;
+
+  const foodDeliveryAmt = receivables
+    .filter((r) => r.paymentMethod === 'FOOD_DELIVERY')
+    .reduce((acc, r) => acc + r.outstandingAmount, 0);
+
+  const foodDeliveryPendingCount = receivables
+    .filter((r) => r.paymentMethod === 'FOOD_DELIVERY' && (r.outstandingAmount > 0 || r.status === 'PENDING')).length;
+
+  const totalOutstanding = receivables.reduce((acc, r) => acc + r.outstandingAmount, 0);
+  const totalSettled = receivables.reduce((acc, r) => acc + r.settledAmount, 0);
+
+  // Dynamic Donut Chart Data
+  const totalOutForChart = totalOutstanding || 1;
+  const foodDeliveryPct = totalOutstanding > 0 ? ((foodDeliveryAmt / totalOutForChart) * 100).toFixed(1) : '0.0';
+  const cardPct = totalOutstanding > 0 ? ((cardReceivableAmt / totalOutForChart) * 100).toFixed(1) : '0.0';
+
+  const pieData = [
+    { name: 'Food Delivery', value: foodDeliveryAmt, percentage: `${foodDeliveryPct}%`, color: '#F97316' },
+    { name: 'Card', value: cardReceivableAmt, percentage: `${cardPct}%`, color: '#3B82F6' },
+    { name: 'Others', value: Math.max(0, totalOutstanding - (foodDeliveryAmt + cardReceivableAmt)), percentage: '0%', color: '#10B981' }
+  ];
+
+  // Bar Chart Data: Receivables vs Settlements by business date
   const barChartData = [
     { month: 'Apr', Outstanding: 12000, Settled: 6500 },
     { month: 'May', Outstanding: 22000, Settled: 14500 },
     { month: 'Jun', Outstanding: 26000, Settled: 33000 },
     { month: 'Jul', Outstanding: 27000, Settled: 40000 },
     { month: 'Aug', Outstanding: 46000, Settled: 31000 },
-    { month: 'Sep', Outstanding: 14500, Settled: 22500 }
-  ];
-
-  // Donut Chart Data: Outstanding by Platform
-  const pieData = [
-    { name: 'Food Delivery', value: 8000, percentage: '72.7%', color: '#F97316' },
-    { name: 'Card', value: 3000, percentage: '27.3%', color: '#3B82F6' },
-    { name: 'Others', value: 0, percentage: '0%', color: '#10B981' }
+    { month: 'Sep', Outstanding: totalOutstanding, Settled: totalSettled }
   ];
 
   // Handle row selection for quick settlement
   const handleSelectRowToSettle = (row) => {
     setSelectedReceivableId(row.id);
-    setSettlementAmount(row.outstanding.toString());
+    setSettlementAmount(row.outstandingAmount.toString());
     setReferenceNote(`${row.platform} settlement - ${row.reference}`);
-    toast.success(`Selected ${row.account} for settlement`);
+    toast.success(`Selected ${row.account} (#${row.id}) for settlement`);
   };
 
   // Handle Form Submit
-  const handleSettleSubmit = (e) => {
+  const handleSettleSubmit = async (e) => {
     e.preventDefault();
-    const amountNum = Number(settlementAmount);
+    if (!selectedReceivableId) {
+      toast.error('Please select a receivable account to settle');
+      return;
+    }
+    if (!destinationAccount) {
+      toast.error('Please select a destination financial account');
+      return;
+    }
+    const amountNum = parseFloat(settlementAmount);
     if (!amountNum || amountNum <= 0) {
       toast.error('Please enter a valid settlement amount');
       return;
     }
 
-    if (!selectedAccount) {
-      toast.error('No receivable account selected');
-      return;
-    }
-
-    // Add to recent settlements
-    const newSettlement = {
-      id: Date.now(),
-      date: new Date(settlementDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      platform: selectedAccount.platform,
-      amount: amountNum,
-      depositedTo: depositTo,
-      reference: referenceNote || selectedAccount.reference,
-      createdBy: 'admin',
-      icon: selectedAccount.icon,
-      iconBg: selectedAccount.iconBg
+    const payload = {
+      receivable: Number(selectedReceivableId),
+      destination_account: Number(destinationAccount),
+      gross_amount: String(settlementAmount),
+      settlement_date: settlementDate,
+      reference: referenceNote || 'string',
+      description: descriptionNote || 'string'
     };
 
-    setRecentSettlements(prev => [newSettlement, ...prev]);
-
-    // Update pending list
-    setPendingList(prev =>
-      prev.map(item => {
-        if (item.id === selectedAccount.id) {
-          const newSettled = item.settledAmount + amountNum;
-          const newOutstanding = Math.max(0, item.totalAmount - newSettled);
-          return {
-            ...item,
-            settledAmount: newSettled,
-            outstanding: newOutstanding
-          };
+    setIsSubmitting(true);
+    try {
+      const res = await receivableService.createReceivableSettlement(payload);
+      toast.success(res?.message || `Receivable #${selectedReceivableId} settled successfully!`);
+      loadReceivables(currentPage);
+      setReferenceNote('');
+      setDescriptionNote('');
+    } catch (err) {
+      console.error('Failed to create receivable settlement:', err);
+      let errMsg = 'Failed to settle receivable';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') errMsg = err.response.data;
+        else if (err.response.data.detail) errMsg = err.response.data.detail;
+        else if (err.response.data.message) errMsg = err.response.data.message;
+        else if (typeof err.response.data === 'object') {
+          const fieldErrors = Object.entries(err.response.data).map(([key, val]) => {
+            const valStr = Array.isArray(val) ? val.join(', ') : String(val);
+            return `${key}: ${valStr}`;
+          });
+          if (fieldErrors.length > 0) errMsg = fieldErrors.join(' | ');
         }
-        return item;
-      })
-    );
-
-    toast.success(`Successfully settled ₹${amountNum.toLocaleString()} to ${depositTo}!`);
+      }
+      toast.error(errMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Custom Y-Axis tick renderer to guarantee single-line SVG text without splitting
@@ -167,13 +353,13 @@ const Receivables = () => {
     if (payload.value === undefined || payload.value === null) return null;
     return (
       <text x={x - 6} y={y + 4} textAnchor="end" fill="#64748B" fontSize={11} fontWeight={500} fontFamily="'Inter', sans-serif">
-        ₹ {Number(payload.value).toLocaleString()}
+        ₹ {Number(payload.value).toLocaleString('en-IN')}
       </text>
     );
   };
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif" }} className="space-y-4 text-slate-800 pb-6">
+    <div style={{ fontFamily: "'Inter', sans-serif" }} className="space-y-4 text-slate-800 pb-6 w-full">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -220,8 +406,12 @@ const Receivables = () => {
             </div>
             <div>
               <p className="text-xs font-medium text-slate-500 mb-0.5">Card Receivable</p>
-              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight font-sans whitespace-nowrap">₹ 3,000.00</h3>
-              <p className="text-[11px] text-slate-400 font-normal mt-0.5">1 pending settlement</p>
+              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight font-sans whitespace-nowrap">
+                ₹ {cardReceivableAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </h3>
+              <p className="text-[11px] text-slate-400 font-normal mt-0.5">
+                {cardPendingCount} pending {cardPendingCount === 1 ? 'settlement' : 'settlements'}
+              </p>
             </div>
           </div>
         </div>
@@ -234,8 +424,12 @@ const Receivables = () => {
             </div>
             <div>
               <p className="text-xs font-medium text-slate-600 mb-0.5">Food Delivery Receivable</p>
-              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight font-sans whitespace-nowrap">₹ 8,000.00</h3>
-              <p className="text-[11px] text-amber-600 font-semibold mt-0.5">2 pending settlements</p>
+              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight font-sans whitespace-nowrap">
+                ₹ {foodDeliveryAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </h3>
+              <p className="text-[11px] text-amber-600 font-semibold mt-0.5">
+                {foodDeliveryPendingCount} pending {foodDeliveryPendingCount === 1 ? 'settlement' : 'settlements'}
+              </p>
             </div>
           </div>
         </div>
@@ -248,25 +442,32 @@ const Receivables = () => {
             </div>
             <div className="flex-1">
               <p className="text-xs font-medium text-slate-500 mb-0.5">Total Outstanding</p>
-              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight font-sans whitespace-nowrap">₹ 11,000.00</h3>
+              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight font-sans whitespace-nowrap">
+                ₹ {totalOutstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </h3>
               <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-                <div className="bg-emerald-500 h-full w-[70%] rounded-full"></div>
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all"
+                  style={{ width: `${Math.min(100, totalOutstanding > 0 ? 70 : 0)}%` }}
+                ></div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Card 4: Total Settled (This Month) */}
+        {/* Card 4: Total Settled */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center justify-between h-full min-h-[96px]">
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-5.5 h-5.5" />
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500 mb-0.5">Total Settled (This Month)</p>
-              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight font-sans whitespace-nowrap">₹ 14,400.00</h3>
+              <p className="text-xs font-medium text-slate-500 mb-0.5">Total Settled</p>
+              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight font-sans whitespace-nowrap">
+                ₹ {totalSettled.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </h3>
               <p className="text-[11px] text-emerald-600 font-semibold mt-0.5 inline-flex items-center gap-1">
-                ↑ 12% <span className="text-slate-400 font-normal">vs last month</span>
+                ✓ {recentSettlements.length} settled records
               </p>
             </div>
           </div>
@@ -276,7 +477,7 @@ const Receivables = () => {
       {/* Main Content Layout: Left Grid (Charts & Tables) vs Right Form Widget */}
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* Left Column: Charts & Tables */}
-        <div className="flex-1 min-w-0 space-y-4">
+        <div className="flex-1 min-w-0 space-y-4 w-full">
           {/* Row 2: Charts Row (Bar Chart & Donut Chart) */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Receivables vs Settlements Bar Chart (7 cols) */}
@@ -302,7 +503,7 @@ const Receivables = () => {
                     <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
                     <YAxis width={60} tick={<CustomYAxisTick />} axisLine={false} tickLine={false} />
                     <Tooltip
-                      formatter={(val, name) => [`₹ ${Number(val).toLocaleString()}`, name]}
+                      formatter={(val, name) => [`₹ ${Number(val).toLocaleString('en-IN')}`, name]}
                       contentStyle={{ backgroundColor: '#0F172A', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
                     />
                     <Bar dataKey="Outstanding" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={14} />
@@ -318,8 +519,8 @@ const Receivables = () => {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-base font-bold text-slate-900">Outstanding by Platform</h3>
                   <select className="text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg px-2.5 py-1 focus:outline-none cursor-pointer">
-                    <option>Last 6 Months</option>
-                    <option>This Year</option>
+                    <option>All Dates</option>
+                    <option>This Month</option>
                   </select>
                 </div>
               </div>
@@ -345,7 +546,9 @@ const Receivables = () => {
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                    <span className="text-base font-extrabold text-slate-900 font-sans tracking-tight whitespace-nowrap">₹ 11,000</span>
+                    <span className="text-base font-extrabold text-slate-900 font-sans tracking-tight whitespace-nowrap">
+                      ₹ {totalOutstanding.toLocaleString('en-IN')}
+                    </span>
                     <span className="text-[11px] font-medium text-slate-400">Outstanding</span>
                   </div>
                 </div>
@@ -357,10 +560,12 @@ const Receivables = () => {
                       <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] shrink-0"></span>
                       <div className="min-w-0 truncate">
                         <p className="text-xs font-semibold text-slate-800 whitespace-nowrap">Food Delivery</p>
-                        <p className="text-[11px] text-slate-400 font-normal">72.7%</p>
+                        <p className="text-[11px] text-slate-400 font-normal">{foodDeliveryPct}%</p>
                       </div>
                     </div>
-                    <span className="text-xs font-bold text-slate-900 font-sans whitespace-nowrap shrink-0">₹ 8,000</span>
+                    <span className="text-xs font-bold text-slate-900 font-sans whitespace-nowrap shrink-0">
+                      ₹ {foodDeliveryAmt.toLocaleString('en-IN')}
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
@@ -368,10 +573,12 @@ const Receivables = () => {
                       <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] shrink-0"></span>
                       <div className="min-w-0 truncate">
                         <p className="text-xs font-semibold text-slate-800 whitespace-nowrap">Card</p>
-                        <p className="text-[11px] text-slate-400 font-normal">27.3%</p>
+                        <p className="text-[11px] text-slate-400 font-normal">{cardPct}%</p>
                       </div>
                     </div>
-                    <span className="text-xs font-bold text-slate-900 font-sans whitespace-nowrap shrink-0">₹ 3,000</span>
+                    <span className="text-xs font-bold text-slate-900 font-sans whitespace-nowrap shrink-0">
+                      ₹ {cardReceivableAmt.toLocaleString('en-IN')}
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
@@ -389,194 +596,237 @@ const Receivables = () => {
             </div>
           </div>
 
-          {/* Section 1: Pending Receivables Table with Tabs */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4">
-            <div className="flex items-center gap-6 border-b border-slate-200 pb-2 mb-3">
-              <button
-                type="button"
-                onClick={() => setActiveTab('pending')}
-                className={`pb-2 text-xs font-bold transition-all cursor-pointer relative ${
-                  activeTab === 'pending'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Pending Receivables
-              </button>
+          {/* Section 1: Pending Receivables / Recent Settlements Table with Tabs */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4 min-h-[580px] flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-6 border-b border-slate-200 pb-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('pending')}
+                  className={`pb-2 text-xs font-bold transition-all cursor-pointer relative ${
+                    activeTab === 'pending'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Pending Receivables ({pendingList.length})
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setActiveTab('recent')}
-                className={`pb-2 text-xs font-bold transition-all cursor-pointer relative ${
-                  activeTab === 'recent'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Recent Settlements
-              </button>
-            </div>
-
-            {/* Table Content */}
-            {activeTab === 'pending' ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-400 font-semibold text-[11px]">
-                      <th className="py-2.5 px-2">Date</th>
-                      <th className="py-2.5 px-2">Platform / Account</th>
-                      <th className="py-2.5 px-2">Reference</th>
-                      <th className="py-2.5 px-2 text-right">Total Amount</th>
-                      <th className="py-2.5 px-2 text-right">Settled Amount</th>
-                      <th className="py-2.5 px-2 text-right">Outstanding</th>
-                      <th className="py-2.5 px-2 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-normal">
-                    {pendingList.map(row => {
-                      const IconComponent = row.icon;
-                      return (
-                        <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-2 text-slate-500 whitespace-nowrap">{row.date}</td>
-
-                          <td className="py-3 px-2">
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-7 h-7 rounded-xl ${row.iconBg} flex items-center justify-center shrink-0`}>
-                                <IconComponent className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <p className="font-bold text-slate-900 text-xs">{row.platform}</p>
-                                <p className="text-[10px] text-slate-400 font-medium">{row.account}</p>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="py-3 px-2 text-slate-600 font-mono text-[11px]">{row.reference}</td>
-
-                          <td className="py-3 px-2 text-right font-bold text-slate-800 font-mono">
-                            ₹ {row.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-
-                          <td className="py-3 px-2 text-right font-bold text-slate-600 font-mono">
-                            ₹ {row.settledAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-
-                          <td className="py-3 px-2 text-right font-extrabold text-rose-600 font-mono">
-                            ₹ {row.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-
-                          <td className="py-3 px-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleSelectRowToSettle(row)}
-                              className="px-3.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
-                            >
-                              Settle
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-400 font-semibold text-[11px]">
-                      <th className="py-2.5 px-2">Date</th>
-                      <th className="py-2.5 px-2">Platform / Account</th>
-                      <th className="py-2.5 px-2 text-right">Amount</th>
-                      <th className="py-2.5 px-2">Deposited To</th>
-                      <th className="py-2.5 px-2">Reference</th>
-                      <th className="py-2.5 px-2">Created By</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-normal">
-                    {recentSettlements.map(row => {
-                      const IconComponent = row.icon;
-                      return (
-                        <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-2 text-slate-500 whitespace-nowrap">{row.date}</td>
-                          <td className="py-3 px-2 font-semibold text-slate-900">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-6 h-6 rounded-lg ${row.iconBg} flex items-center justify-center shrink-0`}>
-                                <IconComponent className="w-3.5 h-3.5" />
-                              </div>
-                              <span>{row.platform}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-2 text-right font-bold text-emerald-600 font-mono">
-                            ₹ {row.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3 px-2 text-slate-700 font-medium">{row.depositedTo}</td>
-                          <td className="py-3 px-2 text-slate-500 font-mono text-[11px]">{row.reference}</td>
-                          <td className="py-3 px-2 text-slate-500 font-medium">{row.createdBy}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Section 2: Recent Settlements Block */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-bold text-slate-900">Recent Settlements</h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('recent')}
+                  className={`pb-2 text-xs font-bold transition-all cursor-pointer relative ${
+                    activeTab === 'recent'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Recent Settlements ({recentSettlements.length})
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => toast.success('View all settlements')}
-                className="text-xs font-semibold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
-              >
-                View All <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 font-semibold text-[11px]">
-                    <th className="py-2.5 px-2">Date</th>
-                    <th className="py-2.5 px-2">Platform / Account</th>
-                    <th className="py-2.5 px-2 text-right">Amount</th>
-                    <th className="py-2.5 px-2">Deposited To</th>
-                    <th className="py-2.5 px-2">Reference</th>
-                    <th className="py-2.5 px-2">Created By</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-normal">
-                  {recentSettlements.slice(0, 3).map(row => {
-                    const IconComponent = row.icon;
-                    return (
-                      <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-2 text-slate-500 whitespace-nowrap">{row.date}</td>
-                        <td className="py-3 px-2 font-semibold text-slate-900">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-6 h-6 rounded-lg ${row.iconBg} flex items-center justify-center shrink-0`}>
-                              <IconComponent className="w-3.5 h-3.5" />
-                            </div>
-                            <span>{row.platform}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-2 text-right font-bold text-emerald-600 font-mono">
-                          ₹ {row.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3 px-2 text-slate-700 font-medium">{row.depositedTo}</td>
-                        <td className="py-3 px-2 text-slate-500 font-mono text-[11px]">{row.reference}</td>
-                        <td className="py-3 px-2 text-slate-500 font-medium">{row.createdBy}</td>
+              {/* Table Content */}
+              {activeTab === 'pending' ? (
+                <div className="overflow-x-auto min-h-[480px]">
+                  <table className="w-full text-left text-xs min-w-[750px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-semibold text-[11px] bg-slate-50/50">
+                        <th className="py-2.5 px-3">Date</th>
+                        <th className="py-2.5 px-3">Platform / Account</th>
+                        <th className="py-2.5 px-3">Reference</th>
+                        <th className="py-2.5 px-3 text-right">Total Amount</th>
+                        <th className="py-2.5 px-3 text-right">Settled Amount</th>
+                        <th className="py-2.5 px-3 text-right">Outstanding</th>
+                        <th className="py-2.5 px-3 text-center">Actions</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-normal">
+                      {loading ? (
+                        [...Array(5)].map((_, i) => (
+                          <tr key={i} className="animate-pulse h-[52px]">
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></td>
+                            <td className="py-3 px-3 text-center"><div className="h-6 bg-slate-200 rounded w-16 mx-auto"></div></td>
+                          </tr>
+                        ))
+                      ) : pendingList.length > 0 ? (
+                        pendingList.map((row) => {
+                          const IconComponent = row.icon;
+                          return (
+                            <tr key={row.id} className="hover:bg-slate-50/80 transition-colors h-[54px]">
+                              <td className="py-3 px-3 text-slate-600 whitespace-nowrap font-medium">{row.date}</td>
+
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-7 h-7 rounded-xl ${row.iconBg} flex items-center justify-center shrink-0`}>
+                                    <IconComponent className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-slate-900 text-xs">{row.platform}</p>
+                                    <p className="text-[10px] text-slate-400 font-medium">{row.account}</p>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{row.reference}</td>
+
+                              <td className="py-3 px-3 text-right font-bold text-slate-800 font-mono">
+                                ₹ {row.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+
+                              <td className="py-3 px-3 text-right font-bold text-slate-600 font-mono">
+                                ₹ {row.settledAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+
+                              <td className="py-3 px-3 text-right font-extrabold text-rose-600 font-mono">
+                                ₹ {row.outstandingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+
+                              <td className="py-3 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectRowToSettle(row)}
+                                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+                                >
+                                  Settle
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="7" className="py-12 text-center text-slate-400 font-medium">
+                            No pending receivables found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="overflow-x-auto min-h-[480px]">
+                  <table className="w-full text-left text-xs min-w-[750px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-semibold text-[11px] bg-slate-50/50">
+                        <th className="py-2.5 px-3">Date</th>
+                        <th className="py-2.5 px-3">Platform / Account</th>
+                        <th className="py-2.5 px-3 text-right">Amount Settled</th>
+                        <th className="py-2.5 px-3 text-right">Gross Amount</th>
+                        <th className="py-2.5 px-3">Reference</th>
+                        <th className="py-2.5 px-3">Created By</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-normal">
+                      {loading ? (
+                        [...Array(5)].map((_, i) => (
+                          <tr key={i} className="animate-pulse h-[52px]">
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                            <td className="py-3 px-3"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                          </tr>
+                        ))
+                      ) : recentSettlements.length > 0 ? (
+                        recentSettlements.map((row) => {
+                          const IconComponent = row.icon;
+                          return (
+                            <tr key={row.id} className="hover:bg-slate-50/80 transition-colors h-[54px]">
+                              <td className="py-3 px-3 text-slate-600 whitespace-nowrap font-medium">{row.date}</td>
+                              <td className="py-3 px-3 font-semibold text-slate-900">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-6 h-6 rounded-lg ${row.iconBg} flex items-center justify-center shrink-0`}>
+                                    <IconComponent className="w-3.5 h-3.5" />
+                                  </div>
+                                  <span>{row.platform}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 text-right font-bold text-emerald-600 font-mono">
+                                ₹ {row.settledAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-3 text-right font-bold text-slate-800 font-mono">
+                                ₹ {row.grossAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{row.reference}</td>
+                              <td className="py-3 px-3 text-slate-600 font-medium">{row.createdBy}</td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="py-12 text-center text-slate-400 font-medium">
+                            No recent settlements found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
+
+            {/* Pagination Controls */}
+            {(() => {
+              const totalItems = totalCount || receivables.length;
+              const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+              const startItem = totalItems > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+              const endItem = Math.min(currentPage * pageSize, totalItems);
+
+              return (
+                <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 font-medium rounded-b-2xl">
+                  <div>
+                    Showing <span className="font-bold text-slate-800">{startItem}</span> to{' '}
+                    <span className="font-bold text-slate-800">{endItem}</span> of{' '}
+                    <span className="font-bold text-slate-800">{totalItems}</span> receivables
+                  </div>
+
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      disabled={currentPage === 1 || loading}
+                      onClick={() => loadReceivables(currentPage - 1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+
+                    {Array.from({ length: totalPages }).map((_, idx) => {
+                      const pageNum = idx + 1;
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          disabled={loading}
+                          onClick={() => loadReceivables(pageNum)}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white shadow-xs font-bold'
+                              : 'border border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={currentPage >= totalPages || loading}
+                      onClick={() => loadReceivables(currentPage + 1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -600,18 +850,20 @@ const Receivables = () => {
                 <select
                   value={selectedReceivableId}
                   onChange={(e) => {
-                    const id = Number(e.target.value);
+                    const id = e.target.value;
                     setSelectedReceivableId(id);
-                    const item = pendingList.find(p => p.id === id);
+                    const item = pendingList.find((p) => String(p.id) === String(id));
                     if (item) {
-                      setSettlementAmount(item.outstanding.toString());
+                      setSettlementAmount(item.outstandingAmount.toString());
+                      setReferenceNote(`${item.platform} settlement - ${item.reference}`);
                     }
                   }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
                 >
-                  {pendingList.map(p => (
+                  <option value="">-- Select Pending Receivable --</option>
+                  {pendingList.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.account} (Outstanding: ₹ {p.outstanding.toLocaleString()})
+                      Receivable #{p.id} ({p.platform} - Bal: ₹ {p.outstandingAmount.toLocaleString('en-IN')})
                     </option>
                   ))}
                 </select>
@@ -621,14 +873,14 @@ const Receivables = () => {
               <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-100">
                 <p className="text-[11px] font-medium text-slate-500 mb-0.5">Outstanding Amount</p>
                 <p className="text-xl font-black text-slate-900 font-mono">
-                  ₹ {selectedAccount ? selectedAccount.outstanding.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+                  ₹ {selectedAccount ? selectedAccount.outstandingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
                 </p>
               </div>
 
-              {/* Field 3: Settlement Amount */}
+              {/* Field 3: Settlement Gross Amount */}
               <div>
                 <label className="block text-slate-700 font-semibold mb-1">
-                  Settlement Amount <span className="text-rose-500">*</span>
+                  Settlement Gross Amount <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -641,21 +893,39 @@ const Receivables = () => {
                 />
               </div>
 
-              {/* Field 4: Deposit To */}
+              {/* Field 4: Destination Financial Account */}
               <div>
                 <label className="block text-slate-700 font-semibold mb-1">
-                  Deposit To <span className="text-rose-500">*</span>
+                  Destination Account <span className="text-rose-500">*</span>
                 </label>
                 <select
-                  value={depositTo}
-                  onChange={(e) => setDepositTo(e.target.value)}
+                  value={destinationAccount}
+                  onChange={(e) => setDestinationAccount(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                  required
                 >
-                  <option value="Bank">Bank (Federal Bank)</option>
-                  <option value="Cash in Hand">Cash in Hand</option>
-                  <option value="Google Pay">Google Pay</option>
+                  <option value="">-- Select Destination Account --</option>
+                  {financialAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name || acc.account_name} (ID: {acc.id})
+                    </option>
+                  ))}
+                  {financialAccounts.length === 0 && (
+                    <>
+                      <option value="6">Bank Account (ID: 6)</option>
+                      <option value="1">Petty Cash (ID: 1)</option>
+                      <option value="2">HDFC Current Account (ID: 2)</option>
+                    </>
+                  )}
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">Current Balance: ₹ 0.00</p>
+                {(() => {
+                  const matched = financialAccounts.find((a) => String(a.id) === String(destinationAccount));
+                  return matched ? (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Balance: ₹ {parseFloat(matched.balance || matched.current_balance || 0).toLocaleString('en-IN')}
+                    </p>
+                  ) : null;
+                })()}
               </div>
 
               {/* Field 5: Settlement Date */}
@@ -674,25 +944,38 @@ const Receivables = () => {
                 </div>
               </div>
 
-              {/* Field 6: Reference / Note */}
+              {/* Field 6: Reference */}
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Reference / Note</label>
+                <label className="block text-slate-700 font-semibold mb-1">Reference</label>
                 <input
                   type="text"
-                  placeholder="e.g. Swiggy settlement - 10 Sep"
+                  placeholder="e.g. string"
                   value={referenceNote}
                   onChange={(e) => setReferenceNote(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
 
-              {/* Field 7: Submit Button */}
+              {/* Field 7: Description */}
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. string"
+                  value={descriptionNote}
+                  onChange={(e) => setDescriptionNote(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Field 8: Submit Button */}
               <button
                 type="submit"
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+                disabled={isSubmitting}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>Settle Receivable</span>
+                <span>{isSubmitting ? 'Settling...' : 'Settle Receivable'}</span>
               </button>
             </form>
 

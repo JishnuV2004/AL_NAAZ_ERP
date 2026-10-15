@@ -2,19 +2,42 @@ import axiosInstance from '../config/axios';
 import { useInventoryStore } from '../store/inventoryStore';
 import toast from 'react-hot-toast';
 
+export const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch (e) {}
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    try {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+    } catch (e) {}
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const inventoryService = {
   // PRODUCTS
-  fetchProducts: async () => {
+  fetchProducts: async (page = 1, pageSize = 10) => {
     const store = useInventoryStore.getState();
     store.setLoading(true);
     try {
       try {
-        const response = await axiosInstance.get('/products/');
+        const response = await axiosInstance.get(`/products/?page=${page}&page_size=${pageSize}`);
         const data = response.data.results ? response.data.results : response.data;
         store.setProducts(data);
-        return data;
+        return response.data;
       } catch (err) {
-        return store.products;
+        return { results: store.products || [], count: (store.products || []).length, next: null, previous: null };
       }
     } finally {
       store.setLoading(false);
@@ -34,6 +57,16 @@ export const inventoryService = {
       }
     } finally {
       store.setLoading(false);
+    }
+  },
+  fetchStock: async () => {
+    try {
+      const response = await axiosInstance.get('/stock/');
+      const data = response.data.results ? response.data.results : response.data;
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Failed to fetch stock from API:', err);
+      return [];
     }
   },
   addProduct: async (data) => {
@@ -227,28 +260,48 @@ export const inventoryService = {
   },
 
   // USAGE
-  recordUsage: async (data) => {
+  recordUsage: async (data, idempotencyKey) => {
     const store = useInventoryStore.getState();
     const loadingToast = toast.loading('Recording usage...');
     
     try {
+      // Each action sends a fresh, different random Idempotency-Key (UUID v4)
+      const key = idempotencyKey || generateUUID();
+
       const payload = {
-        product: Number(data.productId),
+        branch: Number(data.branch),
+        product: Number(data.product || data.productId),
         quantity: String(data.quantity),
-        usage_date: data.date,
+        usage_date: data.usage_date || data.date,
         remarks: data.remarks || ''
       };
 
+      const response = await axiosInstance.post('/usages/', payload, {
+        headers: {
+          'Idempotency-Key': key
+        }
+      });
+      store.addUsage(response.data);
+      toast.success('Usage recorded successfully!', { id: loadingToast });
       try {
-        const response = await axiosInstance.post('/usages/', payload);
-        store.addUsage(response.data);
-        toast.success('Usage recorded successfully!', { id: loadingToast });
-      } catch (err) {
-        store.addUsage(data);
-        toast.success('Usage recorded locally (Demo Mode)', { id: loadingToast });
+        await inventoryService.fetchLiveStock();
+      } catch (e) {
+        // Non-blocking stock sync
       }
-    } catch (e) {
-      toast.error('Failed to record usage', { id: loadingToast });
+      return response.data;
+    } catch (err) {
+      console.error('Failed to record stock usage:', err);
+      const errDetail =
+        err.response?.data?.detail ||
+        (typeof err.response?.data === 'object'
+          ? Object.entries(err.response.data)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
+              .join(' | ')
+          : null) ||
+        err.message ||
+        'Failed to record usage';
+      toast.error(errDetail, { id: loadingToast });
+      throw err;
     }
   },
   fetchUsages: async (page = 1, pageSize = 5) => {
@@ -267,15 +320,105 @@ export const inventoryService = {
   },
 
   // LEDGER
-  fetchLedger: async () => {
+  fetchLedger: async (page = 1, pageSize = 10) => {
     const store = useInventoryStore.getState();
     try {
-      const response = await axiosInstance.get('/stock/ledger/');
+      const response = await axiosInstance.get(`/stock/ledger/?page=${page}&page_size=${pageSize}`);
       const data = response.data.results ? response.data.results : response.data;
       store.setLedger(data);
-      return data;
+      return response.data;
     } catch (err) {
-      return store.ledger; // Fallback to local
+      console.error('Failed to fetch stock ledger:', err);
+      return { results: store.ledger || [], count: (store.ledger || []).length, next: null, previous: null };
     }
   },
+
+  // ADJUSTMENTS
+  fetchAdjustments: async (page = 1, pageSize = 10) => {
+    try {
+      const response = await axiosInstance.get(`/stock-adjustments/?page=${page}&page_size=${pageSize}`);
+      return response.data;
+    } catch (err) {
+      console.error('Failed to fetch stock adjustments:', err);
+      return { results: [], count: 0 };
+    }
+  },
+
+  createAdjustment: async (payload, idempotencyKey) => {
+    const loadingToast = toast.loading('Recording stock adjustment...');
+    try {
+      // Each action sends a fresh, different random Idempotency-Key (UUID v4)
+      const key = idempotencyKey || generateUUID();
+
+      const response = await axiosInstance.post('/stock-adjustments/', payload, {
+        headers: {
+          'Idempotency-Key': key
+        }
+      });
+      toast.success('Stock adjustment recorded successfully!', { id: loadingToast });
+      try {
+        await inventoryService.fetchLiveStock();
+      } catch (e) {
+        // Non-blocking stock sync
+      }
+      return response.data;
+    } catch (err) {
+      console.error('Failed to record stock adjustment:', err);
+      const errDetail =
+        err.response?.data?.detail ||
+        (typeof err.response?.data === 'object'
+          ? Object.entries(err.response.data)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
+              .join(' | ')
+          : null) ||
+        err.message ||
+        'Failed to record stock adjustment';
+      toast.error(errDetail, { id: loadingToast });
+      throw err;
+    }
+  },
+
+  // PRODUCT CATEGORIES
+  fetchProductCategories: async () => {
+    try {
+      const response = await axiosInstance.get('/product-categories/');
+      const data = response.data;
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.results)) return data.results;
+      return [];
+    } catch (err) {
+      console.error('Failed to fetch product categories:', err);
+      throw err;
+    }
+  },
+
+  createProductCategory: async (payload) => {
+    try {
+      const response = await axiosInstance.post('/product-categories/', payload);
+      return response.data;
+    } catch (err) {
+      console.error('Failed to create product category:', err);
+      throw err;
+    }
+  },
+
+  updateProductCategory: async (id, payload) => {
+    try {
+      const response = await axiosInstance.patch(`/product-categories/${id}/`, payload);
+      return response.data;
+    } catch (err) {
+      console.error(`Failed to update product category ${id}:`, err);
+      throw err;
+    }
+  },
+
+  deleteProductCategory: async (id) => {
+    try {
+      const response = await axiosInstance.delete(`/product-categories/${id}/`);
+      return response.data;
+    } catch (err) {
+      console.error(`Failed to delete product category ${id}:`, err);
+      throw err;
+    }
+  }
 };
