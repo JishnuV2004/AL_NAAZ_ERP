@@ -805,6 +805,15 @@ const Salary = () => {
                     </div>
                   </td>
                 </tr>
+              ) : paginatedList.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={isGenerateMode ? 6 : 12}
+                    className="p-12 text-center text-slate-400 font-medium"
+                  >
+                    {isGenerateMode ? 'No employee records found.' : 'No salary records found.'}
+                  </td>
+                </tr>
               ) : (
                 <>
                   {isGenerateMode ? (

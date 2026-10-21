@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { IoAddOutline, IoWarningOutline, IoSearchOutline } from 'react-icons/io5';
+import { 
+  IoAddOutline, 
+  IoWarningOutline, 
+  IoChevronBackOutline, 
+  IoChevronForwardOutline 
+} from 'react-icons/io5';
 
 import { getEmployees, createEmployee, patchEmployee, updateEmployee } from '../../api/employees.api';
 import api from '../../config/axios';
@@ -164,73 +169,28 @@ const Employees = () => {
     }
   };
 
-  // Render Helpers
-  const renderEmptyState = () => {
-    if (isLoading || apiError) return null;
-
-    const isFiltered = filters.branchId !== 'All' || filters.status !== 'All' || filters.search !== '';
-
-    if (employees.length === 0) {
-      if (isFiltered) {
-        return (
-          <div className="bg-white rounded-b-2xl p-12 flex flex-col items-center justify-center text-center border-t border-[#E7E8EE]">
-            <div className="h-16 w-16 bg-[#F4F5F8] rounded-full flex items-center justify-center text-[#6B7280] mb-4">
-              <IoSearchOutline size={32} />
-            </div>
-            <h3 className="text-[#1C1F2A] font-semibold text-lg mb-1">No employees match your filters</h3>
-            <p className="text-[#6B7280] mb-6">Try adjusting your search or clearing the filters to see more results.</p>
-            <button 
-              onClick={() => setFilters({ branchId: 'All', status: 'All', search: '' })}
-              className="px-4 py-2 bg-white text-[#1C1F2A] border border-[#E7E8EE] rounded-lg font-semibold hover:bg-[#F4F5F8] transition-colors"
-            >
-              Clear Filters
-            </button>
-          </div>
-        );
-      } else {
-        return (
-          <div className="bg-white rounded-b-2xl p-16 flex flex-col items-center justify-center text-center border-t border-[#E7E8EE]">
-            <div className="h-20 w-20 bg-[#F4F5F8] rounded-full flex items-center justify-center text-[#6B7280] mb-4">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="9" cy="7" r="4"></circle>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-              </svg>
-            </div>
-            <h3 className="text-[#1C1F2A] font-semibold text-xl mb-2">No employees yet</h3>
-            <p className="text-[#6B7280] mb-6 max-w-sm">Get started by adding your first employee to the system. You can manage their details, roles, and identity proofs here.</p>
-            <button 
-              onClick={handleOpenCreate}
-              className="px-5 py-2.5 bg-[#C9A227] text-white rounded-lg font-semibold hover:bg-[#B49122] transition-colors flex items-center gap-2"
-            >
-              <IoAddOutline size={20} /> Add Employee
-            </button>
-          </div>
-        );
-      }
-    }
-    return null;
-  };
 
   return (
-    <div className="space-y-4 font-sans w-full">
+    <div className="space-y-6 font-sans w-full pb-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1C1F2A] tracking-tight">Employees Directory</h1>
-          <p className="text-xs sm:text-sm text-[#6B7280] mt-0.5">Manage staff members and personal information.</p>
+          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+            <span>HR</span> &gt; <span className="text-gray-700">Employees</span>
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Employees Directory</h1>
+          <p className="text-xs text-gray-500 font-medium mt-0.5">Manage staff members and personal information.</p>
         </div>
         <button 
           onClick={handleOpenCreate}
-          className="flex items-center px-4 py-2 bg-[#C9A227] text-white rounded-xl font-semibold text-xs sm:text-sm hover:bg-[#B49122] transition-colors shadow-xs cursor-pointer"
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-2xs cursor-pointer"
         >
-          <IoAddOutline className="mr-1.5" size={18} /> Add Employee
+          <IoAddOutline size={18} /> Add Employee
         </button>
       </div>
 
-      {/* Main Content Area */}
-      <div className="shadow-sm rounded-2xl border border-[#E7E8EE]">
+      {/* Main Table Container */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
         <EmployeeFilters 
           accessibleBranches={branches} 
           filters={filters}
@@ -258,63 +218,59 @@ const Employees = () => {
           employees={paginatedEmployees} 
           isLoading={isLoading} 
           emptyRowsCount={emptyRowsCount}
+          accessibleBranches={branches}
           onRowClick={(emp) => handleAction('view', emp)}
           onAction={handleAction} 
         />
 
         {/* Pagination Controls */}
         {employees.length > 0 && !isLoading && (
-          <div className="p-4 bg-white rounded-b-2xl border-t border-[#E7E8EE] flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-[#6B7280]">
-              Showing <span className="font-medium text-[#1C1F2A]">{startIndex + 1}</span> to <span className="font-medium text-[#1C1F2A]">{Math.min(startIndex + ITEMS_PER_PAGE, employees.length)}</span> of <span className="font-medium text-[#1C1F2A]">{employees.length}</span> employees
-            </p>
-            <div className="flex items-center gap-1">
-              <button 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 border border-[#E7E8EE] rounded-lg text-sm font-medium text-[#4B5563] hover:bg-[#F4F5F8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Previous
-              </button>
-              
-              <div className="hidden sm:flex items-center gap-1">
-                {Array.from({ length: totalPages }).map((_, idx) => {
-                  // Simple pagination: show first, last, and current +/- 1. For simplicity, just show all if < 7 pages.
-                  if (totalPages > 7) {
-                    if (idx !== 0 && idx !== totalPages - 1 && Math.abs(currentPage - 1 - idx) > 1) {
-                      if (Math.abs(currentPage - 1 - idx) === 2) return <span key={idx} className="px-2 text-gray-400">...</span>;
-                      return null;
-                    }
-                  }
-                  
-                  return (
-                    <button 
-                      key={idx + 1}
-                      onClick={() => setCurrentPage(idx + 1)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
-                        currentPage === idx + 1 
-                          ? 'bg-[#1C1F2A] text-white' 
-                          : 'text-[#4B5563] hover:bg-[#F4F5F8]'
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  );
-                })}
-              </div>
+          <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+            <div>
+              Showing <span className="font-bold text-gray-900">{startIndex + 1}</span> to{' '}
+              <span className="font-bold text-gray-900">{Math.min(startIndex + ITEMS_PER_PAGE, employees.length)}</span> of{' '}
+              <span className="font-bold text-gray-900">{employees.length}</span> entries
+            </div>
 
-              <button 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1.5 border border-[#E7E8EE] rounded-lg text-sm font-medium text-[#4B5563] hover:bg-[#F4F5F8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
               >
-                Next
+                <IoChevronBackOutline size={14} />
+              </button>
+
+              {Array.from({ length: totalPages }).map((_, idx) => {
+                const pageNum = idx + 1;
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
+                      currentPage === pageNum
+                        ? 'bg-blue-600 text-white shadow-xs font-bold'
+                        : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              >
+                <IoChevronForwardOutline size={14} />
               </button>
             </div>
           </div>
         )}
-
-        {renderEmptyState()}
       </div>
 
       {/* Modals & Drawers */}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { IoSearchOutline, IoFilterOutline } from 'react-icons/io5';
 
-const EmployeeFilters = ({ accessibleBranches, filters, onFilterChange }) => {
+const EmployeeFilters = ({ accessibleBranches = [], filters, onFilterChange }) => {
   const [localSearch, setLocalSearch] = useState(filters.search);
 
   // Debounce search
@@ -15,29 +15,33 @@ const EmployeeFilters = ({ accessibleBranches, filters, onFilterChange }) => {
   }, [localSearch, filters.search, onFilterChange]);
 
   return (
-    <div className="p-4 border-b border-[#E7E8EE] flex flex-col sm:flex-row justify-between items-center gap-3 bg-white rounded-t-2xl">
-      <div className="relative w-full sm:w-96">
-        <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" size={16} />
+    <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-white">
+      {/* Search Input */}
+      <div className="relative w-full sm:w-80">
+        <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
         <input 
           type="text" 
-          placeholder="Search name, phone, or designation..." 
+          placeholder="Search by name, phone, or designation..." 
           value={localSearch}
           onChange={(e) => setLocalSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-1.5 border border-[#E7E8EE] rounded-xl focus:outline-none focus:border-[#C9A227] focus:ring-1 focus:ring-[#C9A227] transition-all bg-[#F4F5F8] text-[#1C1F2A] text-xs font-medium"
+          className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs bg-white text-gray-800 focus:outline-none focus:border-blue-500 transition-colors"
         />
       </div>
       
-      <div className="flex items-center gap-3 w-full sm:w-auto">
-        <div className="relative flex-1 sm:flex-none">
-          <IoFilterOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" size={15} />
+      {/* Filters */}
+      <div className="flex items-center gap-2.5 w-full sm:w-auto">
+        <div className="flex items-center gap-2 flex-1 sm:flex-none">
+          <IoFilterOutline size={16} className="text-gray-400 shrink-0 hidden sm:block" />
           <select 
             value={filters.branchId} 
             onChange={(e) => onFilterChange({ branchId: e.target.value })}
-            className="w-full pl-8 pr-3 py-1.5 border border-[#E7E8EE] rounded-xl focus:outline-none focus:border-[#C9A227] bg-[#F4F5F8] text-[#1C1F2A] text-xs font-medium appearance-none cursor-pointer"
+            className="w-full sm:w-auto border border-gray-200 rounded-xl text-xs px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
           >
             <option value="All">All Branches</option>
             {accessibleBranches.map(branch => (
-              <option key={branch.id} value={branch.id}>{branch.code}</option>
+              <option key={branch.id} value={branch.id}>
+                {branch.name || branch.branch_name || branch.code || `Branch #${branch.id}`}
+              </option>
             ))}
           </select>
         </div>
@@ -45,7 +49,7 @@ const EmployeeFilters = ({ accessibleBranches, filters, onFilterChange }) => {
         <select 
           value={filters.status} 
           onChange={(e) => onFilterChange({ status: e.target.value })}
-          className="flex-1 sm:flex-none px-3 py-1.5 border border-[#E7E8EE] rounded-xl focus:outline-none focus:border-[#C9A227] bg-[#F4F5F8] text-[#1C1F2A] text-xs font-medium cursor-pointer"
+          className="flex-1 sm:flex-none border border-gray-200 rounded-xl text-xs px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
         >
           <option value="All">All Status</option>
           <option value="Active">Active</option>

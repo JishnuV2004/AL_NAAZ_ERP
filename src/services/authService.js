@@ -21,7 +21,16 @@ export const authService = {
         return response.data;
       }
     } catch (error) {
-      toast.error(error.message || 'Login failed');
+      const responseData = error.response?.data;
+      const toastMessage = 
+        responseData?.message || 
+        responseData?.error || 
+        responseData?.detail || 
+        error.userMessage || 
+        error.message || 
+        'Login failed';
+
+      toast.error(toastMessage);
       throw error;
     }
   },

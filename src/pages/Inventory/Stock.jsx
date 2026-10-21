@@ -34,33 +34,6 @@ const formatDisplayDate = (dateStr) => {
   return `${monthNamesShort[m]} ${d}, ${y}`;
 };
 
-const INITIAL_STOCK_DATA = [
-  {
-    product: 3,
-    product_name: "apple",
-    unit: "KG",
-    current_stock: "3.00",
-    minimum_stock: "1.00",
-    status: "GOOD"
-  },
-  {
-    product: 4,
-    product_name: "meat",
-    unit: "KG",
-    current_stock: "0.00",
-    minimum_stock: "4.00",
-    status: "OUT_OF_STOCK"
-  },
-  {
-    product: 1,
-    product_name: "tomato",
-    unit: "KG",
-    current_stock: "50.00",
-    minimum_stock: "15.00",
-    status: "GOOD"
-  }
-];
-
 const Stock = () => {
   const navigate = useNavigate();
   const [stockItems, setStockItems] = useState([]);
@@ -282,7 +255,7 @@ const Stock = () => {
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-300 font-sans">
-      
+
       {/* Header & Module Routings */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -322,7 +295,7 @@ const Stock = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
+
         {/* Total Items */}
         <div
           onClick={() => setStatusFilter('All')}
@@ -389,10 +362,10 @@ const Stock = () => {
 
       {/* Main Container */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
-        
+
         {/* Search & Filter Toolbar */}
         <div className="p-4 border-b border-gray-100 bg-white grid grid-cols-1 sm:grid-cols-4 gap-3">
-          
+
           {/* Search Input */}
           <div className="relative sm:col-span-2">
             <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -573,11 +546,10 @@ const Stock = () => {
                     key={pageNum}
                     type="button"
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
-                      validPage === pageNum
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${validPage === pageNum
                         ? 'bg-blue-600 text-white shadow-xs font-bold'
                         : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     {pageNum}
                   </button>
@@ -655,22 +627,20 @@ const Stock = () => {
                   <button
                     type="button"
                     onClick={() => setAdjustType('Add')}
-                    className={`py-2 px-3 rounded-xl font-bold border transition-colors flex items-center justify-center gap-1 cursor-pointer ${
-                      adjustType === 'Add'
+                    className={`py-2 px-3 rounded-xl font-bold border transition-colors flex items-center justify-center gap-1 cursor-pointer ${adjustType === 'Add'
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     <IoAddOutline size={16} /> Increase (+)
                   </button>
                   <button
                     type="button"
                     onClick={() => setAdjustType('Reduce')}
-                    className={`py-2 px-3 rounded-xl font-bold border transition-colors flex items-center justify-center gap-1 cursor-pointer ${
-                      adjustType === 'Reduce'
+                    className={`py-2 px-3 rounded-xl font-bold border transition-colors flex items-center justify-center gap-1 cursor-pointer ${adjustType === 'Reduce'
                         ? 'bg-rose-600 text-white border-rose-600'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     <IoRemoveOutline size={16} /> Decrease (-)
                   </button>
@@ -710,18 +680,16 @@ const Stock = () => {
                     </span>
                   </div>
                   <IoChevronDownOutline
-                    className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${
-                      showCalendarPopover ? 'rotate-180' : ''
-                    }`}
+                    className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${showCalendarPopover ? 'rotate-180' : ''
+                      }`}
                     size={13}
                   />
                 </button>
 
                 {showCalendarPopover && (
                   <div
-                    className={`absolute left-0 z-50 animate-in fade-in zoom-in-95 duration-100 shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 ${
-                      popoverPlacement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
-                    }`}
+                    className={`absolute left-0 z-50 animate-in fade-in zoom-in-95 duration-100 shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 ${popoverPlacement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+                      }`}
                   >
                     <Calendar
                       value={adjustDate || new Date().toISOString().split('T')[0]}

@@ -25,8 +25,9 @@ const Branches = () => {
   useEffect(() => {
     const fetchBranches = async () => {
       try {
-        const response = await api.get('https://al-naaz.onrender.com/api/branches/');
-        setBranches(response.data);
+        const response = await api.get('/branches/');
+        const data = Array.isArray(response.data) ? response.data : (response.data?.results || []);
+        setBranches(data);
       } catch (err) {
         setError(err.message || 'Failed to fetch branches');
       } finally {
@@ -49,10 +50,10 @@ const Branches = () => {
     setIsSubmitting(true);
     try {
       if (editingBranchId) {
-        const response = await api.patch(`https://al-naaz.onrender.com/api/branches/${editingBranchId}/`, newBranch);
+        const response = await api.patch(`/branches/${editingBranchId}/`, newBranch);
         setBranches(branches.map(b => b.id === editingBranchId ? response.data : b));
       } else {
-        const response = await api.post('https://al-naaz.onrender.com/api/branches/', newBranch);
+        const response = await api.post('/branches/', newBranch);
         setBranches([...branches, response.data]);
       }
       setIsAddModalOpen(false);
@@ -90,7 +91,7 @@ const Branches = () => {
   const handleDeleteBranch = async (id) => {
     if (window.confirm("Are you sure you want to delete this branch?")) {
       try {
-        await api.delete(`https://al-naaz.onrender.com/api/branches/${id}/`);
+        await api.delete(`/branches/${id}/`);
         setBranches(branches.filter(b => b.id !== id));
       } catch (err) {
         alert('Failed to delete branch: ' + (err.response?.data?.message || err.message));

@@ -19,39 +19,6 @@ const getTodayDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
-const DEFAULT_USAGES = [
-  {
-    id: 9187,
-    usage_code: 'USG-9187',
-    usage_date: '2026-09-24',
-    product_name: 'Tomato',
-    quantity: '1',
-    unit: 'KG',
-    branch_name: 'Branch A',
-    remarks: ''
-  },
-  {
-    id: 9186,
-    usage_code: 'USG-9186',
-    usage_date: '2026-09-23',
-    product_name: 'Basmati Rice',
-    quantity: '5',
-    unit: 'KG',
-    branch_name: 'Main Branch',
-    remarks: 'Kitchen preparation'
-  },
-  {
-    id: 9185,
-    usage_code: 'USG-9185',
-    usage_date: '2026-09-22',
-    product_name: 'Cooking Oil',
-    quantity: '2',
-    unit: 'L',
-    branch_name: 'Main Branch',
-    remarks: 'Fryer refill'
-  }
-];
-
 const StockUsage = () => {
   const products = useInventoryStore(state => state.products) || [];
   const usages = useInventoryStore(state => state.usages) || [];
@@ -394,11 +361,10 @@ const StockUsage = () => {
                       type="button"
                       disabled={loading}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
-                        currentPage === pageNum
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${currentPage === pageNum
                           ? 'bg-blue-600 text-white shadow-xs font-bold'
                           : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       {pageNum}
                     </button>
