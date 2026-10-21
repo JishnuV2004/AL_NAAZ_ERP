@@ -184,9 +184,13 @@ const Sidebar = () => {
           className={`shrink-0 object-contain transition-all duration-300 ${isHovered ? 'w-16 h-16' : 'w-14 h-14'}`}
         />
         {isHovered && (
-          <div className="overflow-hidden whitespace-nowrap">
-            <h1 className="text-brand-gold font-extrabold text-base leading-tight tracking-wide font-sans">Al Naaz</h1>
-            {/* <p className="text-[11px] text-gray-400 font-medium tracking-wider">ERP Admin Panel</p> */}
+          <div className="overflow-hidden whitespace-nowrap flex flex-col justify-center animate-in fade-in duration-200">
+            <h1
+              className="text-[30px] font-bold tracking-wider leading-none select-none bg-gradient-to-r from-[#FDE08B] via-[#E2B743] to-[#B88728] bg-clip-text text-transparent drop-shadow-[0_2px_10px_rgba(226,183,67,0.35)]"
+              style={{ fontFamily: "'Cinzel Decorative', 'Cinzel', 'Playfair Display', serif" }}
+            >
+              Al Naas
+            </h1>
           </div>
         )}
       </div>
