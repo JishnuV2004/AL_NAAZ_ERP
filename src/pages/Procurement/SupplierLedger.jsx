@@ -1,329 +1,659 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   IoSearchOutline,
-  IoDownloadOutline,
   IoReceiptOutline,
   IoWalletOutline,
   IoCheckmarkCircleOutline,
   IoDocumentTextOutline,
-  IoBusinessOutline,
   IoFilterOutline,
-  IoCalendarOutline
+  IoCalendarOutline,
+  IoRefreshOutline,
+  IoChevronBackOutline,
+  IoChevronForwardOutline,
+  IoEyeOutline,
+  IoCloseOutline,
+  IoTimeOutline,
+  IoBusinessOutline
 } from 'react-icons/io5';
+import { supplierPayableService } from '../../services/supplierPayableService';
+import { supplierService } from '../../services/supplierService';
 import toast from 'react-hot-toast';
 
-const initialLedgerEntries = [
-  {
-    id: 'led-1',
-    date: '2026-08-01',
-    txnRef: 'OPB-2026-001',
-    supplierId: 's1',
-    supplierName: 'Fresh Farms Produce Ltd',
-    type: 'Opening Balance',
-    description: 'Brought forward liability balance',
-    debit: 20000,
-    credit: 0,
-    runningBalance: 20000
-  },
-  {
-    id: 'led-2',
-    date: '2026-08-15',
-    txnRef: 'INV-2026-380',
-    supplierId: 's1',
-    supplierName: 'Fresh Farms Produce Ltd',
-    type: 'Purchase Invoice',
-    description: 'Bulk Vegetables PO-2026-0810',
-    debit: 50000,
-    credit: 0,
-    runningBalance: 70000
-  },
-  {
-    id: 'led-3',
-    date: '2026-08-28',
-    txnRef: 'PAY-2026-850',
-    supplierId: 's1',
-    supplierName: 'Fresh Farms Produce Ltd',
-    type: 'Vendor Payment',
-    description: 'NEFT Bank Transfer Clearing',
-    debit: 0,
-    credit: 25000,
-    runningBalance: 45000
-  },
-  {
-    id: 'led-4',
-    date: '2026-09-01',
-    txnRef: 'INV-2026-390',
-    supplierId: 's2',
-    supplierName: 'Gulf General Trading Co',
-    type: 'Purchase Invoice',
-    description: 'Grains & Cooking Oil PO-2026-0850',
-    debit: 203500,
-    credit: 0,
-    runningBalance: 203500
-  },
-  {
-    id: 'led-5',
-    date: '2026-09-15',
-    txnRef: 'PAY-2026-904',
-    supplierId: 's2',
-    supplierName: 'Gulf General Trading Co',
-    type: 'Vendor Payment',
-    description: 'RTGS Settlement INV-2026-390',
-    debit: 0,
-    credit: 75000,
-    runningBalance: 128500
-  },
-  {
-    id: 'led-6',
-    date: '2026-09-18',
-    txnRef: 'INV-2026-403',
-    supplierId: 's4',
-    supplierName: 'Crown Dairy Products',
-    type: 'Purchase Invoice',
-    description: 'Dairy Milk & Yogurt Delivery',
-    debit: 32000,
-    credit: 0,
-    runningBalance: 32000
-  },
-  {
-    id: 'led-7',
-    date: '2026-09-24',
-    txnRef: 'PAY-2026-901',
-    supplierId: 's3',
-    supplierName: 'Prime Poultry & Meats',
-    type: 'Vendor Payment',
-    description: 'NEFT Full Payment PO-2026-0893',
-    debit: 0,
-    credit: 35000,
-    runningBalance: 0
+const formatCurrency = (amount) => {
+  const num = parseFloat(amount || 0);
+  if (isNaN(num)) return '₹0.00';
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return dateStr;
   }
-];
+};
+
+const getStatusBadge = (status) => {
+  const st = String(status || '').toUpperCase();
+  switch (st) {
+    case 'PAID':
+      return {
+        bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        dot: 'bg-emerald-500',
+        label: 'PAID'
+      };
+    case 'PARTIAL':
+      return {
+        bg: 'bg-amber-50 text-amber-700 border-amber-200',
+        dot: 'bg-amber-500',
+        label: 'PARTIAL'
+      };
+    case 'OPEN':
+    default:
+      return {
+        bg: 'bg-rose-50 text-rose-700 border-rose-200',
+        dot: 'bg-rose-500',
+        label: 'OPEN'
+      };
+  }
+};
 
 const SupplierLedger = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const filterSupplierId = searchParams.get('supplierId') || 'All';
+  const urlSupplierId = searchParams.get('supplierId') || 'ALL';
 
-  const [selectedSupplier, setSelectedSupplier] = useState(filterSupplierId);
-  const [typeFilter, setTypeFilter] = useState('All');
+  // State management
+  const [payables, setPayables] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Pagination states matching system standard
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [selectedSupplier, setSelectedSupplier] = useState(urlSupplierId);
+  const [suppliersList, setSuppliersList] = useState([]);
 
-  const filteredLedger = initialLedgerEntries.filter(entry => {
-    const matchesSupplier = selectedSupplier === 'All' || entry.supplierId === selectedSupplier;
-    const matchesType = typeFilter === 'All' || entry.type === typeFilter;
-    const matchesSearch =
-      entry.txnRef.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.description.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSupplier && matchesType && matchesSearch;
-  });
+  // Selected item for payment detail modal
+  const [selectedPayable, setSelectedPayable] = useState(null);
 
-  const totalDebit = filteredLedger.reduce((sum, e) => sum + e.debit, 0);
-  const totalCredit = filteredLedger.reduce((sum, e) => sum + e.credit, 0);
-  const netClosingBalance = totalDebit - totalCredit;
+  // Fetch suppliers list for filter dropdown
+  useEffect(() => {
+    const loadSuppliers = async () => {
+      try {
+        const data = await supplierService.fetchSuppliers(1, 100);
+        if (data && Array.isArray(data.results)) {
+          setSuppliersList(data.results);
+        } else if (Array.isArray(data)) {
+          setSuppliersList(data);
+        }
+      } catch (err) {
+        console.error('Failed to load suppliers list:', err);
+      }
+    };
+    loadSuppliers();
+  }, []);
 
-  const handleExportStatement = () => {
-    toast.success('Downloading Supplier Ledger Statement (PDF/Excel)...');
+  // Fetch supplier payables from live API
+  const fetchPayables = async (pageToFetch = currentPage, isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+
+      const params = {
+        page: pageToFetch,
+        page_size: pageSize
+      };
+      if (selectedStatus !== 'ALL') params.status = selectedStatus;
+      if (selectedSupplier !== 'ALL') params.supplier = selectedSupplier;
+      if (searchTerm.trim()) params.search = searchTerm.trim();
+
+      const data = await supplierPayableService.fetchSupplierPayables(params);
+
+      if (data && Array.isArray(data.results)) {
+        setPayables(data.results);
+        setTotalCount(data.count ?? data.results.length);
+      } else if (Array.isArray(data)) {
+        setPayables(data);
+        setTotalCount(data.length);
+      } else {
+        setPayables([]);
+        setTotalCount(0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch supplier payables:', err);
+      setError(err.response?.data?.detail || err.message || 'Failed to load supplier payables.');
+      toast.error('Could not load supplier ledger entries.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
+  useEffect(() => {
+    fetchPayables(currentPage);
+  }, [currentPage, selectedStatus, selectedSupplier]);
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setCurrentPage(1);
+    fetchPayables(1);
+  };
+
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const emptyRowsCount = loading ? 0 : Math.max(0, pageSize - payables.length);
+
+  // Aggregate metrics from current page dataset
+  const totalBilled = payables.reduce((acc, row) => acc + (parseFloat(row.total_amount) || 0), 0);
+  const totalPaid = payables.reduce((acc, row) => acc + (parseFloat(row.paid_amount) || 0), 0);
+  const totalOutstanding = payables.reduce((acc, row) => acc + (parseFloat(row.outstanding_amount) || 0), 0);
+
   return (
-    <div className="space-y-6 pb-12 font-sans">
-      {/* Header Navigation */}
+    <div className="space-y-6 pb-12 font-sans animate-in fade-in duration-300">
+      
+      {/* 1. Header Navigation */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <div className="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1.5">
-            <span>Procurement</span> &gt; <span className="text-gray-700">Supplier Ledger</span>
+          <div className="text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1.5">
+            <span>Procurement</span> &gt; <span className="text-slate-700">Supplier Ledger</span>
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Vendor Account Statement & Ledger</h1>
-          <p className="text-xs text-gray-500 font-medium mt-0.5">
-            Complete debit/credit transaction history and running account balances per supplier.
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <IoReceiptOutline className="text-blue-600" size={26} />
+            Vendor Payables & Ledger
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            Live supplier purchase invoices, settlement tracking, and outstanding payable balances.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
           <button
             type="button"
             onClick={() => navigate('/procurement/suppliers')}
-            className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
           >
-            Suppliers Master
+            Suppliers
           </button>
           <button
             type="button"
             onClick={() => navigate('/procurement/purchases')}
-            className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
           >
-            Purchase Orders
+            Purchases
           </button>
           <button
             type="button"
             onClick={() => navigate('/procurement/creditpurchases')}
-            className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-amber-600 hover:bg-amber-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:text-amber-600 hover:bg-amber-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
           >
             Credit Invoices
           </button>
           <button
             type="button"
             onClick={() => navigate('/procurement/supplierpayments')}
-            className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
           >
-            Supplier Payments
+            Payments
           </button>
           <button
             type="button"
-            onClick={handleExportStatement}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+            disabled={loading || refreshing}
+            onClick={() => fetchPayables(currentPage, true)}
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Refresh payables"
           >
-            <IoDownloadOutline size={16} /> Export Statement
+            <IoRefreshOutline size={15} className={refreshing ? 'animate-spin' : ''} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* 2. Overview Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 mb-1">Total Purchases / Debits</p>
-            <h3 className="text-2xl font-bold text-gray-900 tabular-nums font-mono">
-              ₹{totalDebit.toLocaleString('en-IN')}
+            <p className="text-xs font-semibold text-slate-500 mb-1">Total Purchases / Billed</p>
+            <h3 className="text-2xl font-bold text-slate-900 tabular-nums font-mono">
+              {loading ? '...' : formatCurrency(totalBilled)}
             </h3>
-            <p className="text-[10px] font-medium text-blue-600 mt-1">Billed Credit Invoices</p>
+            <p className="text-[11px] font-medium text-blue-600 mt-0.5">Page Credit Invoices</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <IoReceiptOutline size={24} />
+          <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <IoReceiptOutline size={22} />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 mb-1">Total Payments / Credits</p>
+            <p className="text-xs font-semibold text-slate-500 mb-1">Total Payments / Settled</p>
             <h3 className="text-2xl font-bold text-emerald-600 tabular-nums font-mono">
-              ₹{totalCredit.toLocaleString('en-IN')}
+              {loading ? '...' : formatCurrency(totalPaid)}
             </h3>
-            <p className="text-[10px] font-medium text-emerald-600 mt-1">Cleared Disbursements</p>
+            <p className="text-[11px] font-medium text-emerald-600 mt-0.5">Cleared Disbursements</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <IoCheckmarkCircleOutline size={24} />
+          <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <IoCheckmarkCircleOutline size={22} />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 mb-1">Net Closing Payable Balance</p>
-            <h3 className={`text-2xl font-bold tabular-nums font-mono ${netClosingBalance > 0 ? 'text-rose-600' : 'text-gray-900'}`}>
-              ₹{Math.max(0, netClosingBalance).toLocaleString('en-IN')}
+            <p className="text-xs font-semibold text-slate-500 mb-1">Net Outstanding Balance</p>
+            <h3 className={`text-2xl font-bold tabular-nums font-mono ${totalOutstanding > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+              {loading ? '...' : formatCurrency(totalOutstanding)}
             </h3>
-            <p className="text-[10px] font-medium text-purple-600 mt-1">Vendor Account Balance</p>
+            <p className="text-[11px] font-medium text-rose-500 mt-0.5">{totalCount} total payable records</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-            <IoWalletOutline size={24} />
+          <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+            <IoWalletOutline size={22} />
           </div>
         </div>
       </div>
 
-      {/* Filter & Supplier Selector Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-2xl border border-gray-200 shadow-xs gap-4">
-        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <span className="font-bold text-gray-700">Select Supplier:</span>
+      {/* 3. Filter & Search Bar */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          
+          {/* Search Box */}
+          <div className="sm:col-span-5 relative">
+            <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search invoice number, supplier..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all placeholder-slate-400"
+            />
+          </div>
+
+          {/* Supplier Dropdown */}
+          <div className="sm:col-span-4">
             <select
               value={selectedSupplier}
-              onChange={e => setSelectedSupplier(e.target.value)}
-              className="bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:border-purple-500"
+              onChange={(e) => {
+                setSelectedSupplier(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none transition-all cursor-pointer"
             >
-              <option value="All">All Suppliers</option>
-              <option value="s1">Fresh Farms Produce Ltd</option>
-              <option value="s2">Gulf General Trading Co</option>
-              <option value="s3">Prime Poultry & Meats</option>
-              <option value="s4">Crown Dairy Products</option>
-              <option value="s5">Apex Packaging Solutions</option>
+              <option value="ALL">All Suppliers</option>
+              {suppliersList.map((sup) => (
+                <option key={sup.id} value={sup.id}>
+                  {sup.name || sup.supplier_name || `Supplier #${sup.id}`}
+                </option>
+              ))}
             </select>
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <span>Txn Type:</span>
+          {/* Status Dropdown */}
+          <div className="sm:col-span-2">
             <select
-              value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value)}
-              className="bg-gray-50 border border-gray-200 text-gray-700 rounded-xl px-3 py-2 text-xs font-medium outline-none"
+              value={selectedStatus}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none transition-all cursor-pointer"
             >
-              <option value="All">All Transactions</option>
-              <option value="Purchase Invoice">Purchase Invoice</option>
-              <option value="Vendor Payment">Vendor Payment</option>
-              <option value="Opening Balance">Opening Balance</option>
+              <option value="ALL">All Statuses</option>
+              <option value="OPEN">Open</option>
+              <option value="PARTIAL">Partial</option>
+              <option value="PAID">Paid</option>
             </select>
           </div>
-        </div>
 
-        <div className="relative w-full sm:w-64">
-          <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            type="text"
-            placeholder="Search txn ref or description..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:bg-white focus:border-purple-500 outline-none"
-          />
-        </div>
+          {/* Search Submit */}
+          <div className="sm:col-span-1">
+            <button
+              type="submit"
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center cursor-pointer shadow-2xs"
+              title="Apply Search"
+            >
+              <IoSearchOutline size={15} />
+            </button>
+          </div>
+        </form>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+      {/* 4. Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full text-left text-xs border-collapse min-w-[800px]">
             <thead>
-              <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-500 font-semibold uppercase tracking-wider">
-                <th className="py-3.5 px-4">Date & Txn Ref</th>
-                <th className="py-3.5 px-4">Supplier Name</th>
-                <th className="py-3.5 px-4">Transaction Type</th>
-                <th className="py-3.5 px-4">Description</th>
-                <th className="py-3.5 px-4 text-right">Debit / Billed (₹)</th>
-                <th className="py-3.5 px-4 text-right">Credit / Paid (₹)</th>
-                <th className="py-3.5 px-4 text-right">Running Balance (₹)</th>
+              <tr className="bg-slate-50/75 border-b border-slate-100 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                <th className="py-3.5 px-4">Invoice & Date</th>
+                <th className="py-3.5 px-4">Supplier</th>
+                <th className="py-3.5 px-4 text-center">Status</th>
+                <th className="py-3.5 px-4 text-right">Total Billed</th>
+                <th className="py-3.5 px-4 text-right">Paid Amount</th>
+                <th className="py-3.5 px-4 text-right">Outstanding</th>
+                <th className="py-3.5 px-4 text-center w-24">Payments</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-gray-700">
-              {filteredLedger.length === 0 ? (
+            <tbody className="divide-y divide-slate-100 text-slate-700">
+              {loading ? (
+                Array.from({ length: 10 }).map((_, idx) => (
+                  <tr key={`skel-${idx}`} className="h-[52px] animate-pulse">
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-100 rounded w-28" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 bg-slate-100 rounded w-32" /></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-5 bg-slate-100 rounded w-16 mx-auto" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 bg-slate-100 rounded w-20 ml-auto" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 bg-slate-100 rounded w-20 ml-auto" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 bg-slate-100 rounded w-20 ml-auto" /></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-6 bg-slate-100 rounded w-12 mx-auto" /></td>
+                  </tr>
+                ))
+              ) : error ? (
                 <tr>
-                  <td colSpan="7" className="py-10 text-center text-gray-400 text-xs">
-                    No supplier ledger transactions found matching filters.
+                  <td colSpan={7} className="py-12 text-center text-slate-500">
+                    <p className="text-rose-600 font-semibold mb-2">{error}</p>
+                    <button
+                      type="button"
+                      onClick={() => fetchPayables(currentPage)}
+                      className="px-4 py-1.5 bg-blue-600 text-white rounded-lg font-bold text-xs hover:bg-blue-700 transition-colors cursor-pointer"
+                    >
+                      Retry Loading
+                    </button>
+                  </td>
+                </tr>
+              ) : payables.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <IoDocumentTextOutline size={40} className="mx-auto mb-2 text-slate-300" />
+                    <p className="font-semibold text-slate-700">No supplier payable records found.</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Records will automatically show here as credit purchases are billed.</p>
                   </td>
                 </tr>
               ) : (
-                filteredLedger.map(entry => (
-                  <tr key={entry.id} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-gray-900 font-mono">{entry.txnRef}</div>
-                      <div className="text-[11px] text-gray-400 mt-0.5">{entry.date}</div>
-                    </td>
-                    <td className="py-3.5 px-4 font-semibold text-gray-900">{entry.supplierName}</td>
-                    <td className="py-3.5 px-4">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        entry.type === 'Purchase Invoice' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                        entry.type === 'Vendor Payment' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {entry.type}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 font-medium text-gray-600">{entry.description}</td>
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-gray-900">
-                      {entry.debit > 0 ? `₹${entry.debit.toLocaleString('en-IN')}` : '-'}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">
-                      {entry.credit > 0 ? `₹${entry.credit.toLocaleString('en-IN')}` : '-'}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-purple-700">
-                      ₹{entry.runningBalance.toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ))
+                <>
+                  {payables.map((item) => {
+                    const statusBadge = getStatusBadge(item.status);
+                    const outstanding = parseFloat(item.outstanding_amount || 0);
+
+                    return (
+                      <tr 
+                        key={item.id} 
+                        className="hover:bg-slate-50/70 transition-colors h-[52px]"
+                      >
+                        {/* Invoice & Date */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-slate-900 font-mono text-xs">
+                            {item.purchase_invoice_number || `Purchase #${item.purchase}`}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                            {formatDate(item.purchase_date || item.created_at)}
+                          </div>
+                        </td>
+
+                        {/* Supplier */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-slate-900">
+                            {item.supplier_name || `Supplier #${item.supplier}`}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {item.branch_name || 'Branch Main'}
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-extrabold rounded-md border uppercase tracking-wider ${statusBadge.bg}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`}></span>
+                            {statusBadge.label}
+                          </span>
+                        </td>
+
+                        {/* Total Billed */}
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                          {formatCurrency(item.total_amount)}
+                        </td>
+
+                        {/* Paid Amount */}
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 whitespace-nowrap">
+                          {formatCurrency(item.paid_amount)}
+                        </td>
+
+                        {/* Outstanding Amount */}
+                        <td className={`py-3.5 px-4 text-right font-mono font-bold whitespace-nowrap ${outstanding > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+                          {formatCurrency(item.outstanding_amount)}
+                        </td>
+
+                        {/* Payments Breakdown Action */}
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPayable(item)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                            title="View Payments & Breakdown"
+                          >
+                            <IoEyeOutline size={14} />
+                            <span>View</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {/* Empty rows placeholders to preserve uniform 10-row size */}
+                  {emptyRowsCount > 0 && Array.from({ length: emptyRowsCount }).map((_, idx) => (
+                    <tr key={`empty-${idx}`} className="h-[52px]">
+                      <td className="py-3.5 px-4">&nbsp;</td>
+                      <td className="py-3.5 px-4">&nbsp;</td>
+                      <td className="py-3.5 px-4">&nbsp;</td>
+                      <td className="py-3.5 px-4">&nbsp;</td>
+                      <td className="py-3.5 px-4">&nbsp;</td>
+                      <td className="py-3.5 px-4">&nbsp;</td>
+                      <td className="py-3.5 px-4">&nbsp;</td>
+                    </tr>
+                  ))}
+                </>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* 5. Standardized System Pagination Footer */}
+        <div className="flex items-center justify-between p-4 border-t border-slate-100 bg-white">
+          <span className="text-xs text-slate-500 font-medium">
+            Showing {totalCount === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + pageSize, totalCount)} of {totalCount} payable entries
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button 
+              disabled={validCurrentPage <= 1 || loading}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Previous Page"
+            >
+              <IoChevronBackOutline size={16} />
+            </button>
+
+            {Array.from({ length: totalPages }).map((_, idx) => {
+              const pageNum = idx + 1;
+              const isActive = pageNum === validCurrentPage;
+              return (
+                <button
+                  key={pageNum}
+                  disabled={loading}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
+            <button 
+              disabled={validCurrentPage >= totalPages || loading}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Next Page"
+            >
+              <IoChevronForwardOutline size={16} />
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* 6. Payment Detail Modal */}
+      {selectedPayable && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200 font-sans">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto relative">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <IoReceiptOutline size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {selectedPayable.purchase_invoice_number || `Purchase #${selectedPayable.purchase}`}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Recorded on {formatDate(selectedPayable.purchase_date || selectedPayable.created_at)}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedPayable(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                title="Close Modal"
+              >
+                <IoCloseOutline size={20} />
+              </button>
+            </div>
+
+            {/* Overview Meta Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/75 p-3.5 rounded-xl border border-slate-100 text-xs">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Supplier</p>
+                <p className="font-bold text-slate-900 mt-0.5 truncate">{selectedPayable.supplier_name || '-'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Branch</p>
+                <p className="font-bold text-slate-900 mt-0.5 truncate">{selectedPayable.branch_name || '-'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Status</p>
+                <p className="font-bold text-slate-900 mt-0.5">{selectedPayable.status}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Purchase Ref</p>
+                <p className="font-bold text-slate-900 mt-0.5 font-mono">#{selectedPayable.purchase || selectedPayable.id}</p>
+              </div>
+            </div>
+
+            {/* Financial Overview Cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Billed</span>
+                <span className="text-sm font-bold font-mono text-slate-900 mt-0.5 block">
+                  {formatCurrency(selectedPayable.total_amount)}
+                </span>
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
+                <span className="text-[10px] font-bold text-emerald-700 uppercase block">Total Paid</span>
+                <span className="text-sm font-bold font-mono text-emerald-700 mt-0.5 block">
+                  {formatCurrency(selectedPayable.paid_amount)}
+                </span>
+              </div>
+              <div className="p-3 bg-rose-50 rounded-xl border border-rose-100 text-center">
+                <span className="text-[10px] font-bold text-rose-700 uppercase block">Outstanding</span>
+                <span className="text-sm font-bold font-mono text-rose-700 mt-0.5 block">
+                  {formatCurrency(selectedPayable.outstanding_amount)}
+                </span>
+              </div>
+            </div>
+
+            {/* Payments List Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <IoCheckmarkCircleOutline className="text-emerald-500" size={16} />
+                  Settlement Payments ({selectedPayable.payments?.length || 0})
+                </span>
+              </div>
+
+              {selectedPayable.payments && selectedPayable.payments.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="p-2.5">Date</th>
+                        <th className="p-2.5">Account</th>
+                        <th className="p-2.5">Reference</th>
+                        <th className="p-2.5">Remarks</th>
+                        <th className="p-2.5 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedPayable.payments.map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-50/50">
+                          <td className="p-2.5 whitespace-nowrap text-slate-700 font-medium">
+                            {formatDate(p.payment_date || p.created_at)}
+                          </td>
+                          <td className="p-2.5 whitespace-nowrap font-semibold text-slate-900">
+                            {p.payment_account_name || `Account #${p.payment_account}`}
+                          </td>
+                          <td className="p-2.5 font-mono text-[11px] text-slate-600">
+                            {p.reference || '-'}
+                          </td>
+                          <td className="p-2.5 text-slate-600 text-[11px] max-w-[160px] truncate" title={p.remarks}>
+                            {p.remarks || '-'}
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold text-emerald-600 whitespace-nowrap">
+                            {formatCurrency(p.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-6 bg-slate-50 border border-slate-100 rounded-xl text-center text-xs text-slate-400">
+                  No payment disbursements recorded for this credit invoice yet.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedPayable(null)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

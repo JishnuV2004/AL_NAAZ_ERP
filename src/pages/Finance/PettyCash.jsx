@@ -1,255 +1,407 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
+  IoArrowBackOutline,
   IoPencilOutline,
   IoSwapHorizontalOutline,
-  IoWalletOutline,
-  IoDownloadOutline,
-  IoArrowBackOutline,
-  IoCloseOutline,
   IoArrowForwardOutline,
-  IoChevronBack,
-  IoChevronForward
+  IoEyeOutline,
+  IoChevronBackOutline,
+  IoChevronForwardOutline,
+  IoCalendarOutline,
+  IoCloseOutline,
+  IoChevronDownOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 import Modal from '../../components/common/Modal';
+import { Calendar } from '../../components/ui/calendar';
 import { accountService } from '../../services/accountService';
 
-const INITIAL_TRANSACTIONS = [
-  {
-    id: 'TXN-9021',
-    dateTime: '2026-09-24 14:10',
-    description: 'Daily Sales Revenue Collection',
-    type: 'CREDIT',
-    amount: 42500,
-    balance: 6180
-  },
-  {
-    id: 'TXN-8845',
-    dateTime: '2026-09-23 18:30',
-    description: 'Supplier Payment Settlement — Fresh Fruits Ltd',
-    type: 'DEBIT',
-    amount: 15000,
-    balance: -21320
-  },
-  {
-    id: 'TXN-8720',
-    dateTime: '2026-09-22 11:15',
-    description: 'Store Expense Reimbursement — Utility Bills',
-    type: 'DEBIT',
-    amount: 3200,
-    balance: -18120
-  },
-  {
-    id: 'TXN-8510',
-    dateTime: '2026-09-20 09:00',
-    description: 'Account Opening / Initial Balance Setup',
-    type: 'CREDIT',
-    amount: 10000,
-    balance: 10000
+// Custom Select Component matching FinancialAccounts.jsx
+const CustomSelect = ({ value, onChange, options, placeholder = 'Select...', className = '' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between text-sm border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+      >
+        <span className="truncate">{value || placeholder}</span>
+        <IoChevronDownOutline className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1.5 ${isOpen ? 'rotate-180' : ''}`} size={15} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 font-sans max-h-60 overflow-y-auto">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => {
+                onChange(opt);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-3.5 py-2 text-sm font-medium flex items-center justify-between transition-colors cursor-pointer ${
+                value === opt ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <span>{opt}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const y = parts[0];
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+  return `${monthNamesShort[m]} ${d}, ${y}`;
+};
+
+const formatNiceDateTime = (dateStr) => {
+  if (!dateStr || dateStr === '-') return '-';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return dateStr;
   }
-];
+};
+
+const getTodayDateString = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const PettyCash = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Account Metadata State
-  const [account, setAccount] = useState({
-    id: 1,
-    name: 'Petty Cash',
-    typeTag: 'PETTY_CASH',
-    status: 'ACTIVE',
-    branch: 'Al Naaz Kayamkulam',
-    purposeTag: 'GENERAL',
-    currentBalance: 6180,
-    openingBalance: 10000,
-    created_by_name: 'admin',
-    opening_balance_date: '2026-09-01'
-  });
+  // Account State
+  const [account, setAccount] = useState(null);
+  const [allAccounts, setAllAccounts] = useState([]);
+  const [branchesList, setBranchesList] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [loadingTxns, setLoadingTxns] = useState(false);
+  // Pagination
+  const DETAIL_PAGE_SIZE = 10;
+  const [detailTxnPage, setDetailTxnPage] = useState(1);
 
-  useEffect(() => {
-    const loadAccountDetails = async () => {
-      setLoadingTxns(true);
-      try {
-        const [accRes, txnsRes, balRes] = await Promise.allSettled([
-          accountService.getAccountById(1),
-          accountService.getAccountTransactions(1),
-          accountService.getAccountBalance(1)
-        ]);
-
-        if (accRes.status === 'fulfilled' && accRes.value) {
-          const data = accRes.value;
-          const liveBal = balRes.status === 'fulfilled' && balRes.value && (balRes.value.balance !== undefined && balRes.value.balance !== null)
-            ? parseFloat(balRes.value.balance)
-            : parseFloat(data.opening_balance || 10000);
-
-          setAccount({
-            id: data.id,
-            name: data.name || 'Petty Cash',
-            typeTag: data.account_type || 'PETTY_CASH',
-            status: data.is_active !== false ? 'ACTIVE' : 'INACTIVE',
-            branch: data.branch_name || 'Al Naaz Kayamkulam',
-            purposeTag: data.account_purpose || 'GENERAL',
-            currentBalance: liveBal,
-            openingBalance: parseFloat(data.opening_balance || 10000),
-            created_by_name: data.created_by_name || 'admin',
-            opening_balance_date: data.opening_balance_date || '2026-09-01'
-          });
-        }
-
-        if (txnsRes.status === 'fulfilled' && Array.isArray(txnsRes.value)) {
-          const mapped = txnsRes.value.map((tx) => {
-            const isCredit = tx.direction === 'IN';
-            return {
-              id: tx.reference || `TXN-${tx.id}`,
-              dateTime: tx.created_at ? `${tx.created_at.slice(0, 10)} ${tx.created_at.slice(11, 16)}` : (tx.transaction_date || ''),
-              description: tx.description || tx.transaction_type,
-              type: isCredit ? 'CREDIT' : 'DEBIT',
-              amount: parseFloat(tx.amount || 0),
-              created_by_name: tx.created_by_name || 'admin'
-            };
-          });
-          setTransactions(mapped);
-        }
-      } catch (err) {
-        console.warn('Could not fetch Petty Cash details/transactions for ID 1:', err);
-      } finally {
-        setLoadingTxns(false);
-      }
-    };
-    loadAccountDetails();
-  }, []);
-
-  const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
-  const TXN_PAGE_SIZE = 10;
-  const [txnPage, setTxnPage] = useState(1);
-
-  const totalTxnPages = Math.max(1, Math.ceil(transactions.length / TXN_PAGE_SIZE));
-  const indexOfLastTxn = txnPage * TXN_PAGE_SIZE;
-  const indexOfFirstTxn = indexOfLastTxn - TXN_PAGE_SIZE;
-  const currentTransactions = transactions.slice(indexOfFirstTxn, indexOfLastTxn);
-
-  // Modals state
-  const [showEditModal, setShowEditModal] = useState(false);
+  // Modals
+  const [viewingTxnDetail, setViewingTxnDetail] = useState(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  // Form states
-  const [editForm, setEditForm] = useState({
-    name: account.name,
-    branch: account.branch,
-    purposeTag: account.purposeTag
-  });
-
-  const [transferForm, setTransferForm] = useState({
-    targetAccount: 'Main Cash Drawer',
+  // Transfer Form State
+  const [transferData, setTransferData] = useState({
+    from_account: '',
+    to_account: '',
     amount: '',
+    transaction_date: getTodayDateString(),
+    description: '',
     reference: ''
   });
+  const [showTransferCalendar, setShowTransferCalendar] = useState(false);
+  const [submittingTransfer, setSubmittingTransfer] = useState(false);
+  const transferCalendarRef = useRef(null);
 
-  const [adjustmentForm, setAdjustmentForm] = useState({
-    type: 'CREDIT',
-    amount: '',
-    reason: 'Reconciliation adjustment'
+  // Edit Form State
+  const [editForm, setEditForm] = useState({
+    name: '',
+    branch: '',
+    account_purpose: 'GENERAL',
+    is_active: true
   });
+  const [savingEdit, setSavingEdit] = useState(false);
 
-  const netMovement = account.currentBalance - account.openingBalance;
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (transferCalendarRef.current && !transferCalendarRef.current.contains(event.target)) {
+        setShowTransferCalendar(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  // Handlers
-  const handleSaveEdit = (e) => {
-    e.preventDefault();
-    setAccount((prev) => ({
-      ...prev,
-      name: editForm.name,
-      branch: editForm.branch,
-      purposeTag: editForm.purposeTag
-    }));
-    setShowEditModal(false);
-    toast.success('Petty Cash account details updated!');
+  const loadAccountData = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch all accounts and branches in parallel
+      const [accountsRes, branchesRes] = await Promise.allSettled([
+        accountService.fetchAccounts(),
+        accountService.fetchBranches()
+      ]);
+
+      const accList = accountsRes.status === 'fulfilled' && accountsRes.value
+        ? (Array.isArray(accountsRes.value) ? accountsRes.value : (accountsRes.value.results || []))
+        : [];
+      setAllAccounts(accList);
+
+      const brList = branchesRes.status === 'fulfilled' && branchesRes.value
+        ? (Array.isArray(branchesRes.value) ? branchesRes.value : (branchesRes.value.results || []))
+        : [];
+      setBranchesList(brList);
+
+      // 2. Identify target Petty Cash account
+      let targetAccId = location.state?.accountId;
+      let matchedAcc = null;
+
+      if (targetAccId) {
+        matchedAcc = accList.find((a) => String(a.id) === String(targetAccId));
+      }
+      if (!matchedAcc) {
+        matchedAcc = accList.find(
+          (a) => (a.account_type === 'PETTY_CASH' || a.type === 'PETTY_CASH' || (a.name || '').toLowerCase().includes('petty cash'))
+        );
+      }
+      if (!matchedAcc && accList.length > 0) {
+        matchedAcc = accList[0];
+      }
+
+      const accountId = matchedAcc ? matchedAcc.id : (targetAccId || 1);
+
+      // 3. Fetch detailed account data, transactions, and live balance
+      const [detailRes, txnsRes, balRes] = await Promise.allSettled([
+        accountService.getAccountById(accountId),
+        accountService.getAccountTransactions(accountId),
+        accountService.getAccountBalance(accountId)
+      ]);
+
+      let accData = matchedAcc || { id: accountId, name: 'Petty Cash', account_type: 'PETTY_CASH' };
+      if (detailRes.status === 'fulfilled' && detailRes.value) {
+        accData = { ...accData, ...detailRes.value };
+      }
+
+      if (balRes.status === 'fulfilled' && balRes.value && (balRes.value.balance !== undefined && balRes.value.balance !== null)) {
+        accData.current_balance = balRes.value.balance;
+        accData.balance = balRes.value.balance;
+      }
+
+      setAccount(accData);
+
+      // 4. Map transactions
+      const rawTxns = txnsRes.status === 'fulfilled' && txnsRes.value
+        ? (Array.isArray(txnsRes.value) ? txnsRes.value : (txnsRes.value.results || []))
+        : [];
+
+      const mappedTxns = rawTxns.map((tx) => ({
+        rawId: tx.id,
+        id: tx.id,
+        branch: tx.branch,
+        branch_name: tx.branch_name || accData.branch_name || '-',
+        account: tx.account,
+        account_name: tx.account_name || accData.name,
+        transaction_type: tx.transaction_type || '-',
+        direction: tx.direction || (tx.type === 'CREDIT' ? 'IN' : 'OUT'),
+        amount: parseFloat(tx.amount || 0),
+        transaction_date: tx.transaction_date || (tx.created_at ? tx.created_at.slice(0, 10) : '-'),
+        description: tx.description || '-',
+        reference: tx.reference || '-',
+        transfer_group_id: tx.transfer_group_id || null,
+        created_by: tx.created_by,
+        created_by_name: tx.created_by_name || 'admin',
+        created_at: tx.created_at || '-',
+        date: tx.created_at
+          ? `${tx.created_at.slice(0, 10)} ${tx.created_at.slice(11, 16)}`
+          : (tx.transaction_date || '-'),
+        type: tx.direction === 'IN' || tx.type === 'CREDIT' ? 'CREDIT' : 'DEBIT'
+      }));
+
+      setTransactions(mappedTxns);
+    } catch (err) {
+      console.warn('Failed to load Petty Cash account details:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleExecuteTransfer = (e) => {
+  useEffect(() => {
+    loadAccountData();
+  }, [location.state?.accountId]);
+
+  // Calculations
+  const curBal = parseFloat(account?.current_balance ?? account?.balance ?? account?.opening_balance ?? 0);
+  const openBal = parseFloat(account?.opening_balance ?? 0);
+  const netMovement = curBal - openBal;
+
+  const detailTotalPages = Math.max(1, Math.ceil(transactions.length / DETAIL_PAGE_SIZE));
+  const detailIndexOfLast = detailTxnPage * DETAIL_PAGE_SIZE;
+  const detailIndexOfFirst = detailIndexOfLast - DETAIL_PAGE_SIZE;
+  const currentDetailTxns = transactions.slice(detailIndexOfFirst, detailIndexOfLast);
+
+  // Transfer modal opening
+  const handleOpenTransfer = () => {
+    if (!account) return;
+    const otherAccounts = allAccounts.filter((a) => String(a.id) !== String(account.id));
+    const defaultToId = otherAccounts.length > 0 ? otherAccounts[0].id : '';
+    setTransferData({
+      from_account: account.id,
+      to_account: defaultToId,
+      amount: '',
+      transaction_date: getTodayDateString(),
+      description: '',
+      reference: ''
+    });
+    setShowTransferModal(true);
+  };
+
+  const handleExecuteTransfer = async (e) => {
     e.preventDefault();
-    const num = parseFloat(transferForm.amount) || 0;
-    if (num <= 0) {
-      toast.error('Please enter a valid amount');
+    if (!transferData.from_account) {
+      toast.error('Please select source account');
       return;
     }
-    const newBal = account.currentBalance - num;
-    setAccount((prev) => ({ ...prev, currentBalance: newBal }));
-
-    const newTxn = {
-      id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
-      dateTime: `${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`,
-      description: `Fund Transfer to ${transferForm.targetAccount}`,
-      type: 'DEBIT',
-      amount: num,
-      balance: newBal
-    };
-    setTransactions([newTxn, ...transactions]);
-    setShowTransferModal(false);
-    toast.success(`Transferred ₹${num.toLocaleString('en-IN')} to ${transferForm.targetAccount}`);
-    setTransferForm({ targetAccount: 'Main Cash Drawer', amount: '', reference: '' });
-  };
-
-  const handleExecuteAdjustment = (e) => {
-    e.preventDefault();
-    const num = parseFloat(adjustmentForm.amount) || 0;
-    if (num <= 0) {
-      toast.error('Please enter a valid amount');
+    if (!transferData.to_account) {
+      toast.error('Please select destination account');
       return;
     }
-    const newBal = adjustmentForm.type === 'CREDIT' ? account.currentBalance + num : account.currentBalance - num;
-    setAccount((prev) => ({ ...prev, currentBalance: newBal }));
+    if (String(transferData.from_account) === String(transferData.to_account)) {
+      toast.error('From Account and To Account must be different');
+      return;
+    }
+    const numAmount = parseFloat(transferData.amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      toast.error('Please enter a valid transfer amount');
+      return;
+    }
 
-    const newTxn = {
-      id: `TXN-${Math.floor(1000 + Math.random() * 9000)}`,
-      dateTime: `${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}`,
-      description: adjustmentForm.reason || 'Ledger Adjustment',
-      type: adjustmentForm.type,
-      amount: num,
-      balance: newBal
+    const payload = {
+      from_account: parseInt(transferData.from_account, 10),
+      to_account: parseInt(transferData.to_account, 10),
+      amount: String(transferData.amount),
+      transaction_date: transferData.transaction_date || getTodayDateString(),
+      description: transferData.description || '',
+      reference: transferData.reference || ''
     };
-    setTransactions([newTxn, ...transactions]);
-    setShowAdjustmentModal(false);
-    toast.success(`Recorded ${adjustmentForm.type} adjustment of ₹${num.toLocaleString('en-IN')}`);
-    setAdjustmentForm({ type: 'CREDIT', amount: '', reason: 'Reconciliation adjustment' });
+
+    setSubmittingTransfer(true);
+    const loadingToast = toast.loading('Executing fund transfer...');
+    try {
+      const res = await accountService.transferFunds(payload);
+      toast.success(res?.message || 'Transfer completed successfully.', { id: loadingToast });
+      setShowTransferModal(false);
+      await loadAccountData();
+    } catch (err) {
+      console.error('Transfer failed:', err);
+      const msg = err?.response?.data?.detail || err?.response?.data?.error || err?.userMessage || 'Failed to execute transfer';
+      toast.error(msg, { id: loadingToast });
+    } finally {
+      setSubmittingTransfer(false);
+    }
   };
 
-  const handleDownloadReport = () => {
-    toast.success('Downloading Petty Cash Account PDF Report...');
+  // Edit Account Handlers
+  const handleStartEdit = () => {
+    if (!account) return;
+    setEditForm({
+      name: account.name || '',
+      branch: account.branch_name || account.branch || 'Al Naaz Kayamkulam',
+      account_purpose: account.account_purpose || account.purpose || 'GENERAL',
+      is_active: account.is_active !== false
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!account) return;
+    if (!editForm.name.trim()) {
+      toast.error('Please enter an account name');
+      return;
+    }
+
+    const payload = {
+      name: editForm.name.trim(),
+      account_purpose: editForm.account_purpose,
+      is_active: editForm.is_active
+    };
+
+    setSavingEdit(true);
+    try {
+      await accountService.updateAccount(account.id, payload);
+      toast.success('Account updated successfully!');
+      setShowEditModal(false);
+      await loadAccountData();
+    } catch (err) {
+      console.error('Failed to update account:', err);
+      const msg = err?.response?.data?.detail || err?.userMessage || 'Failed to update account';
+      toast.error(msg);
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   return (
-    <div className="space-y-6 font-sans w-full pb-12">
-      
-      {/* 1. Header Section */}
+    <div className="space-y-6 font-sans w-full pb-10 animate-in fade-in duration-150">
+      {/* 1. Back Button */}
+      <div>
+        <button
+          type="button"
+          onClick={() => navigate('/finance/financialaccounts')}
+          className="inline-flex items-center gap-2 text-slate-700 hover:text-slate-900 text-sm font-bold transition-colors cursor-pointer"
+        >
+          <IoArrowBackOutline size={18} />
+          <span>Back to Financial Accounts</span>
+        </button>
+      </div>
+
+      {/* 2. Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight font-sans">
-              {account.name}
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              {account?.name || 'Petty Cash'}
             </h1>
-            <span className="px-2.5 py-0.5 text-xs font-mono font-bold rounded-md bg-gray-100 text-gray-700 border border-gray-200">
-              {account.typeTag}
+            <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+              {account?.account_type || account?.typeTag || 'PETTY_CASH'}
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              <span>{account.status}</span>
+              <span>{account?.is_active !== false && account?.status !== 'INACTIVE' ? 'ACTIVE' : 'INACTIVE'}</span>
             </span>
           </div>
-          <p className="text-xs text-gray-500 font-medium mt-1">
-            Branch: <span className="font-semibold text-gray-800">{account.branch}</span> · Purpose Tag: <span className="font-semibold text-gray-800">{account.purposeTag}</span>
+          <p className="text-xs font-medium text-gray-500 mt-1">
+            Branch: <span className="font-semibold text-gray-800">{account?.branch_name || account?.branch || 'Al Naaz Kayamkulam'}</span> · Purpose Tag: <span className="font-semibold text-gray-800">{account?.account_purpose || account?.purposeTag || 'GENERAL'}</span>
           </p>
         </div>
 
-        <div>
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             type="button"
-            onClick={() => setShowEditModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            onClick={handleStartEdit}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
           >
             <IoPencilOutline size={15} />
             <span>Edit Account</span>
@@ -257,90 +409,107 @@ const PettyCash = () => {
         </div>
       </div>
 
-      {/* 2. Top 4 Metric Summary Cards Grid (Exact screenshot 4-box layout) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Current Available Balance */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
-          <p className="text-xs font-semibold text-gray-500">Current Available Balance</p>
-          <p className="text-2xl font-extrabold text-emerald-600 tabular-nums font-mono">
-            ₹{account.currentBalance.toLocaleString('en-IN')}
-          </p>
-          <p className="text-[11px] text-gray-400 font-medium">Reconciled balance</p>
+      {/* 3. Top 4 Key Metric Summary Cards */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, idx) => (
+            <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-2.5 animate-pulse">
+              <div className="h-3 bg-slate-200 rounded w-28"></div>
+              <div className="h-7 bg-slate-200 rounded w-36"></div>
+              <div className="h-3 bg-slate-200 rounded w-24"></div>
+            </div>
+          ))}
         </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Available Balance */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
+            <p className="text-xs font-semibold text-gray-500 font-sans">Current Available Balance</p>
+            <p className="text-2xl font-extrabold text-emerald-600 tabular-nums">
+              ₹{curBal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-[11px] text-gray-400 font-medium">Reconciled balance</p>
+          </div>
 
-        {/* Card 2: Opening Balance */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
-          <p className="text-xs font-semibold text-gray-500">Opening Balance</p>
-          <p className="text-2xl font-extrabold text-gray-900 tabular-nums font-mono">
-            ₹{account.openingBalance.toLocaleString('en-IN')}
-          </p>
-          <p className="text-[11px] text-gray-400 font-medium">Setup amount ({account.opening_balance_date || '2026-09-01'})</p>
+          {/* Opening Balance */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
+            <p className="text-xs font-semibold text-gray-500 font-sans">Opening Balance</p>
+            <p className="text-2xl font-extrabold text-gray-900 tabular-nums">
+              ₹{openBal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-[11px] text-gray-400 font-medium">Setup amount ({account?.opening_balance_date || '2026-09-01'})</p>
+          </div>
+
+          {/* Net Balance Movement */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
+            <p className="text-xs font-semibold text-gray-500 font-sans">Net Movement</p>
+            <p className={`text-2xl font-extrabold tabular-nums ${netMovement >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
+              {netMovement >= 0 ? '+' : ''}₹{netMovement.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-[11px] text-gray-400 font-medium">Since account creation</p>
+          </div>
+
+          {/* Account Classification */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
+            <p className="text-xs font-semibold text-gray-500 font-sans">Created By</p>
+            <p className="text-lg font-bold text-slate-800">
+              {account?.created_by_name || 'admin'}
+            </p>
+            <p className="text-[11px] text-gray-400 font-medium">{account?.created_at ? account.created_at.slice(0, 10) : (account?.opening_balance_date || '-')}</p>
+          </div>
         </div>
+      )}
 
-        {/* Card 3: Net Movement */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
-          <p className="text-xs font-semibold text-gray-500">Net Movement</p>
-          <p className={`text-2xl font-extrabold tabular-nums font-mono ${netMovement >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
-            {netMovement >= 0 ? '+' : ''}₹{netMovement.toLocaleString('en-IN')}
-          </p>
-          <p className="text-[11px] text-gray-400 font-medium">Since account creation</p>
-        </div>
-
-        {/* Card 4: Created By */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs space-y-1">
-          <p className="text-xs font-semibold text-gray-500">Created By</p>
-          <p className="text-lg font-bold text-gray-900 truncate">
-            {account.created_by_name || 'admin'}
-          </p>
-          <p className="text-[11px] text-gray-400 font-medium">{account.opening_balance_date || '2026-09-01'}</p>
-        </div>
-      </div>
-
-      {/* 3. Main 2-Column Section (Left: Transactions Table, Right: Account Management Box) */}
+      {/* 4. Recent Transactions & Account Management Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        
-        {/* Left Column (2 Cols): Recent Account Transactions */}
+        {/* Ledger Transactions Table (Left side) */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden min-h-[580px] flex flex-col justify-between">
           <div>
             <div className="p-4 border-b border-gray-100 bg-slate-50/50 flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-gray-900 font-serif">Recent Account Transactions</h3>
+              <h3 className="text-sm font-extrabold text-gray-900">Recent Account Transactions</h3>
               <span className="text-xs text-gray-500 font-medium">Real-time ledger audit log</span>
             </div>
 
             <div className="overflow-x-auto min-h-[480px]">
-              <table className="w-full text-left border-collapse min-w-[550px]">
+              <table className="w-full text-left border-collapse min-w-[650px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-500 font-bold">
-                    <th className="p-3.5">Txn Ref #</th>
+                    <th className="p-3.5">Transaction Type</th>
                     <th className="p-3.5">Date & Time</th>
                     <th className="p-3.5">Description</th>
                     <th className="p-3.5 text-center">Type</th>
                     <th className="p-3.5 text-right">Amount</th>
+                    <th className="p-3.5 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs bg-white">
-                  {loadingTxns ? (
-                    [...Array(10)].map((_, i) => (
+                  {loading ? (
+                    [...Array(6)].map((_, i) => (
                       <tr key={i} className="animate-pulse h-[48px]">
-                        <td className="p-3.5"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                        <td className="p-3.5"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
                         <td className="p-3.5"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
                         <td className="p-3.5"><div className="h-4 bg-slate-200 rounded w-48"></div></td>
                         <td className="p-3.5 text-center"><div className="h-4 bg-slate-200 rounded w-14 mx-auto"></div></td>
                         <td className="p-3.5 text-right"><div className="h-4 bg-slate-200 rounded w-16 ml-auto"></div></td>
+                        <td className="p-3.5 text-center"><div className="h-4 bg-slate-200 rounded w-8 mx-auto"></div></td>
                       </tr>
                     ))
-                  ) : currentTransactions.length === 0 ? (
+                  ) : currentDetailTxns.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-12 text-center text-slate-400 font-medium">
+                      <td colSpan={6} className="p-12 text-center text-slate-400 font-medium">
                         No transactions recorded for this account.
                       </td>
                     </tr>
                   ) : (
-                    currentTransactions.map((txn) => (
+                    currentDetailTxns.map((txn) => (
                       <tr key={txn.id} className="hover:bg-slate-50/70 transition-colors h-[48px]">
-                        <td className="p-3.5 font-mono font-bold text-blue-600">{txn.id}</td>
-                        <td className="p-3.5 font-medium text-slate-700">{txn.dateTime}</td>
-                        <td className="p-3.5 font-medium text-slate-900">{txn.description}</td>
+                        <td className="p-3.5 whitespace-nowrap font-bold text-gray-800">
+                          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
+                            {txn.transaction_type || 'TRANSFER_IN'}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-medium text-slate-700 whitespace-nowrap">{txn.date}</td>
+                        <td className="p-3.5 font-medium text-slate-900 truncate max-w-xs">{txn.description}</td>
                         <td className="p-3.5 text-center">
                           <span
                             className={`inline-flex px-2 py-0.5 rounded text-[10px] font-extrabold ${
@@ -351,11 +520,21 @@ const PettyCash = () => {
                           </span>
                         </td>
                         <td
-                          className={`p-3.5 text-right font-mono font-bold ${
+                          className={`p-3.5 text-right font-mono font-bold whitespace-nowrap ${
                             txn.type === 'CREDIT' ? 'text-emerald-600' : 'text-slate-900'
                           }`}
                         >
-                          {txn.type === 'CREDIT' ? '+' : '-'}₹{txn.amount.toLocaleString('en-IN')}
+                          {txn.type === 'CREDIT' ? '+' : '-'}₹{txn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setViewingTxnDetail(txn)}
+                            className="p-1.5 bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
+                            title="View All Transaction Details"
+                          >
+                            <IoEyeOutline size={15} />
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -365,35 +544,35 @@ const PettyCash = () => {
             </div>
           </div>
 
-          {/* Pagination Footer */}
+          {/* Transactions Pagination Footer */}
           {transactions.length > 0 && (
             <div className="p-3.5 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <span className="text-slate-500 font-medium">
-                Showing <span className="font-bold text-slate-800">{indexOfFirstTxn + 1}</span> to{' '}
+                Showing <span className="font-bold text-slate-800">{detailIndexOfFirst + 1}</span> to{' '}
                 <span className="font-bold text-slate-800">
-                  {Math.min(indexOfLastTxn, transactions.length)}
+                  {Math.min(detailIndexOfLast, transactions.length)}
                 </span>{' '}
                 of <span className="font-bold text-slate-800">{transactions.length}</span> entries
               </span>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  disabled={txnPage === 1}
-                  onClick={() => setTxnPage((p) => Math.max(1, p - 1))}
+                  disabled={detailTxnPage === 1}
+                  onClick={() => setDetailTxnPage((p) => Math.max(1, p - 1))}
                   className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 font-semibold cursor-pointer"
                 >
-                  <IoChevronBack size={14} />
+                  <IoChevronBackOutline size={14} />
                   <span>Previous</span>
                 </button>
-                {Array.from({ length: totalTxnPages }).map((_, idx) => {
+                {Array.from({ length: detailTotalPages }).map((_, idx) => {
                   const pNum = idx + 1;
                   return (
                     <button
                       key={pNum}
                       type="button"
-                      onClick={() => setTxnPage(pNum)}
+                      onClick={() => setDetailTxnPage(pNum)}
                       className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        txnPage === pNum
+                        detailTxnPage === pNum
                           ? 'bg-blue-600 text-white shadow-xs'
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
@@ -404,29 +583,29 @@ const PettyCash = () => {
                 })}
                 <button
                   type="button"
-                  disabled={txnPage >= totalTxnPages}
-                  onClick={() => setTxnPage((p) => Math.min(totalTxnPages, p + 1))}
+                  disabled={detailTxnPage >= detailTotalPages}
+                  onClick={() => setDetailTxnPage((p) => Math.min(detailTotalPages, p + 1))}
                   className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 font-semibold cursor-pointer"
                 >
                   <span>Next</span>
-                  <IoChevronForward size={14} />
+                  <IoChevronForwardOutline size={14} />
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Column (1 Col Sidebar): Account Management Box */}
-        <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4 font-sans">
+        {/* Compact Account Management Box (Right side) */}
+        <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
           <h2 className="text-base font-bold text-slate-900 tracking-tight font-serif">
             Account Management
           </h2>
 
           <div className="space-y-2.5">
-            {/* Transfer Funds Button */}
+            {/* Transfer Funds */}
             <button
               type="button"
-              onClick={() => setShowTransferModal(true)}
+              onClick={handleOpenTransfer}
               className="w-full flex items-center justify-between p-3.5 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl transition-all cursor-pointer group shadow-2xs"
             >
               <div className="flex items-center gap-2.5">
@@ -439,70 +618,196 @@ const PettyCash = () => {
               </div>
               <IoArrowForwardOutline size={14} className="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
             </button>
-
-            {/* Record Adjustment Button */}
-            <button
-              type="button"
-              onClick={() => setShowAdjustmentModal(true)}
-              className="w-full flex items-center justify-between p-3.5 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl transition-all cursor-pointer group shadow-2xs"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="text-emerald-600 font-bold">
-                  <IoWalletOutline size={18} />
-                </div>
-                <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">
-                  Record Adjustment
-                </span>
-              </div>
-              <IoArrowForwardOutline size={14} className="text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
-            </button>
           </div>
         </div>
-
       </div>
 
-      {/* --- MODAL 1: EDIT ACCOUNT --- */}
+      {/* --- MODAL 1: TRANSFER FUNDS --- */}
+      {showTransferModal && (
+        <Modal isOpen={showTransferModal} onClose={() => setShowTransferModal(false)} title="Transfer Funds" overflowVisible={true}>
+          <form onSubmit={handleExecuteTransfer} className="space-y-4 text-xs font-sans">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* From Account */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  From Account <span className="text-red-500">*</span>
+                </label>
+                <select
+                  disabled={true}
+                  value={transferData.from_account}
+                  className="w-full px-3.5 py-2.5 border rounded-xl outline-none text-xs font-semibold bg-slate-100 text-slate-700 cursor-not-allowed border-slate-300"
+                >
+                  <option value={account?.id}>
+                    {account?.name} ({account?.account_type || 'PETTY_CASH'})
+                  </option>
+                </select>
+              </div>
+
+              {/* To Account */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  To Account <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={transferData.to_account}
+                  onChange={(e) => setTransferData({ ...transferData, to_account: e.target.value })}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
+                >
+                  {allAccounts
+                    .filter((acc) => String(acc.id) !== String(transferData.from_account))
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.account_type || acc.type || 'ACCOUNT'})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Amount */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  Transfer Amount (₹) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  step="0.01"
+                  min="0.01"
+                  value={transferData.amount}
+                  onChange={(e) => setTransferData({ ...transferData, amount: e.target.value })}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-mono font-bold"
+                  placeholder="100"
+                />
+              </div>
+
+              {/* Transaction Date */}
+              <div className="relative" ref={transferCalendarRef}>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  Transaction Date <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowTransferCalendar(!showTransferCalendar)}
+                  className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none hover:border-blue-400 font-medium text-left cursor-pointer"
+                >
+                  <span>
+                    {transferData.transaction_date
+                      ? transferData.transaction_date.split('-').reverse().join('/')
+                      : 'Select Date'}
+                  </span>
+                  <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
+                </button>
+
+                {showTransferCalendar && (
+                  <div className="absolute right-0 bottom-full mb-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <Calendar
+                      value={transferData.transaction_date || getTodayDateString()}
+                      onChange={(newDate) => {
+                        setTransferData({ ...transferData, transaction_date: newDate });
+                        setShowTransferCalendar(false);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Reference */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                Reference Code
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. TR-2026-001"
+                value={transferData.reference}
+                onChange={(e) => setTransferData({ ...transferData, reference: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-medium"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                Description
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Optional transfer note..."
+                value={transferData.description}
+                onChange={(e) => setTransferData({ ...transferData, description: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-medium"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl font-semibold text-xs cursor-pointer hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingTransfer}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs cursor-pointer shadow-xs disabled:bg-blue-400"
+              >
+                {submittingTransfer ? 'Transferring...' : 'Execute Transfer'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* --- MODAL 2: EDIT ACCOUNT --- */}
       {showEditModal && (
         <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Petty Cash Account">
           <form onSubmit={handleSaveEdit} className="space-y-4 text-xs font-sans">
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Account Name</label>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                Account Name <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 required
                 value={editForm.name}
-                onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-bold"
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Branch</label>
-              <select
+              <input
+                type="text"
+                disabled
                 value={editForm.branch}
-                onChange={e => setEditForm({ ...editForm, branch: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
-              >
-                <option value="Kochi — Main Mandi">Kochi — Main Mandi</option>
-                <option value="Kozhikode Branch">Kozhikode Branch</option>
-                <option value="Trivandrum Branch">Trivandrum Branch</option>
-              </select>
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none text-xs bg-slate-100 text-slate-700 font-medium cursor-not-allowed"
+              />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Purpose Tag</label>
-              <select
-                value={editForm.purposeTag}
-                onChange={e => setEditForm({ ...editForm, purposeTag: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
-              >
-                <option value="CASH">CASH</option>
-                <option value="GENERAL">GENERAL</option>
-                <option value="OPERATIONAL">OPERATIONAL</option>
-              </select>
+              <CustomSelect
+                value={editForm.account_purpose}
+                onChange={(val) => setEditForm({ ...editForm, account_purpose: val })}
+                options={['GENERAL', 'CASH', 'UPI', 'CARD_RECEIVABLE', 'FOOD_DELIVERY_RECEIVABLE']}
+              />
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Active Status</label>
+              <CustomSelect
+                value={editForm.is_active ? 'Yes' : 'No'}
+                onChange={(val) => setEditForm({ ...editForm, is_active: val === 'Yes' })}
+                options={['Yes', 'No']}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
@@ -512,132 +817,96 @@ const PettyCash = () => {
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs cursor-pointer shadow-xs"
+                disabled={savingEdit}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs cursor-pointer shadow-xs disabled:bg-blue-400"
               >
-                Save Changes
+                {savingEdit ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </form>
         </Modal>
       )}
 
-      {/* --- MODAL 2: TRANSFER FUNDS --- */}
-      {showTransferModal && (
-        <Modal isOpen={showTransferModal} onClose={() => setShowTransferModal(false)} title="Transfer Funds from Petty Cash">
-          <form onSubmit={handleExecuteTransfer} className="space-y-4 text-xs font-sans">
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Destination Account</label>
-              <select
-                value={transferForm.targetAccount}
-                onChange={e => setTransferForm({ ...transferForm, targetAccount: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
-              >
-                <option value="Main Cash Drawer">Main Cash Drawer</option>
-                <option value="HDFC Current A/C">HDFC Current A/C</option>
-                <option value="UPI Collections">UPI Collections</option>
-              </select>
+      {/* --- MODAL 3: VIEW TRANSACTION DETAILS --- */}
+      {viewingTxnDetail && (
+        <Modal
+          isOpen={Boolean(viewingTxnDetail)}
+          onClose={() => setViewingTxnDetail(null)}
+          title={`Transaction Details (ID: #${viewingTxnDetail.rawId || viewingTxnDetail.id})`}
+        >
+          <div className="space-y-4 font-sans text-xs">
+            <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Transaction ID</span>
+                <span className="font-bold text-gray-900">#{viewingTxnDetail.rawId || viewingTxnDetail.id}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Transaction Type</span>
+                <span className="font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 inline-block mt-0.5">
+                  {(viewingTxnDetail.transaction_type || '-').replace(/_/g, ' ')}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Branch</span>
+                <span className="font-semibold text-gray-800">{viewingTxnDetail.branch_name || viewingTxnDetail.branch || '-'}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Account</span>
+                <span className="font-semibold text-gray-800">{viewingTxnDetail.account_name || viewingTxnDetail.account || '-'}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Direction</span>
+                <span className={`font-bold inline-block px-2 py-0.5 rounded text-[10px] ${
+                  viewingTxnDetail.direction === 'IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                }`}>
+                  {viewingTxnDetail.direction || '-'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Amount</span>
+                <span className="font-extrabold text-gray-900 text-sm">
+                  ₹{parseFloat(viewingTxnDetail.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Transaction Date</span>
+                <span className="font-semibold text-gray-800">{formatDisplayDate(viewingTxnDetail.transaction_date) || viewingTxnDetail.transaction_date || '-'}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Created At</span>
+                <span className="font-semibold text-gray-800">{formatNiceDateTime(viewingTxnDetail.created_at)}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Created By</span>
+                <span className="font-semibold text-gray-800">{viewingTxnDetail.created_by_name || viewingTxnDetail.created_by || '-'}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Transfer Group ID</span>
+                <span className="font-mono text-gray-800 text-[11px] truncate block">{viewingTxnDetail.transfer_group_id || 'N/A'}</span>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Transfer Amount (₹)</label>
-              <input
-                type="number"
-                required
-                min="1"
-                value={transferForm.amount}
-                onChange={e => setTransferForm({ ...transferForm, amount: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-mono font-bold"
-                placeholder="e.g. 2000"
-              />
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold mb-0.5">Reference</span>
+                <span className="font-semibold text-blue-600 block break-words">{viewingTxnDetail.reference || '-'}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold mb-0.5">Description</span>
+                <span className="font-medium text-gray-700 block break-words">{viewingTxnDetail.description || '-'}</span>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Reference / Note</label>
-              <input
-                type="text"
-                value={transferForm.reference}
-                onChange={e => setTransferForm({ ...transferForm, reference: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs"
-                placeholder="e.g. Excess cash return to main vault"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
-                onClick={() => setShowTransferModal(false)}
-                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl font-medium text-xs cursor-pointer hover:bg-gray-50"
+                onClick={() => setViewingTxnDetail(null)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs cursor-pointer shadow-xs"
-              >
-                Execute Transfer
+                Close
               </button>
             </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* --- MODAL 3: RECORD ADJUSTMENT --- */}
-      {showAdjustmentModal && (
-        <Modal isOpen={showAdjustmentModal} onClose={() => setShowAdjustmentModal(false)} title="Record Ledger Adjustment">
-          <form onSubmit={handleExecuteAdjustment} className="space-y-4 text-xs font-sans">
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Adjustment Type</label>
-              <select
-                value={adjustmentForm.type}
-                onChange={e => setAdjustmentForm({ ...adjustmentForm, type: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
-              >
-                <option value="CREDIT">CREDIT (+ Add to Balance)</option>
-                <option value="DEBIT">DEBIT (- Deduct from Balance)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Adjustment Amount (₹)</label>
-              <input
-                type="number"
-                required
-                min="1"
-                value={adjustmentForm.amount}
-                onChange={e => setAdjustmentForm({ ...adjustmentForm, amount: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs font-mono font-bold"
-                placeholder="e.g. 500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Reason for Adjustment</label>
-              <input
-                type="text"
-                required
-                value={adjustmentForm.reason}
-                onChange={e => setAdjustmentForm({ ...adjustmentForm, reason: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs"
-                placeholder="e.g. Audit reconciliation discrepancy correction"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setShowAdjustmentModal(false)}
-                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl font-medium text-xs cursor-pointer hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs cursor-pointer shadow-xs"
-              >
-                Save Adjustment
-              </button>
-            </div>
-          </form>
+          </div>
         </Modal>
       )}
     </div>

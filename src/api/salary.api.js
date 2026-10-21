@@ -61,3 +61,37 @@ export const getEmployeeSalaryHistory = async (empId) => {
   const response = await api.get(`/employees/${cleanId}/salary-history/`);
   return response.data;
 };
+
+/**
+ * GET /salary/:id/payslip/
+ * Downloads payslip file for a salary record
+ */
+export const downloadSalaryPayslip = async (salaryId) => {
+  const cleanId = String(salaryId).replace(/\D/g, '') || salaryId;
+  const response = await api.get(`/salary/${cleanId}/payslip/`, {
+    responseType: 'blob',
+  });
+
+  // Extract filename from Content-Disposition header if available
+  let filename = `payslip_${cleanId}.pdf`;
+  const disposition = response.headers?.['content-disposition'];
+  if (disposition && disposition.indexOf('filename=') !== -1) {
+    const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+    if (filenameMatch && filenameMatch[1]) {
+      filename = filenameMatch[1].replace(/['"]/g, '');
+    }
+  }
+
+  const contentType = response.headers?.['content-type'] || 'application/pdf';
+  const blob = new Blob([response.data], { type: contentType });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+  return { filename, blob };
+};
+

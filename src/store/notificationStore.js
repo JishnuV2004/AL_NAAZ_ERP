@@ -3,14 +3,10 @@ import { notificationService } from '../services/notificationService';
 
 export const useNotificationStore = create((set, get) => ({
   notifications: [],
-  unreadCount: 2,
-  stats: {
-    unread: 2,
-    highPriority: 2,
-    today: 2,
-    total: 8
-  },
+  allNotificationsCount: 0,
+  unreadCount: 0,
   loading: false,
+  markingAllAsRead: false,
   error: null,
 
   // Pagination
@@ -21,26 +17,31 @@ export const useNotificationStore = create((set, get) => ({
   hasNext: false,
   hasPrev: false,
 
-  // Active filters matching the reference layout
+  // Active filters: module can be 'ALL', 'EMPLOYEES', 'ADVANCE', 'ATTENDANCE', 'INVENTORY', 'FINANCE'
   filters: {
-    module: 'Expense', // Default 'Expense' as shown in screenshot
-    action: 'ALL', // Default 'All Actions'
-    user: '', // Search user...
-    dateRange: 'Today', // Default 'Today' active
-    startDate: '',
-    endDate: '',
-    search: '',
-    status: 'ALL',
-    priority: 'ALL'
+    module: 'ALL',
+    is_read: 'ALL',
+    search: ''
   },
 
   // Modal / Detail state
   selectedNotification: null,
+  detailLoading: false,
 
   setSelectedNotification: (notification) => {
     set({ selectedNotification: notification });
-    if (notification && !notification.is_read) {
-      get().markAsRead(notification.id);
+  },
+
+  fetchNotificationById: async (id) => {
+    set({ detailLoading: true });
+    try {
+      const data = await notificationService.getNotificationById(id);
+      set({ selectedNotification: data, detailLoading: false });
+      return data;
+    } catch (err) {
+      console.error('Failed to fetch notification detail:', err);
+      set({ detailLoading: false });
+      return null;
     }
   },
 
@@ -49,14 +50,20 @@ export const useNotificationStore = create((set, get) => ({
     get().fetchNotifications(page);
   },
 
-  setFilter: (key, value) => {
-    const updatedFilters = { ...get().filters, [key]: value };
+  setPage: (newPage) => {
+    const pageNum = Math.max(1, parseInt(newPage, 10) || 1);
+    set({ page: pageNum });
+    get().fetchNotifications(pageNum, get().filters);
+  },
+
+  setModuleFilter: (moduleName) => {
+    const updatedFilters = { ...get().filters, module: moduleName };
     set({ filters: updatedFilters, page: 1 });
     get().fetchNotifications(1, updatedFilters);
   },
 
-  setMultipleFilters: (newFilters) => {
-    const updatedFilters = { ...get().filters, ...newFilters };
+  setFilter: (key, value) => {
+    const updatedFilters = { ...get().filters, [key]: value };
     set({ filters: updatedFilters, page: 1 });
     get().fetchNotifications(1, updatedFilters);
   },
@@ -64,43 +71,50 @@ export const useNotificationStore = create((set, get) => ({
   resetFilters: () => {
     const defaultFilters = {
       module: 'ALL',
-      action: 'ALL',
-      user: '',
-      dateRange: 'ALL',
-      startDate: '',
-      endDate: '',
-      search: '',
-      status: 'ALL',
-      priority: 'ALL'
+      is_read: 'ALL',
+      search: ''
     };
     set({ filters: defaultFilters, page: 1 });
     get().fetchNotifications(1, defaultFilters);
   },
 
-  // Fetch notifications with current filters
+  // Fetch notifications using backend pagination and active filters
   fetchNotifications: async (page = get().page, filters = get().filters) => {
     set({ loading: true, error: null });
     try {
+      const currentPage = Math.max(1, parseInt(page, 10) || 1);
+      const pageSize = get().pageSize || 10;
+
       const response = await notificationService.fetchNotifications(
-        page,
-        get().pageSize,
+        currentPage,
+        pageSize,
         filters
       );
 
       const count = response.count || 0;
-      const totalPages = Math.ceil(count / get().pageSize) || 1;
+      const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
       set({
         notifications: response.results || [],
         totalCount: count,
         totalPages,
+        page: currentPage,
         hasNext: !!response.next,
         hasPrev: !!response.previous,
+        filters,
         loading: false
       });
 
-      // Update global unread and stats as well
-      get().fetchStats();
+      // If module is 'ALL', count also reflects allNotificationsCount
+      if (!filters.module || filters.module === 'ALL') {
+        set({ allNotificationsCount: count });
+      } else {
+        // Fetch all notifications total count independently
+        get().fetchAllCount();
+      }
+
+      // Update unread count
+      get().fetchUnreadCount();
     } catch (error) {
       set({
         error: error?.message || 'Failed to load notifications',
@@ -109,68 +123,103 @@ export const useNotificationStore = create((set, get) => ({
     }
   },
 
-  // Fetch summary stats & unread count
+  // Fetch all notifications overall count
+  fetchAllCount: async () => {
+    try {
+      const count = await notificationService.fetchAllCount();
+      set({ allNotificationsCount: count });
+    } catch (error) {
+      console.error('Error fetching total notifications count:', error);
+    }
+  },
+
+  // Fetch unread count from API
+  fetchUnreadCount: async () => {
+    try {
+      const unreadCount = await notificationService.getUnreadCount();
+      set({ unreadCount });
+      return unreadCount;
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+      return 0;
+    }
+  },
+
+  // Fetch summary stats & counts
   fetchStats: async () => {
     try {
-      const stats = await notificationService.fetchStats();
+      const [allCount, unread] = await Promise.all([
+        notificationService.fetchAllCount(),
+        notificationService.getUnreadCount()
+      ]);
       set({
-        stats,
-        unreadCount: stats.unread ?? 0
+        allNotificationsCount: allCount,
+        unreadCount: unread,
+        stats: {
+          total: allCount,
+          unread
+        }
       });
     } catch (error) {
-      console.error('Error fetching notification stats:', error);
+      console.error('Error fetching stats:', error);
     }
   },
 
   // Mark single notification as read
   markAsRead: async (id) => {
     try {
-      await notificationService.markAsRead(id);
+      const res = await notificationService.markAsRead(id);
 
-      // Optimistically update notifications list
       set((state) => {
+        const wasUnread = state.notifications.find((n) => String(n.id) === String(id) && !n.is_read);
         const updatedList = state.notifications.map((n) =>
-          n.id === id ? { ...n, is_read: true } : n
+          String(n.id) === String(id) ? { ...n, is_read: true, read_at: new Date().toISOString() } : n
         );
-        const wasUnread = state.notifications.find((n) => n.id === id && !n.is_read);
         const newUnreadCount = wasUnread ? Math.max(0, state.unreadCount - 1) : state.unreadCount;
 
         return {
           notifications: updatedList,
           unreadCount: newUnreadCount,
-          stats: {
-            ...state.stats,
-            unread: newUnreadCount
-          },
           selectedNotification:
-            state.selectedNotification?.id === id
-              ? { ...state.selectedNotification, is_read: true }
+            state.selectedNotification && String(state.selectedNotification.id) === String(id)
+              ? { ...state.selectedNotification, is_read: true, read_at: new Date().toISOString() }
               : state.selectedNotification
         };
       });
+
+      get().fetchUnreadCount();
+      return res;
     } catch (error) {
       console.error('Error marking notification as read:', error);
+      throw error;
     }
   },
 
   // Mark all notifications as read
   markAllAsRead: async () => {
+    set({ markingAllAsRead: true });
     try {
-      await notificationService.markAllAsRead();
+      const res = await notificationService.markAllAsRead();
 
       set((state) => ({
-        notifications: state.notifications.map((n) => ({ ...n, is_read: true })),
+        notifications: state.notifications.map((n) => ({
+          ...n,
+          is_read: true,
+          read_at: new Date().toISOString()
+        })),
         unreadCount: 0,
-        stats: {
-          ...state.stats,
-          unread: 0
-        },
         selectedNotification: state.selectedNotification
-          ? { ...state.selectedNotification, is_read: true }
-          : null
+          ? { ...state.selectedNotification, is_read: true, read_at: new Date().toISOString() }
+          : null,
+        markingAllAsRead: false
       }));
+
+      get().fetchUnreadCount();
+      return res;
     } catch (error) {
       console.error('Error marking all as read:', error);
+      set({ markingAllAsRead: false });
+      throw error;
     }
   }
 }));

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { authService } from '../../services/authService';
+import { useNotificationStore } from '../../store/notificationStore';
 import {
   Building2, ShieldCheck, Users, CalendarClock, CreditCard, Package,
-  ShoppingCart, Banknote, Target, Contact, Bell, FileBarChart, ShieldAlert,
+  ShoppingCart, Banknote, Contact, Bell, ShieldAlert,
   ChevronDown, ChevronRight, Settings, LogOut, LayoutDashboard
 } from 'lucide-react';
 
@@ -21,8 +22,7 @@ const MENU_GROUPS = [
     icon: Building2,
     links: [
       { name: 'Company', path: '/organization/company' },
-      { name: 'Branches', path: '/organization/branches' },
-      { name: 'Branch Settings', path: '/organization/branchsettings' }
+      { name: 'Branches', path: '/organization/branches' }
     ]
   },
   {
@@ -32,7 +32,6 @@ const MENU_GROUPS = [
     links: [
       { name: 'Users', path: '/administration/users' },
       { name: 'Roles', path: '/administration/roles' },
-      { name: 'Permissions', path: '/administration/permissions' },
       { name: 'User Branch Access', path: '/administration/userbranchaccess' }
     ]
   },
@@ -43,10 +42,8 @@ const MENU_GROUPS = [
     links: [
       { name: 'Employees', path: '/hr/employees' },
       { name: 'Departments', path: '/hr/departments' },
-      { name: 'Designations', path: '/hr/designations' },
       { name: 'Employee Documents', path: '/hr/employeedocuments' },
-      { name: 'Leave / Vacation', path: '/hr/leavevacation' },
-      { name: 'Employee History', path: '/hr/employeehistory' }
+      { name: 'Leave', path: '/hr/leavevacation' }
     ]
   },
   {
@@ -66,8 +63,7 @@ const MENU_GROUPS = [
     links: [
       { name: 'Salary', path: '/payroll/salary' },
       { name: 'Advances', path: '/payroll/advances' },
-      { name: 'Deductions', path: '/payroll/deductions' },
-      { name: 'Salary History', path: '/payroll/salaryhistory' }
+      { name: 'Deductions', path: '/payroll/deductions' }
     ]
   },
   {
@@ -91,7 +87,6 @@ const MENU_GROUPS = [
     links: [
       { name: 'Suppliers', path: '/procurement/suppliers' },
       { name: 'Purchases', path: '/procurement/purchases' },
-      { name: 'Purchase Items', path: '/procurement/purchaseitems' },
       { name: 'Credit Purchases', path: '/procurement/creditpurchases' },
       { name: 'Supplier Payments', path: '/procurement/supplierpayments' },
       { name: 'Supplier Ledger', path: '/procurement/supplierledger' }
@@ -111,25 +106,11 @@ const MENU_GROUPS = [
       { name: 'Petty Cash', path: '/finance/pettycash' },
       { name: 'Cash Transfers', path: '/finance/cashtransfers' },
       { name: 'Supplier Payables', path: '/finance/supplierpayables' },
-      { name: 'Delivery Partners', path: '/finance/deliverypartners' },
-      { name: 'Budgets', path: '/finance/budgets' },
-      { name: 'Financial Ledger', path: '/finance/financialledger' }
+      { name: 'Delivery Partners', path: '/finance/deliverypartners' }
     ]
   },
   {
     id: '09',
-    name: 'CRM',
-    icon: Target,
-    links: [
-      { name: 'Customers', path: '/crm/customers' },
-      { name: 'Customer Profiles', path: '/crm/customerprofiles' },
-      { name: 'Customer History', path: '/crm/customerhistory' },
-      { name: 'Customer Segments', path: '/crm/customersegments' },
-      { name: 'WhatsApp', path: '/crm/whatsappcommunication' }
-    ]
-  },
-  {
-    id: '10',
     name: 'Business Contacts',
     icon: Contact,
     links: [
@@ -141,32 +122,13 @@ const MENU_GROUPS = [
     ]
   },
   {
-    id: '11',
+    id: '10',
     name: 'Notifications',
     icon: Bell,
-    links: [
-      { name: 'System Alerts', path: '/notifications/systemalerts' },
-      { name: 'Budget Alerts', path: '/notifications/budgetalerts' },
-      { name: 'Stock Alerts', path: '/notifications/stockalerts' },
-      { name: 'HR Alerts', path: '/notifications/hralerts' },
-      { name: 'Finance Alerts', path: '/notifications/financealerts' }
-    ]
+    path: '/notifications'
   },
   {
-    id: '12',
-    name: 'Reports',
-    icon: FileBarChart,
-    links: [
-      { name: 'HR Reports', path: '/reports/hrreports' },
-      { name: 'Finance Reports', path: '/reports/financereports' },
-      { name: 'Inventory Reports', path: '/reports/inventoryreports' },
-      { name: 'Supplier Reports', path: '/reports/supplierreports' },
-      { name: 'Budget Reports', path: '/reports/budgetreports' },
-      { name: 'Branch Reports', path: '/reports/branchreports' }
-    ]
-  },
-  {
-    id: '13',
+    id: '11',
     name: 'Audit',
     icon: ShieldAlert,
     links: [
@@ -192,6 +154,13 @@ const Sidebar = () => {
   const [isHovered, setIsHovered] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const fetchUnreadCount = useNotificationStore((state) => state.fetchUnreadCount);
+
+  useEffect(() => {
+    fetchUnreadCount();
+  }, [fetchUnreadCount]);
+
   const toggleGroup = (id) => {
     setExpandedGroup(expandedGroup === id ? null : id);
   };
@@ -210,14 +179,14 @@ const Sidebar = () => {
       {/* Header / Logo */}
       <div className={`py-4 flex items-center gap-3.5 transition-all duration-300 ${!isHovered ? 'justify-center px-2' : 'px-4'}`}>
         <img
-          src="/logo/AlNaaz.png"
+          src="/logo/alnaazLogo1.png"
           alt="Al Naaz ERP"
           className={`shrink-0 object-contain transition-all duration-300 ${isHovered ? 'w-16 h-16' : 'w-14 h-14'}`}
         />
         {isHovered && (
           <div className="overflow-hidden whitespace-nowrap">
-            <h1 className="text-white font-extrabold text-base leading-tight tracking-wide font-sans">Al Naaz Mandi</h1>
-            <p className="text-[11px] text-gray-400 font-medium tracking-wider">ERP Admin Panel</p>
+            <h1 className="text-brand-gold font-extrabold text-base leading-tight tracking-wide font-sans">Al Naaz</h1>
+            {/* <p className="text-[11px] text-gray-400 font-medium tracking-wider">ERP Admin Panel</p> */}
           </div>
         )}
       </div>
@@ -229,21 +198,33 @@ const Sidebar = () => {
 
           if (group.path) {
             const isActive = location.pathname === group.path ||
-              (group.path.startsWith('/dashboard') && location.pathname.startsWith('/dashboard'));
+              (group.path.startsWith('/dashboard') && location.pathname.startsWith('/dashboard')) ||
+              (group.path.startsWith('/notifications') && location.pathname.startsWith('/notifications'));
 
             return (
               <div key={group.id} className="mb-2">
                 <NavLink
                   to={group.path}
-                  className={`w-full flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
-                    isActive ? 'bg-[#1E2336] text-white' : 'hover:bg-[#1E2336]/50 hover:text-white text-[#94A3B8]'
-                  } ${!isHovered ? 'justify-center' : ''}`}
+                  className={`w-full flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${isActive ? 'bg-[#1E2336] text-white' : 'hover:bg-[#1E2336]/50 hover:text-white text-[#94A3B8]'
+                    } ${!isHovered ? 'justify-center' : ''}`}
                   title={!isHovered ? group.name : ''}
                 >
                   <div className={`flex items-center gap-3 ${!isHovered ? 'justify-center w-full' : ''}`}>
-                    <Icon size={isHovered ? 18 : 22} className={isActive ? 'text-white' : 'text-[#94A3B8]'} />
+                    <div className="relative flex items-center justify-center">
+                      <Icon size={isHovered ? 18 : 22} className={isActive ? 'text-white' : 'text-[#94A3B8]'} />
+                      {!isHovered && group.path === '/notifications' && unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-2 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-blue-600 text-[9px] font-extrabold text-white ring-2 ring-[#161925]">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </div>
                     {isHovered && <span className="font-medium text-sm whitespace-nowrap">{group.name}</span>}
                   </div>
+                  {isHovered && group.path === '/notifications' && unreadCount > 0 && (
+                    <span className="px-2 py-0.5 text-xs font-extrabold rounded-full bg-blue-600 text-white">
+                      {unreadCount}
+                    </span>
+                  )}
                 </NavLink>
               </div>
             );
@@ -300,11 +281,11 @@ const Sidebar = () => {
       <div className={`p-4 border-t border-[#1E2336] bg-[#12141D] flex ${!isHovered ? 'flex-col items-center gap-4' : 'justify-between items-center'}`}>
         <div className={`flex items-center ${isHovered ? 'gap-3' : 'justify-center w-full'}`}>
           <div className="w-10 h-10 shrink-0 rounded-full bg-[#1E2336] flex items-center justify-center text-white font-bold border border-[#2E364F]">
-            {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
+            {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
           </div>
           {isHovered && (
             <div className="overflow-hidden whitespace-nowrap">
-              <p className="text-sm font-medium text-white">{user?.name || 'Admin User'}</p>
+              <p className="text-sm font-medium text-white">{user?.name || user?.username || 'Admin User'}</p>
               <p className="text-xs text-[#94A3B8]">{user?.role || 'Super Admin'}</p>
             </div>
           )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, Shield, MapPin, Mail, Phone, Calendar, Clock, 
-  Building2, Key, Activity, UserCheck, UserX, Loader2
+  Building2, Activity, UserCheck, UserX, Loader2
 } from 'lucide-react';
 import { getUserById, toggleUserStatus } from '../../api/users.api';
 import toast from 'react-hot-toast';
@@ -317,16 +317,6 @@ const UserDetails = () => {
                   <span className="text-xs text-blue-600 font-bold">Manage &rarr;</span>
                 </Link>
 
-                <Link
-                  to="/administration/permissions"
-                  className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 hover:border-gray-900 hover:bg-gray-50 transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <Key size={18} className="text-gray-700" />
-                    <span className="text-sm font-semibold text-gray-900">View Role Permissions Matrix</span>
-                  </div>
-                  <span className="text-xs text-blue-600 font-bold">Matrix &rarr;</span>
-                </Link>
 
                 <Link
                   to="/administration/roles"

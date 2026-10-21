@@ -10,7 +10,8 @@ import {
   IoChevronBackOutline,
   IoChevronForwardOutline,
   IoCalendarOutline,
-  IoTrashOutline
+  IoTrashOutline,
+  IoRefreshOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 import { Calendar } from '../../components/ui/calendar';
@@ -66,89 +67,25 @@ const CustomSelect = ({ value, onChange, options, className = '' }) => {
   );
 };
 
-// Initial Data for Supplier Payables
-const INITIAL_PAYABLES = [
-  {
-    id: 8,
-    payableCode: '#8',
-    purchaseCode: 'PURCHASE-8',
-    supplier: 'ABC Traders',
-    branch: 'Al Naaz Kayamkulam',
-    totalAmount: 10000,
-    paidAmount: 7000,
-    outstandingAmount: 3000,
-    status: 'PARTIAL'
-  },
-  {
-    id: 7,
-    payableCode: '#7',
-    purchaseCode: 'PURCHASE-7',
-    supplier: 'Green Valley Farms',
-    branch: 'Al Naaz Kayamkulam',
-    totalAmount: 15400,
-    paidAmount: 15400,
-    outstandingAmount: 0,
-    status: 'PAID'
-  },
-  {
-    id: 6,
-    payableCode: '#6',
-    purchaseCode: 'PURCHASE-6',
-    supplier: 'Coastal Ice Co.',
-    branch: 'Al Naaz Kayamkulam',
-    totalAmount: 4200,
-    paidAmount: 0,
-    outstandingAmount: 4200,
-    status: 'OPEN'
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr || dateStr === '-') return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
   }
-];
+};
 
-// Initial Data for Supplier Payments
-const INITIAL_PAYMENTS = [
-  {
-    id: 7,
-    paymentCode: '#7',
-    supplier: 'ABC Traders',
-    payableCode: 'PAYABLE-8',
-    amount: 4000,
-    paymentDate: '08 Sep 2026',
-    paymentAccount: 'HDFC Current A/C',
-    reference: 'SUPPLIER-PAYMENT-7',
-    createdBy: 'Farhan Rasheed',
-    branch: 'Al Naaz Kayamkulam'
-  },
-  {
-    id: 6,
-    paymentCode: '#6',
-    supplier: 'ABC Traders',
-    payableCode: 'PAYABLE-8',
-    amount: 3000,
-    paymentDate: '05 Sep 2026',
-    paymentAccount: 'HDFC Current A/C',
-    reference: 'SUPPLIER-PAYMENT-6',
-    createdBy: 'Farhan Rasheed',
-    branch: 'Al Naaz Kayamkulam'
-  },
-  {
-    id: 5,
-    paymentCode: '#5',
-    supplier: 'Green Valley Farms',
-    payableCode: 'PAYABLE-7',
-    amount: 15400,
-    paymentDate: '30 Aug 2026',
-    paymentAccount: 'HDFC Current A/C',
-    reference: 'SUPPLIER-PAYMENT-5',
-    createdBy: 'Farhan Rasheed',
-    branch: 'Al Naaz Kayamkulam'
-  }
-];
+
 
 const SupplierPayables = () => {
   const [activeTab, setActiveTab] = useState('payables'); // 'payables' | 'payments'
 
   // --- Payables Tab State ---
   const [payables, setPayables] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -161,7 +98,7 @@ const SupplierPayables = () => {
 
   // --- Payments Tab State ---
   const [payments, setPayments] = useState([]);
-  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [loadingPayments, setLoadingPayments] = useState(true);
   const [paymentsCurrentPage, setPaymentsCurrentPage] = useState(1);
   const [paymentsTotalCount, setPaymentsTotalCount] = useState(0);
 
@@ -180,10 +117,22 @@ const SupplierPayables = () => {
   const [showMakePaymentCalendarPopover, setShowMakePaymentCalendarPopover] = useState(false);
   const makePaymentCalendarRef = useRef(null);
 
+  const [showFromCalendarPopover, setShowFromCalendarPopover] = useState(false);
+  const fromCalendarRef = useRef(null);
+
+  const [showToCalendarPopover, setShowToCalendarPopover] = useState(false);
+  const toCalendarRef = useRef(null);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (makePaymentCalendarRef.current && !makePaymentCalendarRef.current.contains(event.target)) {
         setShowMakePaymentCalendarPopover(false);
+      }
+      if (fromCalendarRef.current && !fromCalendarRef.current.contains(event.target)) {
+        setShowFromCalendarPopover(false);
+      }
+      if (toCalendarRef.current && !toCalendarRef.current.contains(event.target)) {
+        setShowToCalendarPopover(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -266,9 +215,9 @@ const SupplierPayables = () => {
         setPayables([]);
       }
     } catch (err) {
-      console.warn('Failed to fetch supplier payables from API, using fallback data:', err);
-      setPayables(INITIAL_PAYABLES);
-      setTotalCount(INITIAL_PAYABLES.length);
+      console.warn('Failed to fetch supplier payables from API:', err);
+      setPayables([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -323,9 +272,9 @@ const SupplierPayables = () => {
         setPayments([]);
       }
     } catch (err) {
-      console.warn('Failed to fetch supplier payments from API, using fallback data:', err);
-      setPayments(INITIAL_PAYMENTS);
-      setPaymentsTotalCount(INITIAL_PAYMENTS.length);
+      console.warn('Failed to fetch supplier payments from API:', err);
+      setPayments([]);
+      setPaymentsTotalCount(0);
     } finally {
       setLoadingPayments(false);
     }
@@ -366,12 +315,10 @@ const SupplierPayables = () => {
   };
 
   useEffect(() => {
-    const initData = async () => {
-      const accs = await loadAccounts();
-      loadSupplierPayables(1);
+    loadSupplierPayables(1);
+    loadAccounts().then((accs) => {
       loadSupplierPayments(1, accs);
-    };
-    initData();
+    });
   }, []);
 
   // Calculate Metrics for Payables
@@ -397,6 +344,35 @@ const SupplierPayables = () => {
     if (dateTo && pm.paymentDate > dateTo) return false;
     return true;
   });
+
+  // Filter Reset Handlers
+  const isPayablesFiltered =
+    branchFilter !== 'All' ||
+    supplierFilter !== 'All' ||
+    statusFilter !== 'All';
+
+  const handleResetPayableFilters = () => {
+    setBranchFilter('All');
+    setSupplierFilter('All');
+    setStatusFilter('All');
+  };
+
+  const isPaymentsFiltered =
+    paymentBranchFilter !== 'All' ||
+    paymentSupplierFilter !== 'All' ||
+    paymentAccountFilter !== 'All' ||
+    Boolean(dateFrom) ||
+    Boolean(dateTo);
+
+  const handleResetPaymentFilters = () => {
+    setPaymentBranchFilter('All');
+    setPaymentSupplierFilter('All');
+    setPaymentAccountFilter('All');
+    setDateFrom('');
+    setDateTo('');
+    setShowFromCalendarPopover(false);
+    setShowToCalendarPopover(false);
+  };
 
   const handleOpenAddPayment = () => {
     setEditingPayment(null);
@@ -635,7 +611,7 @@ const SupplierPayables = () => {
 
             {/* Filter Bar Box */}
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-end max-w-3xl">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Branch</label>
                   <CustomSelect
@@ -661,6 +637,22 @@ const SupplierPayables = () => {
                     onChange={setStatusFilter}
                     options={['All', 'OPEN', 'PARTIAL', 'PAID']}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-transparent mb-1 select-none">Action</label>
+                  <button
+                    type="button"
+                    onClick={handleResetPayableFilters}
+                    className={`w-full h-[38px] px-3 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      isPayablesFiltered
+                        ? 'border-blue-200 bg-blue-50/60 text-blue-600 hover:bg-blue-100/60 shadow-2xs'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <IoRefreshOutline size={14} />
+                    <span>Reset Filters</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -840,7 +832,7 @@ const SupplierPayables = () => {
             
             {/* Filter Bar Box */}
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5 max-w-4xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end max-w-5xl">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Supplier</label>
                   <CustomSelect
@@ -850,24 +842,94 @@ const SupplierPayables = () => {
                   />
                 </div>
 
-                <div>
+                {/* Date From */}
+                <div className="relative" ref={fromCalendarRef}>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Date From</label>
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium shadow-2xs"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowFromCalendarPopover(!showFromCalendarPopover);
+                      setShowToCalendarPopover(false);
+                    }}
+                    className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1.5 truncate">
+                      <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
+                      <span className={dateFrom ? 'font-semibold text-gray-900 truncate' : 'text-gray-400'}>
+                        {dateFrom ? formatDisplayDate(dateFrom) : 'Select Date'}
+                      </span>
+                    </div>
+                    {dateFrom && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDateFrom('');
+                        }}
+                        className="text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-100 transition-colors ml-1 shrink-0"
+                        title="Clear Date"
+                      >
+                        <IoCloseOutline size={13} />
+                      </span>
+                    )}
+                  </button>
+
+                  {showFromCalendarPopover && (
+                    <div className="absolute left-0 top-full mt-1.5 z-[70] shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 animate-in fade-in zoom-in-95 duration-100">
+                      <Calendar
+                        value={dateFrom || new Date().toISOString().slice(0, 10)}
+                        onChange={(newDate) => {
+                          setDateFrom(newDate);
+                          setShowFromCalendarPopover(false);
+                        }}
+                        onClose={() => setShowFromCalendarPopover(false)}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                <div>
+                {/* Date To */}
+                <div className="relative" ref={toCalendarRef}>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Date To</label>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium shadow-2xs"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowToCalendarPopover(!showToCalendarPopover);
+                      setShowFromCalendarPopover(false);
+                    }}
+                    className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1.5 truncate">
+                      <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
+                      <span className={dateTo ? 'font-semibold text-gray-900 truncate' : 'text-gray-400'}>
+                        {dateTo ? formatDisplayDate(dateTo) : 'Select Date'}
+                      </span>
+                    </div>
+                    {dateTo && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDateTo('');
+                        }}
+                        className="text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-100 transition-colors ml-1 shrink-0"
+                        title="Clear Date"
+                      >
+                        <IoCloseOutline size={13} />
+                      </span>
+                    )}
+                  </button>
+
+                  {showToCalendarPopover && (
+                    <div className="absolute right-0 sm:left-0 top-full mt-1.5 z-[70] shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 animate-in fade-in zoom-in-95 duration-100">
+                      <Calendar
+                        value={dateTo || new Date().toISOString().slice(0, 10)}
+                        onChange={(newDate) => {
+                          setDateTo(newDate);
+                          setShowToCalendarPopover(false);
+                        }}
+                        onClose={() => setShowToCalendarPopover(false)}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -877,6 +939,22 @@ const SupplierPayables = () => {
                     onChange={setPaymentAccountFilter}
                     options={['All', ...Array.from(new Set(payments.map((pm) => pm.paymentAccount)))]}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-transparent mb-1 select-none">Action</label>
+                  <button
+                    type="button"
+                    onClick={handleResetPaymentFilters}
+                    className={`w-full h-[38px] px-3 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      isPaymentsFiltered
+                        ? 'border-blue-200 bg-blue-50/60 text-blue-600 hover:bg-blue-100/60 shadow-2xs'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <IoRefreshOutline size={14} />
+                    <span>Reset Filters</span>
+                  </button>
                 </div>
               </div>
             </div>

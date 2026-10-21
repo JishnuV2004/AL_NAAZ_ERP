@@ -196,6 +196,18 @@ const Deductions = () => {
     return matchesSearch && matchesCategory && matchesDept && matchesStatus;
   });
 
+  // Pagination calculations
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredDeductions.length / pageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const paginatedDeductions = filteredDeductions.slice(startIndex, startIndex + pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, categoryFilter, departmentFilter, statusFilter]);
+
   // Calculate Metrics
   const totalMonthlyDeductions = deductionsList
     .filter((d) => d.status === 'APPLIED')
@@ -479,7 +491,7 @@ const Deductions = () => {
                   </td>
                 </tr>
               ) : (
-                filteredDeductions.map((row) => (
+                paginatedDeductions.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="p-3.5 align-middle whitespace-nowrap">
                       <p className="font-mono font-bold text-rose-600">{row.id}</p>
@@ -578,16 +590,44 @@ const Deductions = () => {
 
         {/* Footer Pagination */}
         <div className="flex items-center justify-between p-4 border-t border-slate-100 bg-white">
-          <span className="text-xs text-slate-500 font-medium">Showing {filteredDeductions.length} of {deductionsList.length} deduction entries</span>
-          <div className="flex items-center gap-2">
-            <button disabled className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-300 disabled:opacity-50">
-              <IoChevronBackOutline size={14} />
+          <span className="text-xs text-slate-500 font-medium">
+            Showing {filteredDeductions.length === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + pageSize, filteredDeductions.length)} of {filteredDeductions.length} deduction entries
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button 
+              disabled={validCurrentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Previous Page"
+            >
+              <IoChevronBackOutline size={16} />
             </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-rose-600 text-white font-medium text-xs">
-              1
-            </button>
-            <button disabled className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-300 disabled:opacity-50">
-              <IoChevronForwardOutline size={14} />
+
+            {Array.from({ length: totalPages }).map((_, idx) => {
+              const pageNum = idx + 1;
+              const isActive = pageNum === validCurrentPage;
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
+            <button 
+              disabled={validCurrentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Next Page"
+            >
+              <IoChevronForwardOutline size={16} />
             </button>
           </div>
         </div>

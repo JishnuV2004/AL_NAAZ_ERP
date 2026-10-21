@@ -1,12 +1,32 @@
 import axiosInstance from '../config/axios';
 
 export const supplierPayableService = {
-  fetchSupplierPayables: async (page = 1, pageSize = 10, status = '') => {
+  fetchSupplierPayables: async (pageOrParams = 1, pageSize = 10, status = '') => {
     try {
-      const url = status
-        ? `/supplier-payables/?status=${status}&page=${page}&page_size=${pageSize}`
-        : `/supplier-payables/?page=${page}&page_size=${pageSize}`;
-      const response = await axiosInstance.get(url);
+      let page = 1;
+      let size = 10;
+      let stat = '';
+      let search = '';
+      let supplier = '';
+
+      if (typeof pageOrParams === 'object' && pageOrParams !== null) {
+        page = pageOrParams.page || 1;
+        size = pageOrParams.pageSize || pageOrParams.page_size || 10;
+        stat = pageOrParams.status || '';
+        search = pageOrParams.search || '';
+        supplier = pageOrParams.supplier || '';
+      } else {
+        page = pageOrParams;
+        size = pageSize;
+        stat = status;
+      }
+
+      const params = { page, page_size: size };
+      if (stat && stat !== 'All' && stat !== 'ALL') params.status = stat;
+      if (search) params.search = search;
+      if (supplier && supplier !== 'All') params.supplier = supplier;
+
+      const response = await axiosInstance.get('/supplier-payables/', { params });
       return response.data;
     } catch (error) {
       console.error('Failed to fetch supplier payables:', error);

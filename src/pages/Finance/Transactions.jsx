@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   IoAddOutline,
   IoChevronDownOutline,
-  IoCloseOutline,
-  IoArrowForwardOutline,
-  IoSwapHorizontalOutline,
-  IoInformationCircleOutline,
   IoChevronBackOutline,
-  IoChevronForwardOutline
+  IoChevronForwardOutline,
+  IoEyeOutline,
+  IoCalendarOutline,
+  IoCopyOutline,
+  IoCheckmarkOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
+import Modal from '../../components/common/Modal';
+import { Calendar } from '../../components/ui/calendar';
 import axiosInstance from '../../config/axios';
+import { accountService } from '../../services/accountService';
 
 // Custom Dropdown Select
 const CustomSelect = ({ value, onChange, options, className = '' }) => {
@@ -61,91 +64,36 @@ const CustomSelect = ({ value, onChange, options, className = '' }) => {
   );
 };
 
-// Initial Fallback Data for Financial Transactions Ledger
-const INITIAL_TRANSACTIONS = [
-  {
-    id: 64,
-    txCode: '#64',
-    date: '2026-10-09',
-    rawDate: '2026-10-09',
-    type: 'SUPPLIER PAYMENT',
-    account: 'Petty Cash',
-    direction: 'OUT',
-    amount: 200,
-    reference: 'PURCHASE-26-BALANCE',
-    description: 'Supplier payment - ABC traders',
-    createdBy: 'admin',
-    branch: 'Al Naaz Kayamkulam'
-  },
-  {
-    id: 63,
-    txCode: '#63',
-    date: '2026-10-09',
-    rawDate: '2026-10-09',
-    type: 'SUPPLIER PAYMENT',
-    account: 'Petty Cash',
-    direction: 'OUT',
-    amount: 100,
-    reference: 'PURCHASE-26-INITIAL',
-    description: 'Supplier payment - ABC traders',
-    createdBy: 'admin',
-    branch: 'Al Naaz Kayamkulam'
-  },
-  {
-    id: 62,
-    txCode: '#62',
-    date: '2026-10-09',
-    rawDate: '2026-10-09',
-    type: 'SUPPLIER PAYMENT',
-    account: 'Petty Cash',
-    direction: 'OUT',
-    amount: 200,
-    reference: 'testing',
-    description: 'Supplier payment - RRR',
-    createdBy: 'admin',
-    branch: 'Al Naaz Kayamkulam'
-  },
-  {
-    id: 61,
-    txCode: '#61',
-    date: '2026-10-07',
-    rawDate: '2026-10-07',
-    type: 'REVENUE',
-    account: 'Cash',
-    direction: 'IN',
-    amount: 300,
-    reference: 'DAILY-SALES-5',
-    description: 'Daily sales - CASH',
-    createdBy: 'admin',
-    branch: 'Al Naaz Kayamkulam'
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr || dateStr === '-') return '-';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
   }
-];
+};
 
-// Initial Fallback Data for Transfers
-const INITIAL_TRANSFERS = [
-  {
-    id: 9,
-    transferGroup: 'TRANSFER-GRP-9',
-    date: '11 Sep 2026',
-    fromAccount: 'Petty Cash',
-    toAccount: 'HDFC Current A/C',
-    amount: 5000,
-    createdBy: 'Farhan Rasheed'
-  },
-  {
-    id: 8,
-    transferGroup: 'TRANSFER-GRP-8',
-    date: '05 Sep 2026',
-    fromAccount: 'Main Cash Drawer',
-    toAccount: 'Petty Cash',
-    amount: 3500,
-    createdBy: 'Farhan Rasheed'
+const formatNiceDateTime = (dateStr) => {
+  if (!dateStr || dateStr === '-') return '-';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return dateStr;
   }
-];
+};
 
 const Transactions = () => {
-  const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'transfers'
-
   // Transactions State
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -155,12 +103,56 @@ const Transactions = () => {
   const [directionFilter, setDirectionFilter] = useState('All');
   const [page, setPage] = useState(1);
 
-  // Transfers Tab State
-  const [transfers, setTransfers] = useState(INITIAL_TRANSFERS);
-  const [transfersPage, setTransfersPage] = useState(1);
+  // Accounts List for Dropdowns
+  const [accountsList, setAccountsList] = useState([]);
+
+  // Modals State
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [viewingTransaction, setViewingTransaction] = useState(null);
+  const [copiedKey, setCopiedKey] = useState(null);
 
   const pageSize = 10;
+
+  // New Transfer Form State
+  const [newTransfer, setNewTransfer] = useState({
+    from_account: '',
+    to_account: '',
+    amount: '',
+    transaction_date: new Date().toISOString().split('T')[0],
+    description: '',
+    reference: ''
+  });
+  const [submittingTransfer, setSubmittingTransfer] = useState(false);
+  const [showTransferCalendar, setShowTransferCalendar] = useState(false);
+  const transferCalendarRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (transferCalendarRef.current && !transferCalendarRef.current.contains(event.target)) {
+        setShowTransferCalendar(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch Accounts for Transfer Dropdowns
+  const loadAccounts = async () => {
+    try {
+      const data = await accountService.fetchAccounts();
+      const list = Array.isArray(data) ? data : (data?.results || []);
+      setAccountsList(list);
+      if (list.length > 0) {
+        setNewTransfer((prev) => ({
+          ...prev,
+          from_account: prev.from_account || String(list[0].id),
+          to_account: prev.to_account || (list[1] ? String(list[1].id) : String(list[0].id))
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch accounts list:', err);
+    }
+  };
 
   // Fetch Transactions from API
   const loadTransactions = async () => {
@@ -169,8 +161,8 @@ const Transactions = () => {
       const response = await axiosInstance.get('/transactions/');
       const rawData = Array.isArray(response.data)
         ? response.data
-        : response.data.results || [];
-      
+        : response.data?.results || [];
+
       if (rawData && rawData.length > 0) {
         const mapped = rawData.map((item) => ({
           id: item.id,
@@ -178,24 +170,31 @@ const Transactions = () => {
           date: item.transaction_date || (item.created_at ? item.created_at.split('T')[0] : '-'),
           rawDate: item.transaction_date || item.created_at || '',
           type: (item.transaction_type || '').replace(/_/g, ' '),
-          rawType: item.transaction_type,
+          rawType: item.transaction_type || '',
           account: item.account_name || (item.account ? `Account #${item.account}` : '-'),
           accountId: item.account,
+          accountName: item.account_name || '',
           direction: item.direction || 'IN',
           amount: parseFloat(item.amount) || 0,
-          reference: item.reference || '-',
-          description: item.description || '-',
+          rawAmount: item.amount,
+          reference: item.reference && item.reference !== 'string' ? item.reference : (item.reference || '-'),
+          description: item.description && item.description !== 'string' ? item.description : (item.description || '-'),
           createdBy: item.created_by_name || (item.created_by ? `User #${item.created_by}` : '-'),
+          createdById: item.created_by,
+          createdByName: item.created_by_name || '',
           branch: item.branch_name || (item.branch ? `Branch #${item.branch}` : '-'),
-          transferGroupId: item.transfer_group_id
+          branchId: item.branch,
+          branchName: item.branch_name || '',
+          transferGroupId: item.transfer_group_id || '',
+          createdAt: item.created_at || ''
         }));
         setTransactions(mapped);
       } else {
-        setTransactions(INITIAL_TRANSACTIONS);
+        setTransactions([]);
       }
     } catch (error) {
       console.error('Failed to fetch transactions API:', error);
-      setTransactions(INITIAL_TRANSACTIONS);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -203,26 +202,25 @@ const Transactions = () => {
 
   useEffect(() => {
     loadTransactions();
+    loadAccounts();
   }, []);
 
-  // New Transfer Form State
-  const [newTransfer, setNewTransfer] = useState({
-    fromAccount: 'Petty Cash',
-    toAccount: 'HDFC Current A/C',
-    amount: '',
-    date: new Date().toISOString().split('T')[0],
-    description: ''
-  });
+  // Dynamic filter options
+  const availableBranches = useMemo(() => {
+    const set = new Set();
+    transactions.forEach((t) => {
+      if (t.branch && t.branch !== '-') set.add(t.branch);
+    });
+    return ['All', ...Array.from(set)];
+  }, [transactions]);
 
-  // Unique filter lists
-  const availableBranches = [
-    'All',
-    ...Array.from(new Set(transactions.map((t) => t.branch).filter(Boolean)))
-  ];
-  const availableAccounts = [
-    'All',
-    ...Array.from(new Set(transactions.map((t) => t.account).filter(Boolean)))
-  ];
+  const availableAccounts = useMemo(() => {
+    const set = new Set();
+    transactions.forEach((t) => {
+      if (t.account && t.account !== '-') set.add(t.account);
+    });
+    return ['All', ...Array.from(set)];
+  }, [transactions]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -248,91 +246,60 @@ const Transactions = () => {
   const indexOfLast = currentPage * pageSize;
   const indexOfFirst = (currentPage - 1) * pageSize;
   const currentTransactions = filteredTransactions.slice(indexOfFirst, indexOfLast);
-  const emptyRowsCount = pageSize - currentTransactions.length;
+  const emptyRowsCount = Math.max(0, pageSize - currentTransactions.length);
 
-  // Pagination calculation for Transfers
-  const totalTransfersPages = Math.max(1, Math.ceil(transfers.length / pageSize));
-  const currentTransfersPage = Math.min(transfersPage, totalTransfersPages);
-  const indexOfLastTransfer = currentTransfersPage * pageSize;
-  const indexOfFirstTransfer = (currentTransfersPage - 1) * pageSize;
-  const currentTransfers = transfers.slice(indexOfFirstTransfer, indexOfLastTransfer);
-  const emptyTransfersRowsCount = pageSize - currentTransfers.length;
-
-  // Handle Submit New Money Transfer
-  const handleCreateTransfer = (e) => {
+  // Handle Submit New Money Transfer via API
+  const handleCreateTransfer = async (e) => {
     e.preventDefault();
+    if (!newTransfer.from_account) {
+      toast.error('Please select source account');
+      return;
+    }
+    if (!newTransfer.to_account) {
+      toast.error('Please select destination account');
+      return;
+    }
+    if (String(newTransfer.from_account) === String(newTransfer.to_account)) {
+      toast.error('From Account and To Account must be different');
+      return;
+    }
     const amt = parseFloat(newTransfer.amount) || 0;
     if (amt <= 0) {
       toast.error('Please enter a valid transfer amount');
       return;
     }
 
-    if (newTransfer.fromAccount === newTransfer.toAccount) {
-      toast.error('From and To accounts must be different');
-      return;
+    const payload = {
+      from_account: parseInt(newTransfer.from_account, 10),
+      to_account: parseInt(newTransfer.to_account, 10),
+      amount: String(newTransfer.amount),
+      transaction_date: newTransfer.transaction_date || new Date().toISOString().split('T')[0],
+      description: newTransfer.description || '',
+      reference: newTransfer.reference || ''
+    };
+
+    setSubmittingTransfer(true);
+    const loadingToast = toast.loading('Executing fund transfer...');
+    try {
+      const res = await accountService.transferFunds(payload);
+      toast.success(res?.message || 'Transfer completed successfully!', { id: loadingToast });
+      setShowTransferModal(false);
+      setNewTransfer({
+        from_account: accountsList[0] ? String(accountsList[0].id) : '',
+        to_account: accountsList[1] ? String(accountsList[1].id) : '',
+        amount: '',
+        transaction_date: new Date().toISOString().split('T')[0],
+        description: '',
+        reference: ''
+      });
+      await loadTransactions();
+    } catch (err) {
+      console.error('Transfer failed:', err);
+      const msg = err?.response?.data?.detail || err?.response?.data?.error || err?.userMessage || 'Failed to execute transfer';
+      toast.error(msg, { id: loadingToast });
+    } finally {
+      setSubmittingTransfer(false);
     }
-
-    const nextGrpId = transfers.length > 0 ? Math.max(...transfers.map((t) => t.id)) + 1 : 1;
-    const grpCode = `TRANSFER-GRP-${nextGrpId}`;
-    const formattedDateStr = new Date(newTransfer.date).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-
-    const transferRecord = {
-      id: nextGrpId,
-      transferGroup: grpCode,
-      date: formattedDateStr,
-      fromAccount: newTransfer.fromAccount,
-      toAccount: newTransfer.toAccount,
-      amount: amt,
-      createdBy: 'Admin User'
-    };
-
-    const nextTxId = transactions.length > 0 ? Math.max(...transactions.map((t) => t.id)) + 1 : 1;
-    const txOut = {
-      id: nextTxId + 1,
-      txCode: `#${nextTxId + 1}`,
-      date: formattedDateStr,
-      rawDate: newTransfer.date,
-      type: 'TRANSFER OUT',
-      account: newTransfer.fromAccount,
-      direction: 'OUT',
-      amount: amt,
-      reference: grpCode,
-      description: `Transfer to ${newTransfer.toAccount}`,
-      createdBy: 'Admin User',
-      branch: branchFilter !== 'All' ? branchFilter : 'Main Branch'
-    };
-
-    const txIn = {
-      id: nextTxId,
-      txCode: `#${nextTxId}`,
-      date: formattedDateStr,
-      rawDate: newTransfer.date,
-      type: 'TRANSFER IN',
-      account: newTransfer.toAccount,
-      direction: 'IN',
-      amount: amt,
-      reference: grpCode,
-      description: `Transfer from ${newTransfer.fromAccount}`,
-      createdBy: 'Admin User',
-      branch: branchFilter !== 'All' ? branchFilter : 'Main Branch'
-    };
-
-    setTransfers([transferRecord, ...transfers]);
-    setTransactions([txOut, txIn, ...transactions]);
-    setShowTransferModal(false);
-    toast.success(`Transfer ${grpCode} of ₹${amt.toLocaleString('en-IN')} completed successfully!`);
-
-    setNewTransfer({
-      fromAccount: 'Petty Cash',
-      toAccount: 'HDFC Current A/C',
-      amount: '',
-      date: new Date().toISOString().split('T')[0],
-      description: ''
-    });
   };
 
   // Helper Badge Color Resolver
@@ -362,137 +329,102 @@ const Transactions = () => {
       {/* Top Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-gray-900 tracking-tight">
-            {activeTab === 'transactions' ? 'Financial Transactions' : 'Transfers'}
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-gray-400">Finance</span>
+            <span className="text-xs text-gray-300">&gt;</span>
+            <span className="text-xs font-semibold text-blue-600">Financial Transactions</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+            Financial Transactions
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {activeTab === 'transactions'
-              ? 'Immutable Financial Ledger — every movement across every account, read-only.'
-              : 'History reconstructed from TRANSFER_IN / TRANSFER_OUT transactions sharing a transfer group.'}
+          <p className="text-xs text-gray-500 font-medium mt-1">
+            Immutable Financial Ledger — record and monitor all account transactions.
           </p>
         </div>
 
-        {activeTab === 'transfers' && (
-          <button
-            onClick={() => setShowTransferModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
-          >
-            <IoAddOutline size={16} />
-            <span>+ Transfer Money</span>
-          </button>
-        )}
+        <button
+          onClick={() => setShowTransferModal(true)}
+          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
+        >
+          <IoAddOutline size={16} />
+          <span>+ Transfer Money</span>
+        </button>
       </div>
 
-      {/* Main Outer Container with Tab Navigation */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        
-        {/* Underlined Tab Switcher */}
-        <div className="flex px-6 border-b border-gray-200 bg-white overflow-x-auto">
-          {[
-            { id: 'transactions', label: 'Financial Transactions' },
-            { id: 'transfers', label: 'Transfers' }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`whitespace-nowrap px-6 py-4 text-sm transition-colors relative cursor-pointer ${
-                activeTab === tab.id
-                  ? 'text-blue-600 font-bold'
-                  : 'text-gray-500 font-semibold hover:text-gray-900'
-              }`}
-            >
-              {tab.label}
-              {activeTab === tab.id && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full"></div>
-              )}
-            </button>
-          ))}
+      {/* Filter Bar Box */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 max-w-4xl">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Branch</label>
+            <CustomSelect
+              value={branchFilter}
+              onChange={setBranchFilter}
+              options={availableBranches}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Account</label>
+            <CustomSelect
+              value={accountFilter}
+              onChange={setAccountFilter}
+              options={availableAccounts}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Transaction Type</label>
+            <CustomSelect
+              value={typeFilter}
+              onChange={setTypeFilter}
+              options={[
+                'All',
+                'REVENUE',
+                'EXPENSE',
+                'ADJUSTMENT',
+                'TRANSFER IN',
+                'TRANSFER OUT',
+                'SUPPLIER PAYMENT',
+                'OPENING BALANCE'
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Direction</label>
+            <CustomSelect
+              value={directionFilter}
+              onChange={setDirectionFilter}
+              options={['All', 'IN', 'OUT']}
+            />
+          </div>
         </div>
+      </div>
 
-        {/* --- TAB 1: FINANCIAL TRANSACTIONS VIEW --- */}
-        {activeTab === 'transactions' && (
-          <div className="p-5 sm:p-6 space-y-5">
-            
-            {/* Filter Bar Box */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 max-w-4xl">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Branch</label>
-                  <CustomSelect
-                    value={branchFilter}
-                    onChange={setBranchFilter}
-                    options={availableBranches}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Account</label>
-                  <CustomSelect
-                    value={accountFilter}
-                    onChange={setAccountFilter}
-                    options={availableAccounts}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Transaction Type</label>
-                  <CustomSelect
-                    value={typeFilter}
-                    onChange={setTypeFilter}
-                    options={[
-                      'All',
-                      'REVENUE',
-                      'EXPENSE',
-                      'ADJUSTMENT',
-                      'TRANSFER IN',
-                      'TRANSFER OUT',
-                      'SUPPLIER PAYMENT',
-                      'OPENING BALANCE'
-                    ]}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Direction</label>
-                  <CustomSelect
-                    value={directionFilter}
-                    onChange={setDirectionFilter}
-                    options={['All', 'IN', 'OUT']}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Financial Transactions Table */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden w-full">
-              <div className="overflow-x-auto w-full">
-                <table className="w-full text-left border-collapse min-w-[1150px]">
-                  <thead>
-                    <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
-                      <th className="py-3.5 px-4">Date</th>
-                      <th className="py-3.5 px-4">Branch</th>
-                      <th className="py-3.5 px-4">Account</th>
-                      <th className="py-3.5 px-4">Type</th>
-                      <th className="py-3.5 px-4">Direction</th>
-                      <th className="py-3.5 px-4">Amount</th>
-                      <th className="py-3.5 px-4">Reference</th>
-                      <th className="py-3.5 px-4">Description</th>
-                      <th className="py-3.5 px-4">Created By</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-xs bg-white">
+      {/* Financial Transactions Table (Showing Important Data + View Action) */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden w-full">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-600 font-bold">
+                <th className="py-3.5 px-4">Date</th>
+                <th className="py-3.5 px-4">Account</th>
+                <th className="py-3.5 px-4">Type</th>
+                <th className="py-3.5 px-4 text-center">Direction</th>
+                <th className="py-3.5 px-4 text-right">Amount</th>
+                <th className="py-3.5 px-4 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-xs bg-white">
                     {loading ? (
                       [...Array(10)].map((_, i) => (
                         <tr key={`skeleton-${i}`} className="animate-pulse h-[54px]">
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-12"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-36"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                          <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-12 mx-auto"></div></td>
+                          <td className="py-3.5 px-4 text-right"><div className="h-4 bg-slate-200 rounded w-20 ml-auto"></div></td>
+                          <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-14 mx-auto"></div></td>
                         </tr>
                       ))
                     ) : filteredTransactions.length > 0 ? (
@@ -500,36 +432,32 @@ const Transactions = () => {
                         {currentTransactions.map((tx) => (
                           <tr key={tx.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
                             {/* Date */}
-                            <td className="py-3.5 px-4 font-semibold text-gray-900 whitespace-nowrap">
-                              {tx.date}
+                            <td className="py-3.5 px-4 font-medium text-gray-700 whitespace-nowrap">
+                              {formatDisplayDate(tx.date) || tx.date}
                             </td>
 
-                            {/* Branch */}
-                            <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
-                              {tx.branch}
-                            </td>
-
-                            {/* Account */}
-                            <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
-                              {tx.account}
+                            {/* Account & Branch */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <p className="font-semibold text-gray-900">{tx.account}</p>
+                              <p className="text-[11px] text-gray-400 font-normal">{tx.branch}</p>
                             </td>
 
                             {/* Type Badge */}
                             <td className="py-3.5 px-4 whitespace-nowrap">
-                              <span className={`inline-block px-2.5 py-0.5 text-[11px] font-extrabold rounded-full border ${getTypeBadgeStyle(tx.type)}`}>
+                              <span className={`inline-block px-2.5 py-0.5 text-[10px] font-extrabold rounded-md border ${getTypeBadgeStyle(tx.type)}`}>
                                 {tx.type}
                               </span>
                             </td>
 
                             {/* Direction */}
-                            <td className="py-3.5 px-4 font-bold whitespace-nowrap">
-                              <span className={tx.direction === 'IN' ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md text-[11px]' : 'text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md text-[11px]'}>
+                            <td className="py-3.5 px-4 text-center font-bold whitespace-nowrap">
+                              <span className={tx.direction === 'IN' ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[10px]' : 'text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded text-[10px]'}>
                                 {tx.direction}
                               </span>
                             </td>
 
                             {/* Amount */}
-                            <td className="py-3.5 px-4 font-extrabold tabular-nums whitespace-nowrap">
+                            <td className="py-3.5 px-4 text-right font-extrabold tabular-nums whitespace-nowrap font-mono">
                               {tx.direction === 'IN' ? (
                                 <span className="text-emerald-600">+ ₹{tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                               ) : (
@@ -537,33 +465,29 @@ const Transactions = () => {
                               )}
                             </td>
 
-                            {/* Reference Link */}
-                            <td className="py-3.5 px-4 whitespace-nowrap">
-                              <span className="font-bold text-blue-600 hover:underline cursor-pointer">
-                                {tx.reference}
-                              </span>
-                            </td>
-
-                            {/* Description */}
-                            <td className="py-3.5 px-4 font-medium text-gray-600 max-w-xs leading-relaxed truncate">
-                              {tx.description}
-                            </td>
-
-                            {/* Created By */}
-                            <td className="py-3.5 px-4 font-medium text-gray-700 whitespace-nowrap">
-                              {tx.createdBy}
+                            {/* Action / View Option */}
+                            <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => setViewingTransaction(tx)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg border border-blue-200 text-xs font-semibold transition-colors cursor-pointer"
+                                title="View All Transaction Details"
+                              >
+                                <IoEyeOutline size={15} />
+                                <span>View</span>
+                              </button>
                             </td>
                           </tr>
                         ))}
                         {emptyRowsCount > 0 && Array.from({ length: emptyRowsCount }).map((_, idx) => (
                           <tr key={`empty-${idx}`} className="h-[54px] border-b border-gray-100/40">
-                            <td colSpan="9">&nbsp;</td>
+                            <td colSpan="6">&nbsp;</td>
                           </tr>
                         ))}
                       </>
                     ) : (
                       <tr>
-                        <td colSpan="9" className="py-12 text-center text-gray-400 font-medium">
+                        <td colSpan="6" className="py-12 text-center text-gray-400 font-medium">
                           No transactions found matching the selected filters.
                         </td>
                       </tr>
@@ -621,210 +545,343 @@ const Transactions = () => {
               )}
             </div>
 
-          </div>
-        )}
-
-        {/* --- TAB 2: TRANSFERS VIEW --- */}
-        {activeTab === 'transfers' && (
-          <div className="p-5 sm:p-6 space-y-5">
-            
-            {/* Transfers Table */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden w-full">
-              <div className="overflow-x-auto w-full">
-                <table className="w-full text-left border-collapse min-w-[750px]">
-                  <thead>
-                    <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
-                      <th className="py-3.5 px-4">Transfer Group</th>
-                      <th className="py-3.5 px-4">Date</th>
-                      <th className="py-3.5 px-4">From</th>
-                      <th className="py-3.5 px-4">To</th>
-                      <th className="py-3.5 px-4">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-xs bg-white">
-                    {transfers.length > 0 ? (
-                      <>
-                        {currentTransfers.map((tr) => (
-                          <tr key={tr.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
-                            {/* Transfer Group Link */}
-                            <td className="py-3.5 px-4 font-bold text-blue-600 hover:underline cursor-pointer whitespace-nowrap">
-                              {tr.transferGroup}
-                            </td>
-
-                            {/* Date */}
-                            <td className="py-3.5 px-4 font-medium text-gray-800 whitespace-nowrap">
-                              {tr.date}
-                            </td>
-
-                            {/* From Account */}
-                            <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
-                              {tr.fromAccount}
-                            </td>
-
-                            {/* To Account */}
-                            <td className="py-3.5 px-4 font-semibold text-gray-800 whitespace-nowrap">
-                              {tr.toAccount}
-                            </td>
-
-                            {/* Amount */}
-                            <td className="py-3.5 px-4 font-extrabold text-gray-900 tabular-nums whitespace-nowrap">
-                              ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        ))}
-                        {emptyTransfersRowsCount > 0 && Array.from({ length: emptyTransfersRowsCount }).map((_, idx) => (
-                          <tr key={`empty-transfer-${idx}`} className="h-[54px] border-b border-gray-100/40">
-                            <td colSpan="5">&nbsp;</td>
-                          </tr>
-                        ))}
-                      </>
-                    ) : (
-                      <tr>
-                        <td colSpan="5" className="py-12 text-center text-gray-400 font-medium">
-                          No transfer records found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Transfers Pagination */}
-              {transfers.length > 0 && (
-                <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
-                  <div>
-                    Showing <span className="font-bold text-gray-900">{indexOfFirstTransfer + 1}</span> to{' '}
-                    <span className="font-bold text-gray-900">{Math.min(indexOfLastTransfer, transfers.length)}</span> of{' '}
-                    <span className="font-bold text-gray-900">{transfers.length}</span> entries
-                  </div>
-                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                    <button
-                      type="button"
-                      disabled={currentTransfersPage === 1}
-                      onClick={() => setTransfersPage((prev) => Math.max(1, prev - 1))}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
-                    >
-                      <IoChevronBackOutline size={14} />
-                    </button>
-
-                    {Array.from({ length: totalTransfersPages }).map((_, idx) => {
-                      const pNum = idx + 1;
-                      return (
-                        <button
-                          key={pNum}
-                          type="button"
-                          onClick={() => setTransfersPage(pNum)}
-                          className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
-                            currentTransfersPage === pNum
-                              ? 'bg-blue-600 text-white shadow-xs font-bold'
-                              : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
-                          }`}
-                        >
-                          {pNum}
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      type="button"
-                      disabled={currentTransfersPage >= totalTransfersPages}
-                      onClick={() => setTransfersPage((prev) => Math.min(totalTransfersPages, prev + 1))}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
-                    >
-                      <IoChevronForwardOutline size={14} />
-                    </button>
-                  </div>
+      {/* --- MODAL 1: VIEW TRANSACTION DETAILS (SHOWS ALL DETAILS) --- */}
+      {viewingTransaction && (
+        <Modal
+          isOpen={Boolean(viewingTransaction)}
+          onClose={() => setViewingTransaction(null)}
+          title={`Transaction Details (${viewingTransaction.txCode || `#${viewingTransaction.id}`})`}
+        >
+          <div className="space-y-4 font-sans text-xs">
+            {/* Amount & Status Banner */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-gray-400">Transaction Amount</span>
+                <div className="text-2xl font-extrabold font-mono mt-0.5">
+                  {viewingTransaction.direction === 'IN' ? (
+                    <span className="text-emerald-600">+ ₹{viewingTransaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  ) : (
+                    <span className="text-rose-600">- ₹{viewingTransaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  )}
                 </div>
-              )}
+              </div>
+              <div className="flex flex-col items-end gap-1.5">
+                <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-md border ${getTypeBadgeStyle(viewingTransaction.type)}`}>
+                  {viewingTransaction.type}
+                </span>
+                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${
+                  viewingTransaction.direction === 'IN' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
+                }`}>
+                  {viewingTransaction.direction === 'IN' ? 'INCOMING (CREDIT)' : 'OUTGOING (DEBIT)'}
+                </span>
+              </div>
             </div>
 
-          </div>
-        )}
+            {/* Comprehensive Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50/80 rounded-xl border border-slate-200">
+              {/* Transaction ID */}
+              <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Transaction ID</span>
+                <span className="font-bold text-gray-900 font-mono text-sm">#{viewingTransaction.id}</span>
+              </div>
 
-      </div>
+              {/* Transaction Date */}
+              <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Transaction Date</span>
+                <span className="font-bold text-gray-800 text-sm">
+                  {formatDisplayDate(viewingTransaction.date) || viewingTransaction.date}
+                </span>
+                {viewingTransaction.rawDate && viewingTransaction.rawDate !== viewingTransaction.date && (
+                  <span className="text-[10px] text-gray-400 block font-mono">({viewingTransaction.rawDate})</span>
+                )}
+              </div>
 
-      {/* Transfer Money Modal */}
-      {showTransferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <h3 className="text-base font-bold text-gray-900">+ Initiate Money Transfer</h3>
-              <button onClick={() => setShowTransferModal(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer">
-                <IoCloseOutline size={20} />
+              {/* Financial Account */}
+              <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Financial Account</span>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className="font-bold text-gray-900 text-xs">
+                    {viewingTransaction.accountName || viewingTransaction.account}
+                  </span>
+                  {viewingTransaction.accountId && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">
+                      ID: {viewingTransaction.accountId}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Branch */}
+              <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Branch</span>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className="font-bold text-gray-900 text-xs">
+                    {viewingTransaction.branchName || viewingTransaction.branch}
+                  </span>
+                  {viewingTransaction.branchId && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-100 text-slate-700 border border-slate-200 rounded font-semibold">
+                      ID: {viewingTransaction.branchId}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Transaction Type */}
+              <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Transaction Type</span>
+                <span className="font-bold text-gray-900 text-xs block">
+                  {viewingTransaction.type}
+                </span>
+                {viewingTransaction.rawType && (
+                  <span className="text-[10px] font-mono text-gray-500">
+                    {viewingTransaction.rawType}
+                  </span>
+                )}
+              </div>
+
+              {/* Direction */}
+              <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Direction</span>
+                <span className={`font-extrabold text-xs inline-block mt-0.5 ${
+                  viewingTransaction.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700'
+                }`}>
+                  {viewingTransaction.direction === 'IN' ? 'IN (Incoming / Credit)' : 'OUT (Outgoing / Debit)'}
+                </span>
+              </div>
+
+              {/* Created By */}
+              <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Created By</span>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className="font-semibold text-gray-800 text-xs">
+                    {viewingTransaction.createdByName || viewingTransaction.createdBy}
+                  </span>
+                  {viewingTransaction.createdById && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 bg-gray-100 text-gray-600 rounded">
+                      User ID: {viewingTransaction.createdById}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Created At Timestamp */}
+              <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">Created At</span>
+                <span className="font-semibold text-gray-800 text-xs block mt-0.5">
+                  {formatNiceDateTime(viewingTransaction.createdAt) || '-'}
+                </span>
+                {viewingTransaction.createdAt && (
+                  <span className="text-[9px] text-gray-400 font-mono block truncate" title={viewingTransaction.createdAt}>
+                    {viewingTransaction.createdAt}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Transfer Group ID Card */}
+            <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-blue-700 block">Transfer Group ID</span>
+              <div className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-lg border border-blue-200">
+                <span className="font-mono text-blue-900 text-xs break-all select-all font-semibold">
+                  {viewingTransaction.transferGroupId || 'N/A'}
+                </span>
+                {viewingTransaction.transferGroupId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(viewingTransaction.transferGroupId);
+                      setCopiedKey('transferGroupId');
+                      toast.success('Transfer Group ID copied!');
+                      setTimeout(() => setCopiedKey(null), 2000);
+                    }}
+                    className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors cursor-pointer shrink-0"
+                    title="Copy Transfer Group ID"
+                  >
+                    {copiedKey === 'transferGroupId' ? (
+                      <IoCheckmarkOutline className="text-emerald-600 text-sm" />
+                    ) : (
+                      <IoCopyOutline className="text-sm" />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Reference & Description Card */}
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+              <div>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold mb-0.5">Reference Code</span>
+                <span className="font-bold text-blue-600 block break-words font-mono text-xs">
+                  {viewingTransaction.reference || 'None'}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-slate-200/70">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold mb-0.5">Description / Notes</span>
+                <span className="font-medium text-gray-700 block break-words leading-relaxed text-xs">
+                  {viewingTransaction.description || 'No description provided'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setViewingTransaction(null)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Close
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
 
-            <form onSubmit={handleCreateTransfer} className="p-5 space-y-4">
+      {/* --- MODAL 3: INITIATE MONEY TRANSFER --- */}
+      {showTransferModal && (
+        <Modal
+          isOpen={showTransferModal}
+          onClose={() => setShowTransferModal(false)}
+          title="+ Initiate Money Transfer"
+          overflowVisible={true}
+        >
+          <form onSubmit={handleCreateTransfer} className="space-y-4 text-xs font-sans">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">From Account</label>
-                <CustomSelect
-                  value={newTransfer.fromAccount}
-                  onChange={(val) => setNewTransfer({ ...newTransfer, fromAccount: val })}
-                  options={['Petty Cash', 'Main Cash Drawer', 'HDFC Current A/C', 'UPI Collections']}
-                />
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  From Account <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newTransfer.from_account}
+                  onChange={(e) => {
+                    const fromVal = e.target.value;
+                    const others = accountsList.filter((a) => String(a.id) !== String(fromVal));
+                    const toVal = others.some((a) => String(a.id) === String(newTransfer.to_account))
+                      ? newTransfer.to_account
+                      : (others[0]?.id || '');
+                    setNewTransfer({ ...newTransfer, from_account: fromVal, to_account: toVal });
+                  }}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
+                >
+                  {accountsList.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.account_type || acc.type || 'ACCOUNT'})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">To Account</label>
-                <CustomSelect
-                  value={newTransfer.toAccount}
-                  onChange={(val) => setNewTransfer({ ...newTransfer, toAccount: val })}
-                  options={['HDFC Current A/C', 'Petty Cash', 'Main Cash Drawer', 'UPI Collections']}
-                />
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  To Account <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newTransfer.to_account}
+                  onChange={(e) => setNewTransfer({ ...newTransfer, to_account: e.target.value })}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
+                >
+                  {accountsList
+                    .filter((acc) => String(acc.id) !== String(newTransfer.from_account))
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.account_type || acc.type || 'ACCOUNT'})
+                      </option>
+                    ))}
+                </select>
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Amount (₹)</label>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  Amount (₹) <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="number"
+                  step="0.01"
+                  min="0.01"
                   placeholder="e.g. 5000"
                   value={newTransfer.amount}
                   onChange={(e) => setNewTransfer({ ...newTransfer, amount: e.target.value })}
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+                  className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-mono font-bold"
                   required
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Transfer Date</label>
-                <input
-                  type="date"
-                  value={newTransfer.date}
-                  onChange={(e) => setNewTransfer({ ...newTransfer, date: e.target.value })}
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Description / Notes</label>
-                <textarea
-                  rows="2"
-                  placeholder="Reason for money transfer..."
-                  value={newTransfer.description}
-                  onChange={(e) => setNewTransfer({ ...newTransfer, description: e.target.value })}
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <div className="relative" ref={transferCalendarRef}>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  Transfer Date <span className="text-red-500">*</span>
+                </label>
                 <button
                   type="button"
-                  onClick={() => setShowTransferModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                  onClick={() => setShowTransferCalendar(!showTransferCalendar)}
+                  className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none hover:border-blue-400 font-medium text-left cursor-pointer"
                 >
-                  Cancel
+                  <span>
+                    {newTransfer.transaction_date
+                      ? newTransfer.transaction_date.split('-').reverse().join('/')
+                      : 'Select Date'}
+                  </span>
+                  <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
-                >
-                  Confirm Transfer
-                </button>
+
+                {showTransferCalendar && (
+                  <div className="absolute right-0 bottom-full mb-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <Calendar
+                      value={newTransfer.transaction_date || new Date().toISOString().split('T')[0]}
+                      onChange={(newDate) => {
+                        setNewTransfer({ ...newTransfer, transaction_date: newDate });
+                        setShowTransferCalendar(false);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                Reference Code
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. TR-2026-001"
+                value={newTransfer.reference}
+                onChange={(e) => setNewTransfer({ ...newTransfer, reference: e.target.value })}
+                className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                Description / Notes
+              </label>
+              <textarea
+                rows="2"
+                placeholder="Reason for money transfer..."
+                value={newTransfer.description}
+                onChange={(e) => setNewTransfer({ ...newTransfer, description: e.target.value })}
+                className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
+              />
+            </div>
+
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingTransfer}
+                className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-xl transition-colors cursor-pointer shadow-xs"
+              >
+                {submittingTransfer ? 'Transferring...' : 'Confirm Transfer'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
     </div>

@@ -49,6 +49,36 @@ export const deliveryPartnerService = {
       console.error(`Failed to delete delivery partner #${id}:`, error);
       throw error;
     }
+  },
+
+  createCommissionRate: async (payload) => {
+    try {
+      const response = await axiosInstance.post('/delivery-partner-rates/', payload);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create commission rate:', error);
+      throw error;
+    }
+  },
+
+  updateCommissionRate: async (id, payload) => {
+    try {
+      const response = await axiosInstance.patch(`/delivery-partner-rates/${id}/`, payload);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to update commission rate #${id}:`, error);
+      throw error;
+    }
+  },
+
+  deleteCommissionRate: async (id) => {
+    try {
+      const response = await axiosInstance.delete(`/delivery-partner-rates/${id}/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to delete commission rate #${id}:`, error);
+      throw error;
+    }
   }
 };
 

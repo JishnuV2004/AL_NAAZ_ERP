@@ -87,9 +87,7 @@ export const mockUsers = [
 export const mockRolesList = [
   'Super Admin',
   'Branch Manager',
-  'Cashier',
-  'Kitchen Staff',
-  'Auditor'
+  'Kitchen Staff'
 ];
 
 export const mockBranchesList = [

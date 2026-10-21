@@ -171,7 +171,7 @@ const FinancialAccounts = () => {
     const typeStr = acc.account_type || acc.type || '';
     const nameStr = (acc.name || '').toLowerCase();
     if (typeStr === 'PETTY_CASH' || nameStr.includes('petty cash')) {
-      navigate('/finance/pettycash');
+      navigate('/finance/pettycash', { state: { accountId: acc.id } });
       return;
     }
 

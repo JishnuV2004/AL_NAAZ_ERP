@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   IoAddOutline,
   IoChevronDownOutline,
@@ -114,101 +114,15 @@ const MetricCard = ({ title, amount, subtitle, icon: Icon, iconBg, iconColor, tr
   </div>
 );
 
-// Initial Expenses Dataset
-const INITIAL_EXPENSES = [
-  {
-    id: 4,
-    expenseCode: '#4',
-    date: '2026-09-20',
-    formattedDate: '20 Sep 2026',
-    branch: 'Kochi — Main Mandi',
-    category: 'Ice & Packaging',
-    paymentAccount: 'Petty Cash',
-    amount: 1800,
-    description: 'Ice blocks — evening batch',
-    createdBy: 'Sana Iqbal'
-  },
-  {
-    id: 3,
-    expenseCode: '#3',
-    date: '2026-09-19',
-    formattedDate: '19 Sep 2026',
-    branch: 'Kochi — Main Mandi',
-    category: 'Transport & Logistics',
-    paymentAccount: 'Main Cash Drawer',
-    amount: 3200,
-    description: 'Auto hire — market run',
-    createdBy: 'Rahim K.'
-  },
-  {
-    id: 2,
-    expenseCode: '#2',
-    date: '2026-09-15',
-    formattedDate: '15 Sep 2026',
-    branch: 'Kochi — Main Mandi',
-    category: 'Utilities',
-    paymentAccount: 'HDFC Current A/C',
-    amount: 6400,
-    description: 'Electricity bill — Aug cycle',
-    createdBy: 'Farhan Rasheed'
-  },
-  {
-    id: 1,
-    expenseCode: '#1',
-    date: '2026-09-12',
-    formattedDate: '12 Sep 2026',
-    branch: 'Kochi — Main Mandi',
-    category: 'Maintenance',
-    paymentAccount: 'Main Cash Drawer',
-    amount: 950,
-    description: 'Weighing scale repair',
-    createdBy: 'Rahim K.'
-  }
-];
-
-// Initial Expense Adjustments Dataset
-const INITIAL_ADJUSTMENTS = [
-  {
-    id: 1,
-    adjustmentCode: '#1',
-    expenseCode: 'EXPENSE-2',
-    oldAmount: 6400,
-    newAmount: 6800,
-    status: 'PENDING',
-    reason: 'Meter reading was under-billed; DISCOM issued a revised invoice.',
-    requestedBy: 'Farhan Rasheed'
-  },
-  {
-    id: 2,
-    adjustmentCode: '#2',
-    expenseCode: 'EXPENSE-1',
-    oldAmount: 950,
-    newAmount: 1150,
-    status: 'APPROVED',
-    reason: 'Vendor added a spare part cost after initial invoice.',
-    requestedBy: 'Rahim K.'
-  },
-  {
-    id: 3,
-    adjustmentCode: '#3',
-    expenseCode: 'EXPENSE-3',
-    oldAmount: 3200,
-    newAmount: 2600,
-    status: 'REJECTED',
-    reason: 'Original entry used round-trip fare by mistake.',
-    requestedBy: 'Rahim K.'
-  }
-];
-
 const Expenses = () => {
   // Page Switcher State: 'expenses' | 'adjustments'
   const [activeTab, setActiveTab] = useState('expenses');
 
   // --- Expenses View State ---
-  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
-  const [loading, setLoading] = useState(false);
+  const [expenses, setExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(INITIAL_EXPENSES.length);
+  const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
 
   const [branchFilter, setBranchFilter] = useState('All');
@@ -264,22 +178,26 @@ const Expenses = () => {
             expenseCode: `#${item.id}`,
             date: item.expense_date || (item.created_at ? item.created_at.slice(0, 10) : ''),
             formattedDate: formattedDateStr,
-            branch: item.branch_name || 'Al Naaz Kayamkulam',
+            branch: item.branch_name || (item.branch ? `Branch #${item.branch}` : '-'),
             branch_id: item.branch,
-            category: item.category_name || 'General',
+            category: item.category_name || (item.category ? `Category #${item.category}` : 'General'),
             category_id: item.category,
-            paymentAccount: item.payment_account_name || 'Petty Cash',
+            paymentAccount: item.payment_account_name || (item.payment_account ? `Account #${item.payment_account}` : '-'),
             payment_account_id: item.payment_account,
             amount: parseFloat(item.amount || 0),
             rawAmount: item.amount,
             description: item.description || '',
-            createdBy: item.created_by_name || 'admin'
+            createdBy: item.created_by_name || (item.created_by ? `User #${item.created_by}` : '-')
           };
         });
         setExpenses(mapped);
+      } else {
+        setExpenses([]);
       }
     } catch (err) {
-      console.warn('Failed to load expenses from API, using fallback data:', err);
+      console.warn('Failed to load expenses from API:', err);
+      setExpenses([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -358,10 +276,10 @@ const Expenses = () => {
   };
 
   // --- Expense Adjustments View State ---
-  const [adjustments, setAdjustments] = useState(INITIAL_ADJUSTMENTS);
-  const [loadingAdjustments, setLoadingAdjustments] = useState(false);
+  const [adjustments, setAdjustments] = useState([]);
+  const [loadingAdjustments, setLoadingAdjustments] = useState(true);
   const [adjCurrentPage, setAdjCurrentPage] = useState(1);
-  const [adjTotalCount, setAdjTotalCount] = useState(INITIAL_ADJUSTMENTS.length);
+  const [adjTotalCount, setAdjTotalCount] = useState(0);
   const [adjStatusFilter, setAdjStatusFilter] = useState('All');
   const [adjExpenseFilter, setAdjExpenseFilter] = useState('All');
 
@@ -387,15 +305,15 @@ const Expenses = () => {
         const mapped = list.map((item) => ({
           id: item.id,
           adjustmentCode: `#${item.id}`,
-          expenseCode: `#${item.expense_id || item.expense || ''}`,
+          expenseCode: item.expense_id || item.expense ? `#${item.expense_id || item.expense}` : '-',
           expenseId: item.expense_id || item.expense,
           oldAmount: parseFloat(item.old_amount || 0),
           newAmount: parseFloat(item.new_amount || 0),
           status: item.status || 'PENDING',
-          reason: item.reason || 'Expense adjustment request',
-          requestedBy: item.requested_by_name || 'admin',
-          approvedBy: item.approved_by_name || '',
-          rejectedBy: item.rejected_by_name || '',
+          reason: item.reason || '',
+          requestedBy: item.requested_by_name || (item.requested_by ? `User #${item.requested_by}` : '-'),
+          approvedBy: item.approved_by_name || (item.approved_by ? `User #${item.approved_by}` : ''),
+          rejectedBy: item.rejected_by_name || (item.rejected_by ? `User #${item.rejected_by}` : ''),
           rejectionReason: item.rejection_reason || '',
           requestedAt: item.requested_at,
           approvedAt: item.approved_at,
@@ -410,9 +328,13 @@ const Expenses = () => {
           newDescription: item.new_description
         }));
         setAdjustments(mapped);
+      } else {
+        setAdjustments([]);
       }
     } catch (err) {
-      console.warn('Failed to load expense adjustments from API, using fallback data:', err);
+      console.warn('Failed to load expense adjustments from API:', err);
+      setAdjustments([]);
+      setAdjTotalCount(0);
     } finally {
       setLoadingAdjustments(false);
     }
@@ -481,11 +403,56 @@ const Expenses = () => {
   };
 
   const [newAdjustment, setNewAdjustment] = useState({
-    expenseCode: 'EXPENSE-2',
-    oldAmount: 6400,
-    newAmount: '',
+    expense: '',
+    new_amount: '',
+    new_payment_account: '',
+    new_expense_date: new Date().toISOString().slice(0, 10),
+    new_category: '',
+    new_description: '',
     reason: ''
   });
+
+  // Dynamic filter options from API data
+  const branchFilterOptions = useMemo(() => {
+    const set = new Set();
+    branchesList.forEach((b) => {
+      if (b.name) set.add(b.name);
+    });
+    expenses.forEach((e) => {
+      if (e.branch && e.branch !== '-') set.add(e.branch);
+    });
+    return ['All', ...Array.from(set)];
+  }, [branchesList, expenses]);
+
+  const categoryFilterOptions = useMemo(() => {
+    const set = new Set();
+    categoriesList.forEach((c) => {
+      if (c.name) set.add(c.name);
+    });
+    expenses.forEach((e) => {
+      if (e.category && e.category !== '-') set.add(e.category);
+    });
+    return ['All', ...Array.from(set)];
+  }, [categoriesList, expenses]);
+
+  const accountFilterOptions = useMemo(() => {
+    const set = new Set();
+    accountsList.forEach((a) => {
+      if (a.name) set.add(a.name);
+    });
+    expenses.forEach((e) => {
+      if (e.paymentAccount && e.paymentAccount !== '-') set.add(e.paymentAccount);
+    });
+    return ['All', ...Array.from(set)];
+  }, [accountsList, expenses]);
+
+  const adjExpenseFilterOptions = useMemo(() => {
+    const set = new Set();
+    adjustments.forEach((a) => {
+      if (a.expenseCode && a.expenseCode !== '-') set.add(a.expenseCode);
+    });
+    return ['All', ...Array.from(set)];
+  }, [adjustments]);
 
   // Filtering Logic
   const filteredExpenses = expenses.filter((e) => {
@@ -860,17 +827,15 @@ const Expenses = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Monthly Expenses"
-          amount={`₹ ${totalExpenseSum.toLocaleString('en-IN')}`}
+          amount={`₹ ${totalExpenseSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
           subtitle="Total Disbursed"
           icon={IoWalletOutline}
           iconBg="bg-rose-50"
           iconColor="text-rose-600"
-          trend="down"
-          trendValue="-4%"
         />
         <MetricCard
           title="Expenses Count"
-          amount={`${expenses.length} Entries`}
+          amount={`${totalCount || expenses.length} Entries`}
           subtitle="Processed Vouchers"
           icon={IoReceiptOutline}
           iconBg="bg-blue-50"
@@ -878,7 +843,7 @@ const Expenses = () => {
         />
         <MetricCard
           title="Pending Adjustments"
-          amount={`${pendingAdjCount} Request`}
+          amount={`${pendingAdjCount} ${pendingAdjCount === 1 ? 'Request' : 'Requests'}`}
           subtitle="Awaiting Manager Approval"
           icon={IoWarningOutline}
           iconBg="bg-amber-50"
@@ -905,7 +870,7 @@ const Expenses = () => {
                 <CustomSelect
                   value={branchFilter}
                   onChange={setBranchFilter}
-                  options={['All', 'Al Naaz Kayamkulam', 'Kochi — Main Mandi', 'Kozhikode Branch', 'Trivandrum Branch']}
+                  options={branchFilterOptions}
                 />
               </div>
 
@@ -914,7 +879,7 @@ const Expenses = () => {
                 <CustomSelect
                   value={categoryFilter}
                   onChange={setCategoryFilter}
-                  options={['All', 'Ice & Packaging', 'Transport & Logistics', 'Utilities', 'Maintenance', 'Staff Welfare']}
+                  options={categoryFilterOptions}
                 />
               </div>
 
@@ -923,7 +888,7 @@ const Expenses = () => {
                 <CustomSelect
                   value={accountFilter}
                   onChange={setAccountFilter}
-                  options={['All', 'Petty Cash', 'Main Cash Drawer', 'HDFC Current A/C']}
+                  options={accountFilterOptions}
                 />
               </div>
 
@@ -1124,7 +1089,7 @@ const Expenses = () => {
                 <CustomSelect
                   value={adjExpenseFilter}
                   onChange={setAdjExpenseFilter}
-                  options={['All', 'EXPENSE-1', 'EXPENSE-2', 'EXPENSE-3', 'EXPENSE-4']}
+                  options={adjExpenseFilterOptions}
                 />
               </div>
             </div>
@@ -1305,30 +1270,17 @@ const Expenses = () => {
       {showAddModal && (() => {
         const branchOptions = [
           { label: 'Select Branch', value: '' },
-          ...(branchesList.length > 0
-            ? branchesList.map((b) => ({ label: b.name, value: b.id }))
-            : [{ label: 'Al Naaz Kayamkulam', value: 1 }])
+          ...branchesList.map((b) => ({ label: b.name, value: b.id }))
         ];
 
         const categoryOptions = [
           { label: 'Select Category', value: '' },
-          ...(categoriesList.length > 0
-            ? categoriesList.map((c) => ({ label: c.name, value: c.id }))
-            : [
-                { label: 'purchase', value: 6 },
-                { label: 'others', value: 3 },
-                { label: 'utilities', value: 1 }
-              ])
+          ...categoriesList.map((c) => ({ label: c.name, value: c.id }))
         ];
 
         const accountOptions = [
           { label: 'Select Payment Account', value: '' },
-          ...(accountsList.length > 0
-            ? accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
-            : [
-                { label: 'Petty Cash', value: 1 },
-                { label: 'Bank', value: 6 }
-              ])
+          ...accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
         ];
 
         return (
@@ -1406,7 +1358,7 @@ const Expenses = () => {
                       <span>
                         {newExpense.expense_date
                           ? newExpense.expense_date.split('-').reverse().join('/')
-                          : '02/10/2026'}
+                          : 'Select date'}
                       </span>
                       <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
                     </button>
@@ -1469,30 +1421,17 @@ const Expenses = () => {
       {editingExpense && (() => {
         const branchOptions = [
           { label: 'Select Branch', value: '' },
-          ...(branchesList.length > 0
-            ? branchesList.map((b) => ({ label: b.name, value: b.id }))
-            : [{ label: 'Al Naaz Kayamkulam', value: 1 }])
+          ...branchesList.map((b) => ({ label: b.name, value: b.id }))
         ];
 
         const categoryOptions = [
           { label: 'Select Category', value: '' },
-          ...(categoriesList.length > 0
-            ? categoriesList.map((c) => ({ label: c.name, value: c.id }))
-            : [
-                { label: 'purchase', value: 6 },
-                { label: 'others', value: 3 },
-                { label: 'utilities', value: 1 }
-              ])
+          ...categoriesList.map((c) => ({ label: c.name, value: c.id }))
         ];
 
         const accountOptions = [
           { label: 'Select Payment Account', value: '' },
-          ...(accountsList.length > 0
-            ? accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
-            : [
-                { label: 'Petty Cash', value: 1 },
-                { label: 'Bank', value: 6 }
-              ])
+          ...accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
         ];
 
         return (
@@ -1570,7 +1509,7 @@ const Expenses = () => {
                       <span>
                         {editingExpense.expense_date
                           ? editingExpense.expense_date.split('-').reverse().join('/')
-                          : '02/10/2026'}
+                          : 'Select date'}
                       </span>
                       <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
                     </button>
@@ -1736,23 +1675,12 @@ const Expenses = () => {
 
         const categoryOptions = [
           { label: 'Select Category', value: '' },
-          ...(categoriesList.length > 0
-            ? categoriesList.map((c) => ({ label: c.name, value: c.id }))
-            : [
-                { label: 'purchase', value: 6 },
-                { label: 'others', value: 3 },
-                { label: 'utilities', value: 1 }
-              ])
+          ...categoriesList.map((c) => ({ label: c.name, value: c.id }))
         ];
 
         const accountOptions = [
           { label: 'Select Payment Account', value: '' },
-          ...(accountsList.length > 0
-            ? accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
-            : [
-                { label: 'Petty Cash', value: 1 },
-                { label: 'Bank', value: 6 }
-              ])
+          ...accountsList.map((a) => ({ label: `${a.name} (${a.account_type || a.type || 'ACCOUNT'})`, value: a.id }))
         ];
 
         return (
@@ -1846,7 +1774,7 @@ const Expenses = () => {
                       <span>
                         {newAdjustment.new_expense_date
                           ? newAdjustment.new_expense_date.split('-').reverse().join('/')
-                          : '02/10/2026'}
+                          : 'Select date'}
                       </span>
                       <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
                     </button>

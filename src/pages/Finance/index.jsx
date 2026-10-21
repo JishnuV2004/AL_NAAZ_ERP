@@ -4,7 +4,6 @@ import Overview from './Overview';
 import Expenses from './Expenses';
 import Categories from './Categories';
 import PettyCash from './PettyCash';
-import Reports from './Reports';
 import ActivityLog from './ActivityLog';
 import { useFinanceStore } from '../../store/financeStore';
 
@@ -19,7 +18,6 @@ const FinanceLayout = () => {
     { name: 'All expenses', path: '/finance/expenses' },
     { name: 'Categories', path: '/finance/categories' },
     { name: 'Petty cash', path: '/finance/petty-cash' },
-    { name: 'Reports', path: '/finance/reports' },
     { name: 'Activity & audit', path: '/finance/activity' },
   ];
 
@@ -62,7 +60,6 @@ const FinanceLayout = () => {
           <Route path="expenses" element={<Expenses />} />
           <Route path="categories" element={<Categories />} />
           <Route path="petty-cash" element={<PettyCash />} />
-          <Route path="reports" element={<Reports />} />
           <Route path="activity" element={<ActivityLog />} />
         </Routes>
       </div>

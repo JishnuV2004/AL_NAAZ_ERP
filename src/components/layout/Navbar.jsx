@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { Menu, ChevronDown, Building2, Clock, Calendar } from 'lucide-react';
+import { Menu, Clock, Calendar } from 'lucide-react';
+import NotificationBell from '../notifications/NotificationBell';
 
 const Navbar = () => {
   const location = useLocation();
@@ -15,19 +16,29 @@ const Navbar = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const formattedDate = currentTime.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
+  const dayName = currentTime.toLocaleDateString('en-US', { weekday: 'short' });
+  const dateStr = currentTime.toLocaleDateString('en-US', {
     day: 'numeric',
+    month: 'short',
     year: 'numeric'
   });
 
-  const formattedTime = currentTime.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
+  const hours = currentTime.getHours();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  const pad = (n) => String(n).padStart(2, '0');
+  const timeStr = `${pad(hours12)}:${pad(currentTime.getMinutes())}:${pad(currentTime.getSeconds())}`;
+
+  const displayName = 
+    (user?.name && user.name.trim()) ||
+    (user?.username && user.username.trim()) ||
+    (user?.first_name && user.first_name.trim()) ||
+    (user?.email && user.email.split('@')[0]) ||
+    'User';
+
+  const displayRole = user?.role || user?.user_type || '';
+
+  const avatarInitial = displayName.charAt(0).toUpperCase() || 'U';
 
   return (
     <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
@@ -39,33 +50,50 @@ const Navbar = () => {
 
       <div className="flex items-center gap-4">
         {/* Live Date & Time Clock Widget */}
-        <div className="hidden sm:flex items-center gap-2.5 px-3.5 py-2 bg-gray-50/90 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 shadow-2xs">
-          <div className="flex items-center gap-1.5 text-gray-600">
-            <Calendar size={14} className="text-blue-600 shrink-0" />
-            <span>{formattedDate}</span>
+        <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 bg-slate-50/90 hover:bg-slate-100/80 transition-colors border border-slate-200/90 rounded-2xl shadow-2xs">
+          {/* Date section */}
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-blue-50 border border-blue-100/80 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
+              <Calendar size={13} className="text-blue-600" />
+            </div>
+            <div className="flex flex-col text-left leading-none">
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-0.5">{dayName}</span>
+              <span className="text-xs font-bold text-slate-800 tracking-tight">{dateStr}</span>
+            </div>
           </div>
-          <span className="text-gray-300 font-normal">|</span>
-          <div className="flex items-center gap-1.5">
-            <Clock size={14} className="text-blue-600 shrink-0" />
-            <span className="font-mono text-gray-900 font-bold tracking-tight">{formattedTime}</span>
+
+          {/* Divider */}
+          <div className="h-5 w-px bg-slate-200/90"></div>
+
+          {/* Time section */}
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-emerald-50 border border-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0 shadow-2xs">
+              <Clock size={13} className="text-emerald-600" />
+            </div>
+            <div className="flex flex-col text-left leading-none">
+              <div className="flex items-center gap-1 mb-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-widest">LIVE</span>
+              </div>
+              <div className="flex items-baseline gap-1 font-mono">
+                <span className="text-xs font-black text-slate-900 tracking-tight">{timeStr}</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase">{ampm}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Branch Selector */}
-        <button className="hidden sm:flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-          <Building2 size={16} className="text-gray-500" />
-          <span className="text-sm font-medium text-gray-700">Main Branch</span>
-          <ChevronDown size={14} className="text-gray-400" />
-        </button>
+        {/* Global Notification Bell & Dropdown */}
+        <NotificationBell />
 
         {/* User Profile */}
         <div className="flex items-center gap-3 ml-2 border-l border-gray-200 pl-4">
           <div className="flex flex-col text-right hidden md:block">
-            <span className="text-sm font-bold text-gray-900 block leading-tight">{user?.name || 'Abdul Rahman'}</span>
-            <span className="text-xs text-gray-500">{user?.role || 'Super Admin'}</span>
+            <span className="text-sm font-bold text-gray-900 block leading-tight">{displayName}</span>
+            {displayRole && <span className="text-xs text-gray-500">{displayRole}</span>}
           </div>
-          <div className="h-10 w-10 rounded-full bg-gray-200 border-2 border-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center font-bold text-gray-500">
-            {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
+          <div className="h-10 w-10 rounded-full bg-blue-50 border-2 border-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center font-bold text-blue-600">
+            {avatarInitial}
           </div>
         </div>
       </div>

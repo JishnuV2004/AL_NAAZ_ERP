@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   IoPeopleOutline, 
   IoCheckmarkCircleOutline, 
@@ -54,7 +54,24 @@ const formatDisplayDate = (dateStr) => {
 
 const Salary = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('Salary List');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'generate' || tabParam === 'Generate Salary') {
+      return 'Generate Salary';
+    }
+    return 'Salary List';
+  });
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'generate' || tabParam === 'Generate Salary') {
+      setActiveTab('Generate Salary');
+    } else if (tabParam === 'list' || tabParam === 'Salary List') {
+      setActiveTab('Salary List');
+    }
+  }, [searchParams]);
+
   const [salaries, setSalaries] = useState([]);
   const [employeeList, setEmployeeList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -526,12 +543,21 @@ const Salary = () => {
         
         {/* 2. Tab Navigation */}
         <div className="flex px-4 border-b border-gray-100 bg-gray-50/50 overflow-x-auto">
-          {['Salary List', 'Generate Salary', 'Dashboard'].map((tab) => (
+          {['Salary List', 'Generate Salary'].map((tab) => (
             <button
               key={tab}
               onClick={() => {
                 setActiveTab(tab);
                 setCurrentPage(1);
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  if (tab === 'Generate Salary') {
+                    next.set('tab', 'generate');
+                  } else {
+                    next.delete('tab');
+                  }
+                  return next;
+                }, { replace: true });
               }}
               className={`whitespace-nowrap px-6 py-4 text-sm font-semibold transition-colors relative cursor-pointer ${
                 activeTab === tab 
@@ -734,7 +760,7 @@ const Salary = () => {
                 {!isGenerateMode && <th className="p-3.5 text-right align-middle">Net Salary</th>}
                 <th className="p-3.5 text-center align-middle">Status</th>
                 {!isGenerateMode && <th className="p-3.5 text-center align-middle">Payment Date</th>}
-                <th className="p-3.5 text-center align-middle">Actions</th>
+                {isGenerateMode && <th className="p-3.5 text-center align-middle">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white text-sm">
@@ -761,12 +787,12 @@ const Salary = () => {
                     {!isGenerateMode && <td className="p-3.5 text-right"><div className="h-4 bg-gray-200 rounded w-20 ml-auto"></div></td>}
                     <td className="p-3.5 text-center"><div className="h-5 bg-gray-200 rounded w-16 mx-auto"></div></td>
                     {!isGenerateMode && <td className="p-3.5 text-center"><div className="h-4 bg-gray-200 rounded w-20 mx-auto"></div></td>}
-                    <td className="p-3.5 text-center"><div className="h-6 bg-gray-200 rounded w-16 mx-auto"></div></td>
+                    {isGenerateMode && <td className="p-3.5 text-center"><div className="h-6 bg-gray-200 rounded w-16 mx-auto"></div></td>}
                   </tr>
                 ))
               ) : error && !isGenerateMode ? (
                 <tr>
-                  <td colSpan={13} className="p-8 text-center text-gray-500">
+                  <td colSpan={isGenerateMode ? 6 : 12} className="p-8 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <IoAlertCircleOutline className="text-red-500" size={36} />
                       <p className="text-gray-800 font-semibold">{error}</p>
@@ -833,7 +859,10 @@ const Salary = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => navigate(`/payroll/employee-salary-history?empId=${empCode}`)}
+                                onClick={() => {
+                                  const existingSalary = salaries.find(s => String(s.employee) === String(emp.id) || String(s.employee_id) === String(emp.id));
+                                  navigate(`/payroll/employee-salary-history?empId=${emp.id || empCode}${existingSalary ? `&salaryId=${existingSalary.id}` : ''}&from=generate`);
+                                }}
                                 className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100 cursor-pointer"
                                 title="View Details"
                               >
@@ -863,10 +892,14 @@ const Salary = () => {
                           className="hover:bg-gray-50/80 transition-colors"
                         >
                           <td className="p-3.5 text-left align-middle min-w-[240px]">
-                            <div className="flex items-center gap-3">
+                            <div 
+                              onClick={() => navigate(`/payroll/employee-salary-history?empId=${row.employee || row.id}&salaryId=${row.id}`)}
+                              className="flex items-center gap-3 cursor-pointer group"
+                              title="View Employee Salary History & Payslip"
+                            >
                               <img src={avatarUrl} alt="Avatar" className="w-9 h-9 rounded-full object-cover shadow-sm shrink-0" />
                               <div className="min-w-0">
-                                <p className="font-semibold text-gray-900 leading-snug whitespace-nowrap">{row.employee_name || 'N/A'}</p>
+                                <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors leading-snug whitespace-nowrap">{row.employee_name || 'N/A'}</p>
                                 <p className="text-xs text-gray-500 font-mono whitespace-nowrap">{empCode}</p>
                               </div>
                             </div>
@@ -913,18 +946,6 @@ const Salary = () => {
                             )}
                           </td>
                           <td className="p-3.5 text-center align-middle text-gray-500 whitespace-nowrap">{row.payment_date ? formatDisplayDate(row.payment_date) : '-'}</td>
-                          <td className="p-3.5 text-center align-middle whitespace-nowrap">
-                            <div className="flex justify-center items-center">
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/payroll/employee-salary-history?empId=${empCode}`)}
-                                className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100 cursor-pointer"
-                                title="View Per-Employee Salary History"
-                              >
-                                <IoEyeOutline size={16} />
-                              </button>
-                            </div>
-                          </td>
                         </tr>
                       );
                     })
@@ -944,8 +965,8 @@ const Salary = () => {
                       {!isGenerateMode && <td className="p-3.5">&nbsp;</td>}
                       {!isGenerateMode && <td className="p-3.5">&nbsp;</td>}
                       <td className="p-3.5">&nbsp;</td>
-                      <td className="p-3.5">&nbsp;</td>
-                      <td className="p-3.5">&nbsp;</td>
+                      {!isGenerateMode && <td className="p-3.5">&nbsp;</td>}
+                      {isGenerateMode && <td className="p-3.5">&nbsp;</td>}
                     </tr>
                   ))}
                 </>
@@ -959,27 +980,42 @@ const Salary = () => {
           <span className="text-sm text-gray-500">
             Showing {totalItems === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + pageSize, totalItems)} of {totalItems} entries
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button 
               disabled={validCurrentPage <= 1}
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Previous Page"
             >
-              <IoChevronBackOutline size={14} />
+              <IoChevronBackOutline size={16} />
             </button>
-            <span className="px-3 py-1 bg-blue-600 text-white rounded-lg font-medium text-xs">
-              Page {validCurrentPage} of {totalPages}
-            </span>
+
+            {Array.from({ length: totalPages }).map((_, idx) => {
+              const pageNum = idx + 1;
+              const isActive = pageNum === validCurrentPage;
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
             <button 
               disabled={validCurrentPage >= totalPages}
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Next Page"
             >
-              <IoChevronForwardOutline size={14} />
+              <IoChevronForwardOutline size={16} />
             </button>
-            <select className="ml-2 border border-gray-200 rounded-lg text-xs px-2 py-1.5 focus:outline-none focus:border-blue-500 text-gray-600 bg-white">
-              <option>10 / page</option>
-            </select>
           </div>
         </div>
       </div>

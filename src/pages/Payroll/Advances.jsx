@@ -589,25 +589,28 @@ const Advances = () => {
           <span className="text-xs text-slate-500 font-medium">
             Showing {startItem} to {endItem} of {totalCount} advance entries
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               disabled={currentPage <= 1 || loading}
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Previous Page"
             >
-              <IoChevronBackOutline size={14} />
+              <IoChevronBackOutline size={16} />
             </button>
 
             {Array.from({ length: totalPages }).map((_, idx) => {
               const pageNum = idx + 1;
+              const isActive = currentPage === pageNum;
               return (
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${currentPage === pageNum
-                    ? 'bg-blue-600 text-white shadow-xs font-bold'
-                    : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                  className={`w-9 h-9 flex items-center justify-center rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
                 >
                   {pageNum}
                 </button>
@@ -617,9 +620,10 @@ const Advances = () => {
             <button
               disabled={currentPage >= totalPages || loading}
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Next Page"
             >
-              <IoChevronForwardOutline size={14} />
+              <IoChevronForwardOutline size={16} />
             </button>
           </div>
         </div>

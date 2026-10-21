@@ -442,14 +442,6 @@ const Categories = () => {
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => navigate('/inventory/products')}
-                            className="px-2.5 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                            title="View Products in Catalog"
-                          >
-                            <IoCubeOutline size={14} /> Products
-                          </button>
-                          <button
-                            type="button"
                             onClick={() => handleOpenEdit(cat)}
                             className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                             title="Edit Category"

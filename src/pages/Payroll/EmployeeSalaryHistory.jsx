@@ -2,20 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   IoArrowBackOutline,
-  IoCalendarOutline,
-  IoWalletOutline,
-  IoCheckmarkCircleOutline,
-  IoDocumentTextOutline,
-  IoPersonOutline,
-  IoBusinessOutline,
-  IoCardOutline,
+  IoDownloadOutline,
   IoRefreshOutline,
   IoAlertCircleOutline,
-  IoTimeOutline,
-  IoTrendingUpOutline
+  IoChevronBackOutline,
+  IoChevronForwardOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
-import { getEmployeeSalaryHistory } from '../../api/salary.api';
+import { getEmployeeSalaryHistory, downloadSalaryPayslip, getSalaries } from '../../api/salary.api';
 
 const formatCurrency = (amt) => {
   if (amt === null || amt === undefined || amt === '') return '-';
@@ -58,6 +52,20 @@ const EmployeeSalaryHistory = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [historyRecords, setHistoryRecords] = useState([]);
+  const [targetSalaryId, setTargetSalaryId] = useState(() => searchParams.get('salaryId') || searchParams.get('salary_id') || null);
+  const [downloadingSlip, setDownloadingSlip] = useState(false);
+
+  // Sync salaryId if query param changes
+  useEffect(() => {
+    const sId = searchParams.get('salaryId') || searchParams.get('salary_id');
+    if (sId) {
+      setTargetSalaryId(sId);
+    }
+  }, [searchParams]);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const fetchSalaryHistory = async () => {
     try {
@@ -77,13 +85,38 @@ const EmployeeSalaryHistory = () => {
     }
   };
 
+  const fetchSalaryRecordForPayslip = async () => {
+    try {
+      const urlSalaryId = searchParams.get('salaryId') || searchParams.get('salary_id');
+      if (urlSalaryId) {
+        setTargetSalaryId(urlSalaryId);
+        return;
+      }
+      const res = await getSalaries();
+      const data = Array.isArray(res) ? res : (res?.results || []);
+      if (Array.isArray(data) && data.length > 0) {
+        const matches = data.filter(
+          s => String(s.employee) === String(numericEmpId) || 
+               String(s.employee_id) === String(numericEmpId)
+        );
+        if (matches.length > 0) {
+          matches.sort((a, b) => (b.id || 0) - (a.id || 0));
+          setTargetSalaryId(matches[0].id);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load salaries for payslip download:', err);
+    }
+  };
+
   useEffect(() => {
     fetchSalaryHistory();
+    fetchSalaryRecordForPayslip();
+    setCurrentPage(1);
   }, [numericEmpId]);
 
   // Derived metadata from API history records
   const latestRecord = historyRecords.length > 0 ? historyRecords[historyRecords.length - 1] : null;
-  const initialRecord = historyRecords.length > 0 ? historyRecords[0] : null;
 
   const empName = latestRecord?.employee_name || `Employee #${numericEmpId}`;
   const empCode = `EMP-${String(numericEmpId).padStart(4, '0')}`;
@@ -93,37 +126,128 @@ const EmployeeSalaryHistory = () => {
     ? (latestRecord.monthly_salary || latestRecord.daily_wage || latestRecord.biweekly_salary || 0)
     : 0;
 
-  const initialSalaryAmount = initialRecord
-    ? (initialRecord.monthly_salary || initialRecord.daily_wage || initialRecord.biweekly_salary || 0)
-    : 0;
-
   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(empName)}&background=0D8ABC&color=fff`;
+
+  // Download payslip via API GET /salary/{salary_id}/payslip/
+  const handleExportPayslip = async () => {
+    let sid = targetSalaryId || searchParams.get('salaryId') || searchParams.get('salary_id');
+
+    // If still not determined, query latest salary record for this employee
+    if (!sid) {
+      try {
+        setDownloadingSlip(true);
+        const res = await getSalaries();
+        const data = Array.isArray(res) ? res : (res?.results || []);
+        if (Array.isArray(data) && data.length > 0) {
+          const matches = data.filter(
+            s => String(s.employee) === String(numericEmpId) || 
+                 String(s.employee_id) === String(numericEmpId) ||
+                 (s.employee_name && latestRecord?.employee_name && s.employee_name.toLowerCase() === latestRecord.employee_name.toLowerCase())
+          );
+          if (matches.length > 0) {
+            matches.sort((a, b) => (b.id || 0) - (a.id || 0));
+            sid = matches[0].id;
+            setTargetSalaryId(sid);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to retrieve salaries list:', err);
+      }
+    }
+
+    // Check if revision record has explicit salary_id
+    if (!sid && latestRecord?.salary_id) {
+      sid = latestRecord.salary_id;
+      setTargetSalaryId(sid);
+    }
+
+    // CRITICAL: NEVER send user ID (numericEmpId) as salary ID
+    if (!sid) {
+      setDownloadingSlip(false);
+      toast.error(`No salary record found for employee #${numericEmpId} to download payslip. Please process salary first.`, { id: 'payslip-download' });
+      return;
+    }
+
+    try {
+      setDownloadingSlip(true);
+      toast.loading(`Downloading payslip for salary #${sid}...`, { id: 'payslip-download' });
+      await downloadSalaryPayslip(sid);
+      toast.success('Payslip downloaded successfully!', { id: 'payslip-download' });
+    } catch (err) {
+      console.error('Failed to download payslip:', err);
+      let errorMsg = 'Failed to download payslip.';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          errorMsg = parsed.message || parsed.detail || errorMsg;
+        } catch {
+          // keep fallback
+        }
+      } else if (err.userMessage) {
+        errorMsg = err.userMessage;
+      }
+      toast.error(errorMsg, { id: 'payslip-download' });
+    } finally {
+      setDownloadingSlip(false);
+    }
+  };
+
+  // Pagination calculations
+  const totalRecords = historyRecords.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const paginatedRecords = historyRecords.slice(startIndex, startIndex + pageSize);
+  const emptyRowsCount = loading ? 0 : Math.max(0, pageSize - paginatedRecords.length);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans">
       
-      {/* Navigation Header */}
+      {/* Back Button matching reference image */}
       <div>
-        <div className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
-          <span>Payroll</span> &gt; <span>Salary</span> &gt; <span className="text-slate-700">Employee Salary History</span>
+        <button
+          type="button"
+          onClick={() => {
+            const fromSource = searchParams.get('from') || searchParams.get('tab');
+            if (fromSource === 'generate' || fromSource === 'Generate Salary') {
+              navigate('/payroll/salary?tab=generate');
+            } else {
+              navigate('/payroll/salary');
+            }
+          }}
+          className="inline-flex items-center gap-2 text-slate-700 hover:text-slate-900 text-sm font-bold transition-colors cursor-pointer"
+        >
+          <IoArrowBackOutline size={18} />
+          <span>Back to Salary</span>
+        </button>
+      </div>
+
+      {/* Top Header & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            Employee Salary History
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
+            {loading ? (
+              <span className="inline-block w-64 h-3.5 bg-slate-200 rounded animate-pulse align-middle" />
+            ) : (
+              `Salary revision logs, contract changes, and effective pay rates for ${empName}.`
+            )}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => navigate('/payroll/salary')}
-            className="p-2.5 bg-white text-slate-700 hover:text-blue-600 rounded-xl border border-slate-200 shadow-2xs hover:bg-slate-50 hover:border-blue-200 transition-all flex items-center justify-center shrink-0 cursor-pointer"
-            title="Back to Salary"
+            disabled={downloadingSlip}
+            onClick={handleExportPayslip}
+            className="px-3.5 py-2 bg-white text-slate-700 hover:text-blue-600 rounded-xl border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer disabled:opacity-60"
+            title="Download Payslip"
           >
-            <IoArrowBackOutline size={20} />
+            <IoDownloadOutline size={16} className={downloadingSlip ? 'animate-bounce' : ''} />
+            <span>{downloadingSlip ? 'Downloading...' : 'Export'}</span>
           </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight truncate">
-              Employee Salary History
-            </h1>
-            <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
-              Salary revision logs, contract changes, and effective pay rates for {empName}.
-            </p>
-          </div>
           <button
             type="button"
             onClick={fetchSalaryHistory}
@@ -136,84 +260,52 @@ const EmployeeSalaryHistory = () => {
       </div>
 
       {/* Employee Profile Banner Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-        <div className="flex items-center gap-4">
-          <img
-            src={avatarUrl}
-            alt={empName}
-            className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-100 shadow-sm shrink-0"
-          />
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-extrabold text-slate-900">{empName}</h2>
-              <span className="px-2.5 py-0.5 rounded text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-100">
-                {empCode}
-              </span>
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 animate-pulse">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-slate-200 shrink-0" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-36 bg-slate-200 rounded-md" />
+                <div className="h-5 w-20 bg-slate-100 rounded-md" />
+              </div>
+              <div className="h-4 w-56 bg-slate-200 rounded-md" />
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-1">
-              Employee ID: <span className="font-mono font-bold text-slate-700">{numericEmpId}</span> • Salary Type: <span className="font-semibold text-slate-700">{salaryType}</span>
-            </p>
+          </div>
+          <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-100 shrink-0 w-full md:w-56 text-left md:text-right space-y-2">
+            <div className="h-3 w-32 bg-slate-200 rounded md:ml-auto" />
+            <div className="h-7 w-36 bg-slate-200 rounded md:ml-auto" />
+            <div className="h-3 w-20 bg-slate-200 rounded md:ml-auto" />
           </div>
         </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+          <div className="flex items-center gap-4">
+            <img
+              src={avatarUrl}
+              alt={empName}
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-100 shadow-sm shrink-0"
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-extrabold text-slate-900">{empName}</h2>
+                <span className="px-2.5 py-0.5 rounded text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-100">
+                  {empCode}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                Employee ID: <span className="font-mono font-bold text-slate-700">{numericEmpId}</span> • Salary Type: <span className="font-semibold text-slate-700">{salaryType}</span>
+              </p>
+            </div>
+          </div>
 
-        <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-100/80 shrink-0 w-full md:w-auto text-left md:text-right">
-          <p className="text-[11px] font-semibold text-slate-500 mb-0.5">Current Effective Salary</p>
-          <p className="text-2xl font-black text-slate-900 font-mono tracking-tight">{formatCurrency(currentSalaryAmount)}</p>
-          <p className="text-[10px] text-blue-600 font-bold mt-0.5">Active Pay Rate</p>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Total Revisions */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <IoDocumentTextOutline size={22} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-500 mb-0.5">Salary Revisions</p>
-            <h3 className="text-xl font-extrabold text-slate-900 font-mono tracking-tight">{loading ? '...' : historyRecords.length}</h3>
-            <p className="text-[11px] text-blue-600 font-semibold mt-0.5">Historical Changes</p>
+          <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-100/80 shrink-0 w-full md:w-auto text-left md:text-right">
+            <p className="text-[11px] font-semibold text-slate-500 mb-0.5">Current Effective Salary</p>
+            <p className="text-2xl font-black text-slate-900 font-mono tracking-tight">{formatCurrency(currentSalaryAmount)}</p>
+            <p className="text-[10px] text-blue-600 font-bold mt-0.5">Active Pay Rate</p>
           </div>
         </div>
-
-        {/* Current Salary */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <IoWalletOutline size={22} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-500 mb-0.5">Current Monthly Rate</p>
-            <h3 className="text-xl font-extrabold text-slate-900 font-mono tracking-tight">{loading ? '...' : formatCurrency(currentSalaryAmount)}</h3>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Latest Revision</p>
-          </div>
-        </div>
-
-        {/* Initial Salary */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-            <IoCalendarOutline size={22} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-500 mb-0.5">Initial Base Salary</p>
-            <h3 className="text-xl font-extrabold text-slate-900 font-mono tracking-tight">{loading ? '...' : formatCurrency(initialSalaryAmount)}</h3>
-            <p className="text-[11px] text-purple-600 font-semibold mt-0.5">First Contract Rate</p>
-          </div>
-        </div>
-
-        {/* Latest Hike / Reason */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
-            <IoTrendingUpOutline size={22} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-500 mb-0.5">Latest Revision Reason</p>
-            <h3 className="text-sm font-extrabold text-slate-900 truncate">{loading ? '...' : (latestRecord?.reason || 'Initial salary')}</h3>
-            <p className="text-[11px] text-teal-600 font-semibold mt-0.5">Effective {formatDate(latestRecord?.effective_from)}</p>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Salary Revision History Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
@@ -222,8 +314,8 @@ const EmployeeSalaryHistory = () => {
             <h3 className="text-sm font-bold text-slate-900">Salary Revision & Contract History</h3>
             <p className="text-xs text-slate-500">Recorded salary adjustments, hike logs, and effective periods</p>
           </div>
-          <span className="text-xs font-semibold text-slate-500 bg-white px-3 py-1 rounded-lg border border-slate-200">
-            {historyRecords.length} Revision(s)
+          <span className="text-xs font-semibold text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+            {totalRecords} Revision(s)
           </span>
         </div>
 
@@ -244,8 +336,8 @@ const EmployeeSalaryHistory = () => {
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white text-xs">
               {loading ? (
-                Array.from({ length: 4 }).map((_, idx) => (
-                  <tr key={`skeleton-${idx}`} className="animate-pulse">
+                Array.from({ length: 10 }).map((_, idx) => (
+                  <tr key={`skeleton-${idx}`} className="animate-pulse h-[49px]">
                     <td className="p-3.5 text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
                     <td className="p-3.5"><div className="h-4 bg-gray-200 rounded w-20"></div></td>
                     <td className="p-3.5 text-right"><div className="h-4 bg-gray-200 rounded w-20 ml-auto"></div></td>
@@ -272,57 +364,118 @@ const EmployeeSalaryHistory = () => {
                     </div>
                   </td>
                 </tr>
-              ) : historyRecords.length === 0 ? (
+              ) : totalRecords === 0 ? (
                 <tr>
                   <td colSpan={9} className="p-8 text-center text-slate-500">
                     No salary history revisions recorded for this employee.
                   </td>
                 </tr>
               ) : (
-                historyRecords.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5 text-center align-middle font-mono font-bold text-slate-500">
-                      #{row.id}
-                    </td>
-                    <td className="p-3.5 align-middle">
-                      <span className={`inline-flex px-2 py-0.5 text-[10px] font-extrabold rounded uppercase tracking-wider ${
-                        row.salary_type === 'MONTHLY' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'
-                      }`}>
-                        {row.salary_type || 'MONTHLY'}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-right align-middle font-mono font-bold text-slate-900 whitespace-nowrap">
-                      {formatCurrency(row.monthly_salary)}
-                    </td>
-                    <td className="p-3.5 text-right align-middle font-mono text-slate-600 whitespace-nowrap">
-                      {formatCurrency(row.daily_wage)}
-                    </td>
-                    <td className="p-3.5 align-middle font-medium text-slate-800 whitespace-nowrap">
-                      {formatDate(row.effective_from)}
-                    </td>
-                    <td className="p-3.5 align-middle whitespace-nowrap">
-                      {row.effective_to ? (
-                        <span className="font-medium text-slate-700">{formatDate(row.effective_to)}</span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Active / Present
+                <>
+                  {paginatedRecords.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/80 transition-colors h-[49px]">
+                      <td className="p-3.5 text-center align-middle font-mono font-bold text-slate-500">
+                        #{row.id}
+                      </td>
+                      <td className="p-3.5 align-middle">
+                        <span className={`inline-flex px-2 py-0.5 text-[10px] font-extrabold rounded uppercase tracking-wider ${
+                          row.salary_type === 'MONTHLY' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'
+                        }`}>
+                          {row.salary_type || 'MONTHLY'}
                         </span>
-                      )}
-                    </td>
-                    <td className="p-3.5 align-middle font-medium text-slate-800">
-                      {row.reason || '-'}
-                    </td>
-                    <td className="p-3.5 align-middle font-medium text-slate-600 whitespace-nowrap">
-                      {row.created_by_name || `User #${row.created_by || 1}`}
-                    </td>
-                    <td className="p-3.5 align-middle font-mono text-slate-500 text-[11px] whitespace-nowrap">
-                      {formatDateTime(row.created_at)}
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="p-3.5 text-right align-middle font-mono font-bold text-slate-900 whitespace-nowrap">
+                        {formatCurrency(row.monthly_salary)}
+                      </td>
+                      <td className="p-3.5 text-right align-middle font-mono text-slate-600 whitespace-nowrap">
+                        {formatCurrency(row.daily_wage)}
+                      </td>
+                      <td className="p-3.5 align-middle font-medium text-slate-800 whitespace-nowrap">
+                        {formatDate(row.effective_from)}
+                      </td>
+                      <td className="p-3.5 align-middle whitespace-nowrap">
+                        {row.effective_to ? (
+                          <span className="font-medium text-slate-700">{formatDate(row.effective_to)}</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Active / Present
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3.5 align-middle font-medium text-slate-800">
+                        {row.reason || '-'}
+                      </td>
+                      <td className="p-3.5 align-middle font-medium text-slate-600 whitespace-nowrap">
+                        {row.created_by_name || `User #${row.created_by || 1}`}
+                      </td>
+                      <td className="p-3.5 align-middle font-mono text-slate-500 text-[11px] whitespace-nowrap">
+                        {formatDateTime(row.created_at)}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Empty rows placeholders to preserve 10-row size */}
+                  {emptyRowsCount > 0 && Array.from({ length: emptyRowsCount }).map((_, idx) => (
+                    <tr key={`empty-${idx}`} className="h-[49px]">
+                      <td className="p-3.5">&nbsp;</td>
+                      <td className="p-3.5">&nbsp;</td>
+                      <td className="p-3.5">&nbsp;</td>
+                      <td className="p-3.5">&nbsp;</td>
+                      <td className="p-3.5">&nbsp;</td>
+                      <td className="p-3.5">&nbsp;</td>
+                      <td className="p-3.5">&nbsp;</td>
+                      <td className="p-3.5">&nbsp;</td>
+                      <td className="p-3.5">&nbsp;</td>
+                    </tr>
+                  ))}
+                </>
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between p-4 border-t border-slate-100 bg-white">
+          <span className="text-xs text-slate-500 font-medium">
+            Showing {totalRecords === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + pageSize, totalRecords)} of {totalRecords} entries
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button 
+              disabled={validCurrentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Previous Page"
+            >
+              <IoChevronBackOutline size={16} />
+            </button>
+
+            {Array.from({ length: totalPages }).map((_, idx) => {
+              const pageNum = idx + 1;
+              const isActive = pageNum === validCurrentPage;
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
+            <button 
+              disabled={validCurrentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Next Page"
+            >
+              <IoChevronForwardOutline size={16} />
+            </button>
+          </div>
         </div>
       </div>
 

@@ -4,9 +4,6 @@ import {
   IoSearchOutline,
   IoFilterOutline,
   IoEyeOutline,
-  IoPencilOutline,
-  IoPlayOutline,
-  IoTrashOutline,
   IoCloseOutline,
   IoChevronDownOutline,
   IoCheckmarkCircleOutline,
@@ -110,73 +107,6 @@ const getTodayDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
-const INITIAL_SALES = [
-  {
-    id: 5,
-    saleCode: '#5',
-    businessDate: getTodayDateString(),
-    formattedDate: formatDisplayDate(getTodayDateString()),
-    branch: 'Kochi — Main Mandi',
-    totalGross: 42500,
-    paymentMethods: ['Cash', 'UPI', 'Card', 'Food Delivery'],
-    amounts: { cash: 18000, upi: 12000, card: 7500, foodDelivery: 5000 },
-    status: 'DRAFT',
-    createdBy: 'Sana Iqbal',
-    createdAt: `${getTodayDateString()} 12:00`
-  },
-  {
-    id: 4,
-    saleCode: '#4',
-    businessDate: '2026-09-20',
-    formattedDate: '20 Sep 2026',
-    branch: 'Kochi — Main Mandi',
-    totalGross: 35700,
-    paymentMethods: ['Cash', 'UPI', 'Card', 'Food Delivery'],
-    amounts: { cash: 12000, upi: 10000, card: 8000, foodDelivery: 5700 },
-    status: 'DRAFT',
-    createdBy: 'Sana Iqbal',
-    createdAt: '2026-09-20 21:40'
-  },
-  {
-    id: 3,
-    saleCode: '#3',
-    businessDate: '2026-09-19',
-    formattedDate: '19 Sep 2026',
-    branch: 'Kochi — Main Mandi',
-    totalGross: 37000,
-    paymentMethods: ['Cash', 'UPI', 'Food Delivery'],
-    amounts: { cash: 15000, upi: 14000, card: 0, foodDelivery: 8000 },
-    status: 'POSTED',
-    createdBy: 'Sana Iqbal',
-    createdAt: '2026-09-19 22:05'
-  },
-  {
-    id: 2,
-    saleCode: '#2',
-    businessDate: '2026-09-18',
-    formattedDate: '18 Sep 2026',
-    branch: 'Kochi — Main Mandi',
-    totalGross: 27000,
-    paymentMethods: ['Cash', 'Card'],
-    amounts: { cash: 18000, upi: 0, card: 9000, foodDelivery: 0 },
-    status: 'POSTED',
-    createdBy: 'Rahim K.',
-    createdAt: '2026-09-18 21:55'
-  },
-  {
-    id: 1,
-    saleCode: '#1',
-    businessDate: '2026-09-17',
-    formattedDate: '17 Sep 2026',
-    branch: 'Kochi — Main Mandi',
-    totalGross: 31400,
-    paymentMethods: ['Cash', 'UPI'],
-    amounts: { cash: 16400, upi: 15000, card: 0, foodDelivery: 0 },
-    status: 'POSTED',
-    createdBy: 'Sana Iqbal',
-    createdAt: '2026-09-17 22:10'
-  }
-];
 
 const mapApiItemToRecord = (item) => {
   const formattedDateStr = item.business_date
@@ -231,7 +161,7 @@ const mapApiItemToRecord = (item) => {
 
 const DailySales = () => {
   const [salesList, setSalesList] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -272,9 +202,9 @@ const DailySales = () => {
         setSalesList([]);
       }
     } catch (err) {
-      console.warn('Failed to fetch daily sales from API, using fallback data:', err);
-      setSalesList(INITIAL_SALES);
-      setTotalCount(INITIAL_SALES.length);
+      console.error('Failed to fetch daily sales from API:', err);
+      setSalesList([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -343,13 +273,13 @@ const DailySales = () => {
   });
 
   const [paymentRows, setPaymentRows] = useState([
-    { id: 1, method: 'CASH', amount: '', deliveryPartner: '—' }
+    { id: 1, method: 'CASH', amount: '' }
   ]);
 
   const handleAddPaymentRow = () => {
     setPaymentRows((prev) => [
       ...prev,
-      { id: Date.now(), method: 'CASH', amount: '', deliveryPartner: '—' }
+      { id: Date.now(), method: 'CASH', amount: '' }
     ]);
   };
 
@@ -368,7 +298,7 @@ const DailySales = () => {
             if (value === 'FOOD_DELIVERY') {
               updated.deliveryPartner = deliveryPartnersList.length > 0 ? String(deliveryPartnersList[0].id) : '';
             } else {
-              updated.deliveryPartner = '—';
+              delete updated.deliveryPartner;
             }
           }
           return updated;
@@ -379,7 +309,7 @@ const DailySales = () => {
   };
 
   const handleClearFilters = () => {
-    setSelectedBranch('');
+    setSelectedBranch('All');
     setSelectedDate('');
     setSelectedStatus('All');
   };
@@ -487,29 +417,41 @@ const DailySales = () => {
     let cash = 0, upi = 0, card = 0, foodDelivery = 0;
     const paymentsPayload = [];
 
-    paymentRows.forEach((r) => {
-      const amt = parseFloat(r.amount) || 0;
-      if (amt > 0) {
-        const pObj = {
-          payment_method: r.method,
-          amount: String(r.amount)
-        };
-        if (r.method === 'FOOD_DELIVERY') {
-          const selectedDp = deliveryPartnersList.find(dp => String(dp.id) === String(r.deliveryPartner));
-          pObj.delivery_partner = r.deliveryPartner ? parseInt(r.deliveryPartner, 10) : 1;
-          pObj.platform = selectedDp ? (selectedDp.name || selectedDp.platform || '') : '';
-        }
-        paymentsPayload.push(pObj);
+    for (let i = 0; i < paymentRows.length; i++) {
+      const r = paymentRows[i];
+      const amt = parseFloat(r.amount);
+      if (isNaN(amt) || amt <= 0) {
+        continue;
       }
+
+      // Format amount cleanly to 2 decimal places (e.g. "644.00")
+      const pObj = {
+        payment_method: r.method,
+        amount: amt.toFixed(2)
+      };
+
+      // ONLY include delivery_partner if payment method is FOOD_DELIVERY
+      if (r.method === 'FOOD_DELIVERY') {
+        const dpId = parseInt(r.deliveryPartner, 10);
+        if (!dpId || isNaN(dpId) || dpId <= 0) {
+          toast.error('Please select a Delivery Partner for Food Delivery payment');
+          return;
+        }
+        pObj.delivery_partner = dpId;
+      }
+      // If method is CASH, UPI, or CARD, delivery_partner is NEVER sent
+
+      paymentsPayload.push(pObj);
+
       if (r.method === 'CASH') cash += amt;
       if (r.method === 'UPI') upi += amt;
       if (r.method === 'CARD') card += amt;
       if (r.method === 'FOOD_DELIVERY') foodDelivery += amt;
-    });
+    }
 
     const totalGross = cash + upi + card + foodDelivery;
 
-    if (totalGross <= 0) {
+    if (totalGross <= 0 || paymentsPayload.length === 0) {
       toast.error('Please enter valid sale amounts (greater than 0)');
       return;
     }
@@ -518,12 +460,7 @@ const DailySales = () => {
       branch: parseInt(formData.branch, 10),
       business_date: formData.businessDate || getTodayDateString(),
       status: formData.status || 'DRAFT',
-      payments: paymentsPayload.length > 0 ? paymentsPayload : [
-        {
-          payment_method: 'CASH',
-          amount: String(totalGross)
-        }
-      ]
+      payments: paymentsPayload
     };
 
     setSubmitting(true);
@@ -540,8 +477,30 @@ const DailySales = () => {
       await loadDailySales(currentPage);
     } catch (err) {
       console.error('Failed to save daily sale:', err);
-      const msg = err?.response?.data?.detail || 'Failed to save daily sale';
-      toast.error(msg);
+      let errorMsg = 'Failed to save daily sale';
+      const data = err?.response?.data;
+      if (data) {
+        if (typeof data === 'string') {
+          errorMsg = data;
+        } else if (data.detail) {
+          errorMsg = data.detail;
+        } else if (data.message) {
+          errorMsg = data.message;
+        } else if (typeof data === 'object') {
+          const fieldErrors = [];
+          for (const [key, val] of Object.entries(data)) {
+            if (Array.isArray(val)) {
+              fieldErrors.push(`${key}: ${val.map((v) => (typeof v === 'object' ? JSON.stringify(v) : v)).join(', ')}`);
+            } else if (typeof val === 'object') {
+              fieldErrors.push(`${key}: ${JSON.stringify(val)}`);
+            } else {
+              fieldErrors.push(`${key}: ${val}`);
+            }
+          }
+          if (fieldErrors.length > 0) errorMsg = fieldErrors.join(' | ');
+        }
+      }
+      toast.error(errorMsg);
     } finally {
       setSubmitting(false);
     }
@@ -587,19 +546,10 @@ const DailySales = () => {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleStartEdit(viewingSale)}
-              className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-            >
-              <IoPencilOutline size={14} />
-              <span>Edit</span>
-            </button>
-
             {viewingSale.status === 'DRAFT' && (
               <button
                 type="button"
-                disabled={postingSale || deletingSale}
+                disabled={postingSale}
                 onClick={async () => {
                   const updatedRecord = await handlePostSale(viewingSale.id);
                   if (updatedRecord) {
@@ -624,33 +574,6 @@ const DailySales = () => {
                 )}
               </button>
             )}
-
-            <button
-              type="button"
-              disabled={postingSale || deletingSale}
-              onClick={async () => {
-                const success = await handleDeleteSale(viewingSale.id);
-                if (success) {
-                  setViewingSale(null);
-                }
-              }}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer min-w-[85px]"
-            >
-              {deletingSale ? (
-                <>
-                  <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>Deleting...</span>
-                </>
-              ) : (
-                <>
-                  <IoTrashOutline size={14} />
-                  <span>Delete</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
 
@@ -696,11 +619,11 @@ const DailySales = () => {
                 </div>
                 <div className="flex items-center justify-between px-5 py-3.5">
                   <span className="text-gray-500 font-medium">Created By</span>
-                  <span className="font-semibold text-gray-800">{viewingSale.createdBy || 'Sana Iqbal'}</span>
+                  <span className="font-semibold text-gray-800">{viewingSale.createdBy || '—'}</span>
                 </div>
                 <div className="flex items-center justify-between px-5 py-3.5">
                   <span className="text-gray-500 font-medium">Created At</span>
-                  <span className="font-medium text-gray-600">{viewingSale.createdAt || '2026-09-20 21:40'}</span>
+                  <span className="font-medium text-gray-600">{viewingSale.createdAt || '—'}</span>
                 </div>
               </div>
             </div>
@@ -731,7 +654,7 @@ const DailySales = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
-                        ₹{(viewingSale.amounts?.cash ?? 18400).toLocaleString('en-IN')}
+                        ₹{(viewingSale.amounts?.cash ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
                     </tr>
@@ -745,7 +668,7 @@ const DailySales = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
-                        ₹{(viewingSale.amounts?.upi ?? 9200).toLocaleString('en-IN')}
+                        ₹{(viewingSale.amounts?.upi ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
                     </tr>
@@ -759,7 +682,7 @@ const DailySales = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
-                        ₹{(viewingSale.amounts?.card ?? 5000).toLocaleString('en-IN')}
+                        ₹{(viewingSale.amounts?.card ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
                     </tr>
@@ -773,10 +696,10 @@ const DailySales = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
-                        ₹{(viewingSale.amounts?.foodDelivery ?? 3100).toLocaleString('en-IN')}
+                        ₹{(viewingSale.amounts?.foodDelivery ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3.5 px-5 font-medium text-gray-700">
-                        {viewingSale.deliveryPartner || 'Swiggy'}
+                        {viewingSale.deliveryPartner || '—'}
                       </td>
                     </tr>
                   </tbody>
@@ -797,25 +720,25 @@ const DailySales = () => {
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-gray-600 text-[11px]">CASH</span>
                   <span className="font-extrabold text-emerald-600 tabular-nums">
-                    + ₹{(viewingSale.amounts?.cash ?? 18400).toLocaleString('en-IN')}
+                    + ₹{(viewingSale.amounts?.cash ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-gray-600 text-[11px]">UPI</span>
                   <span className="font-extrabold text-emerald-600 tabular-nums">
-                    + ₹{(viewingSale.amounts?.upi ?? 9200).toLocaleString('en-IN')}
+                    + ₹{(viewingSale.amounts?.upi ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-gray-600 text-[11px]">CARD RECEIVABLE</span>
                   <span className="font-extrabold text-emerald-600 tabular-nums">
-                    + ₹{(viewingSale.amounts?.card ?? 5000).toLocaleString('en-IN')}
+                    + ₹{(viewingSale.amounts?.card ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-gray-600 text-[11px]">FOOD DELIVERY RECEIVABLE</span>
                   <span className="font-extrabold text-emerald-600 tabular-nums">
-                    + ₹{(viewingSale.amounts?.foodDelivery ?? 3100).toLocaleString('en-IN')}
+                    + ₹{(viewingSale.amounts?.foodDelivery ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -916,19 +839,7 @@ const DailySales = () => {
         </div>
       </div>
 
-      {/* 3. Active Filters Pills */}
-      {selectedBranch && (
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg border border-blue-100">
-            <span>Branch: {selectedBranch}</span>
-            <button onClick={() => setSelectedBranch('')} className="hover:text-blue-900 cursor-pointer">
-              <IoCloseOutline size={14} />
-            </button>
-          </span>
-        </div>
-      )}
-
-      {/* 4. Main Data Table */}
+      {/* 3. Main Data Table */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden min-h-[580px] flex flex-col justify-between w-full">
         <div className="overflow-x-auto min-h-[480px] w-full">
           <table className="w-full text-left border-collapse min-w-[900px]">

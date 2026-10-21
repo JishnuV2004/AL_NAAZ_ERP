@@ -1,48 +1,72 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  PieChart, Pie, Cell,
-  BarChart, Bar
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  PieChart, Pie, Cell
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, DollarSign, Wallet,
-  Users, Package, AlertTriangle, AlertCircle, ShoppingBag, Briefcase, CalendarDays
+  Users, Package, AlertTriangle, AlertCircle, ShoppingBag, Briefcase, CalendarDays,
+  Truck, RefreshCw, ArrowRight
 } from 'lucide-react';
+import { getDashboardSummary, getActivityLogs } from '../../api/dashboard.api';
+import { notificationService } from '../../services/notificationService';
 
-const MOCK_LINE_DATA = [
-  { name: '14 May', revenue: 3.5, expenses: 1.5, profit: 2 },
-  { name: '15 May', revenue: 2.5, expenses: 1.2, profit: 1.3 },
-  { name: '16 May', revenue: 3.8, expenses: 2.1, profit: 1.7 },
-  { name: '17 May', revenue: 2.8, expenses: 1.4, profit: 1.4 },
-  { name: '18 May', revenue: 3.9, expenses: 1.9, profit: 2.0 },
-  { name: '19 May', revenue: 2.1, expenses: 1.1, profit: 1.0 },
-  { name: '20 May', revenue: 3.6, expenses: 2.3, profit: 1.3 },
-];
+const PIE_COLORS = ['#3B82F6', '#FACC15', '#EF4444', '#10B981', '#8B5CF6', '#EC4899', '#06B6D4'];
 
-const MOCK_PIE_DATA = [
-  { name: 'Salary', value: 50400, color: '#3B82F6', percentage: '45%' },
-  { name: 'Purchases', value: 33600, color: '#FACC15', percentage: '30%' },
-  { name: 'Rent', value: 11200, color: '#EF4444', percentage: '10%' },
-  { name: 'Utilities', value: 7840, color: '#10B981', percentage: '7%' },
-  { name: 'Other', value: 8960, color: '#8B5CF6', percentage: '8%' },
-];
+const formatCurrency = (amt) => {
+  if (amt === null || amt === undefined || amt === '') return '₹ 0';
+  const val = typeof amt === 'number' ? amt : parseFloat(amt);
+  if (isNaN(val)) return '₹ 0';
+  return `₹ ${val.toLocaleString('en-IN')}`;
+};
 
-const MOCK_BAR_DATA = [
-  { name: 'Kochi Branch', value: 1245000 },
-  { name: 'Calicut Branch', value: 932000 },
-  { name: 'Kannur Branch', value: 725000 },
-  { name: 'Malappuram Branch', value: 610000 },
-  { name: 'Trivandrum Branch', value: 480000 },
-];
+const formatTimeAgo = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now - d) / 1000);
+    if (diffSec < 60) return 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  } catch {
+    return dateStr;
+  }
+};
 
-const MetricCard = ({ title, amount, subtitle, icon: Icon, trend, trendValue, iconColor, iconBg }) => (
+const getActivityIcon = (module) => {
+  const m = String(module || '').toUpperCase();
+  switch (m) {
+    case 'EXPENSE':
+      return { icon: Wallet, color: 'text-red-500', bg: 'bg-red-50' };
+    case 'PURCHASE':
+      return { icon: ShoppingBag, color: 'text-blue-500', bg: 'bg-blue-50' };
+    case 'INVENTORY':
+      return { icon: Package, color: 'text-purple-500', bg: 'bg-purple-50' };
+    case 'HR':
+    case 'EMPLOYEES':
+      return { icon: Users, color: 'text-teal-500', bg: 'bg-teal-50' };
+    case 'FINANCE':
+      return { icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' };
+    default:
+      return { icon: Briefcase, color: 'text-indigo-500', bg: 'bg-indigo-50' };
+  }
+};
+
+const MetricCard = ({ title, amount, subtitle, icon: Icon, trend, trendValue, iconColor, iconBg, loading }) => (
   <div className="bg-white p-4.5 sm:p-5 rounded-[20px] border border-gray-100 shadow-xs flex flex-col justify-between hover:shadow-md transition-all min-h-[135px]">
     <div className="flex items-start justify-between gap-2.5 mb-3">
       <div className="flex items-center gap-3 min-w-0">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
           <Icon size={20} className={iconColor} />
         </div>
-        <span className="text-[#475569] text-xs sm:text-[13px] font-semibold leading-tight">{title}</span>
+        <span className="text-[#475569] text-xs sm:text-[13px] font-semibold leading-tight truncate">{title}</span>
       </div>
       {trend && (
         <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${trend === 'up' ? 'text-[#16a34a] bg-[#dcfce7]' : 'text-[#ef4444] bg-[#fee2e2]'}`}>
@@ -51,30 +75,177 @@ const MetricCard = ({ title, amount, subtitle, icon: Icon, trend, trendValue, ic
       )}
     </div>
     <div className="mt-auto min-w-0">
-      <div className="font-sans text-xl sm:text-2xl font-bold text-slate-800 tracking-tight mb-0.5 whitespace-nowrap">{amount}</div>
+      {loading ? (
+        <div className="h-7 bg-gray-100 rounded animate-pulse w-28 mb-1"></div>
+      ) : (
+        <div className="font-sans text-xl sm:text-2xl font-bold text-slate-800 tracking-tight mb-0.5 whitespace-nowrap truncate">{amount}</div>
+      )}
       <p className="text-xs font-medium text-[#94a3b8] truncate">{subtitle}</p>
     </div>
   </div>
 );
 
 const CompanyOverview = () => {
+  const navigate = useNavigate();
+
+  // Filters
+  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [selectedPeriod, setSelectedPeriod] = useState('month');
+
+  // API Data States
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
+  const [alerts, setAlerts] = useState([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(true);
+
+  // Fetch Dashboard Summary
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const params = {};
+      if (selectedBranch && selectedBranch !== 'all') {
+        params.branch = selectedBranch;
+      }
+      if (selectedPeriod && selectedPeriod !== 'all') {
+        params.period = selectedPeriod;
+      }
+      const data = await getDashboardSummary(params);
+      setDashboardData(data);
+    } catch (err) {
+      console.error('Failed to fetch dashboard summary:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch Recent Activity Logs
+  const fetchActivities = async () => {
+    try {
+      setLoadingActivities(true);
+      const res = await getActivityLogs({ page: 1, page_size: 10 });
+      if (res && Array.isArray(res.results)) {
+        setActivityLogs(res.results);
+      } else if (Array.isArray(res)) {
+        setActivityLogs(res);
+      } else {
+        setActivityLogs([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch activity logs:', err);
+      setActivityLogs([]);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
+  // Fetch Recent Notifications for Alerts Section
+  const fetchRecentAlerts = async () => {
+    try {
+      setLoadingAlerts(true);
+      const res = await notificationService.fetchNotifications(1, 6);
+      if (res && Array.isArray(res.results)) {
+        setAlerts(res.results);
+      } else {
+        setAlerts([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch alerts:', err);
+      setAlerts([]);
+    } finally {
+      setLoadingAlerts(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [selectedBranch, selectedPeriod]);
+
+  useEffect(() => {
+    fetchActivities();
+    fetchRecentAlerts();
+  }, []);
+
+  const financialSummary = dashboardData?.financial_summary || {};
+  const inventorySummary = dashboardData?.inventory_summary || {};
+  const attendanceSummary = dashboardData?.attendance_summary || {};
+  const branchPerformance = dashboardData?.branch_performance || [];
+  const rawExpenseBreakdown = dashboardData?.expense_breakdown || [];
+
+  // Available branches list from API or default branches
+  const branchOptions = branchPerformance.length > 0 
+    ? branchPerformance.map(b => ({ id: b.branch_id, name: b.branch_name }))
+    : [
+        { id: 1, name: 'Al Naaz Kayamkulam' },
+        { id: 2, name: 'Al Naaz Kochi' }
+      ];
+
+  // Prepare Expense Breakdown Pie Data
+  const totalExpenseAmount = rawExpenseBreakdown.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0) || financialSummary?.monthly_expenses || 0;
+  const pieData = rawExpenseBreakdown.length > 0
+    ? rawExpenseBreakdown.map((item, idx) => {
+        const val = parseFloat(item.amount) || 0;
+        const pct = totalExpenseAmount > 0 ? Math.round((val / totalExpenseAmount) * 100) : 0;
+        return {
+          name: item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : `Cat #${item.category_id}`,
+          value: val,
+          color: PIE_COLORS[idx % PIE_COLORS.length],
+          percentage: `${pct}%`
+        };
+      })
+    : [
+        { name: 'Others', value: 900, color: '#3B82F6', percentage: '64%' },
+        { name: 'Purchase', value: 250, color: '#FACC15', percentage: '18%' },
+        { name: 'Chicken', value: 250, color: '#EF4444', percentage: '18%' }
+      ];
+
+  // Dynamic Chart Data based on Branch Performance or Financial Summary
+  const lineChartData = branchPerformance.length > 0
+    ? branchPerformance.map(b => ({
+        name: b.branch_name?.replace('Al Naaz ', '') || `Branch #${b.branch_id}`,
+        revenue: (b.revenue || 0) / 1000,
+        expenses: (b.expenses || 0) / 1000,
+        profit: (b.operating_result || 0) / 1000
+      }))
+    : [
+        { name: 'Revenue', revenue: (financialSummary.monthly_revenue || 7300) / 1000, expenses: (financialSummary.monthly_expenses || 1400) / 1000, profit: (financialSummary.operating_profit || 5900) / 1000 }
+      ];
+
+  // Period label display
+  const periodData = dashboardData?.period;
+  const periodDisplay = periodData?.start_date && periodData?.end_date
+    ? `${new Date(periodData.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} - ${new Date(periodData.end_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
+    : 'Current Period';
+
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto">
-      {/* Header */}
+    <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
+      
+      {/* Header with Filters */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 style={{ fontFamily: "'Inter', sans-serif" }} className="text-[28px] font-sans font-bold text-[#1e293b] leading-tight tracking-tight">Dashboard</h1>
-          <p className="text-[#64748b] text-[14px] mt-1 font-medium">Welcome back! Here's what's happening with your business today.</p>
+          <h1 style={{ fontFamily: "'Inter', sans-serif" }} className="text-[28px] font-sans font-bold text-[#1e293b] leading-tight tracking-tight">
+            Dashboard
+          </h1>
+          <p className="text-[#64748b] text-[14px] mt-1 font-medium">
+            Welcome back! Here's what's happening with your business today.
+          </p>
         </div>
+
         <div className="flex flex-wrap items-center gap-3">
+          {/* Branch Filter */}
           <div className="relative">
-            <select className="appearance-none bg-white pl-4 pr-10 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer">
+            <select 
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="appearance-none bg-white pl-4 pr-10 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+            >
               <option value="all">All Branches</option>
-              <option value="kochi">Kochi Branch</option>
-              <option value="calicut">Calicut Branch</option>
-              <option value="kannur">Kannur Branch</option>
-              <option value="malappuram">Malappuram Branch</option>
-              <option value="trivandrum">Trivandrum Branch</option>
+              {branchOptions.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
               <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -82,42 +253,143 @@ const CompanyOverview = () => {
               </svg>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-white px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 shadow-sm">
-            <CalendarDays size={16} className="text-gray-400" />
-            <span>May 20, 2025</span>
+
+          {/* Period Filter */}
+          <div className="relative">
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="appearance-none bg-white pl-4 pr-10 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+            >
+              <option value="month">This Month</option>
+              <option value="today">Today</option>
+              <option value="year">This Year</option>
+              <option value="all">All Time</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+              <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+              </svg>
+            </div>
           </div>
+
+          {/* Period Display */}
+          <div className="flex items-center gap-2 bg-white px-3.5 py-2 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 shadow-xs">
+            <CalendarDays size={15} className="text-gray-400" />
+            <span>{periodDisplay}</span>
+          </div>
+
+          {/* Refresh Button */}
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            disabled={loading}
+            className="p-2 bg-white hover:bg-gray-50 text-gray-600 rounded-lg border border-gray-200 shadow-xs transition-colors cursor-pointer"
+            title="Refresh Dashboard"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin text-blue-600' : ''} />
+          </button>
         </div>
       </div>
 
-      {/* Top Metrics Grid: 4 cards in 1st row, remaining 4 cards in 2nd row */}
+      {/* Top Metrics Grid (8 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-        <MetricCard title="Monthly Revenue" amount="₹ 2,45,000" subtitle="" icon={DollarSign} trend="up" trendValue="+12%" iconBg="bg-blue-50" iconColor="text-blue-500" />
-        <MetricCard title="Monthly Expenses" amount="₹ 1,12,000" subtitle="" icon={Wallet} trend="down" trendValue="-4%" iconBg="bg-red-50" iconColor="text-red-500" />
-        <MetricCard title="Monthly Profit" amount="₹ 1,33,000" subtitle="" icon={TrendingUp} trend="up" trendValue="+18%" iconBg="bg-green-50" iconColor="text-green-500" />
-        <MetricCard title="Cash Balance" amount="₹ 8,75,000" subtitle="Total Balance" icon={Briefcase} iconBg="bg-purple-50" iconColor="text-purple-500" />
-        <MetricCard title="Pending Payables" amount="₹ 2,35,000" subtitle="Total Pending" icon={Wallet} iconBg="bg-orange-50" iconColor="text-orange-500" />
-        <MetricCard title="Employees Present" amount="128 / 156" subtitle="Today" icon={Users} iconBg="bg-teal-50" iconColor="text-teal-500" />
-        <MetricCard title="Stock Value" amount="₹ 18,75,000" subtitle="Total Value" icon={Package} iconBg="bg-blue-50" iconColor="text-blue-500" />
-        <MetricCard title="Low Stock Items" amount="23" subtitle="Need Attention" icon={AlertTriangle} iconBg="bg-red-50" iconColor="text-red-500" />
+        <MetricCard 
+          title="Monthly Revenue" 
+          amount={formatCurrency(financialSummary.monthly_revenue)} 
+          subtitle="Total Inflow" 
+          icon={DollarSign} 
+          iconBg="bg-blue-50" 
+          iconColor="text-blue-500" 
+          loading={loading}
+        />
+        <MetricCard 
+          title="Monthly Expenses" 
+          amount={formatCurrency(financialSummary.monthly_expenses)} 
+          subtitle="Total Operating Expenses" 
+          icon={Wallet} 
+          iconBg="bg-red-50" 
+          iconColor="text-red-500" 
+          loading={loading}
+        />
+        <MetricCard 
+          title="Monthly Profit" 
+          amount={formatCurrency(financialSummary.operating_profit ?? financialSummary.operating_result)} 
+          subtitle="Operating Result" 
+          icon={TrendingUp} 
+          iconBg="bg-green-50" 
+          iconColor="text-green-500" 
+          loading={loading}
+        />
+        <MetricCard 
+          title="Cash & Bank Balance" 
+          amount={formatCurrency(financialSummary.cash_and_bank_balance)} 
+          subtitle="Total Balance" 
+          icon={Briefcase} 
+          iconBg="bg-purple-50" 
+          iconColor="text-purple-500" 
+          loading={loading}
+        />
+        <MetricCard 
+          title="Pending Payables" 
+          amount={formatCurrency(financialSummary.pending_supplier_payables)} 
+          subtitle="Supplier Payables" 
+          icon={Wallet} 
+          iconBg="bg-orange-50" 
+          iconColor="text-orange-500" 
+          loading={loading}
+        />
+        <MetricCard 
+          title="Employees Present" 
+          amount={`${attendanceSummary.present ?? 0} / ${attendanceSummary.total_active_employees ?? 0}`} 
+          subtitle={`${attendanceSummary.records_entered ?? 0} Records Entered`} 
+          icon={Users} 
+          iconBg="bg-teal-50" 
+          iconColor="text-teal-500" 
+          loading={loading}
+        />
+        {/* Changed Stock Value to show pending_delivery_receivables */}
+        <MetricCard 
+          title="Delivery Receivables" 
+          amount={formatCurrency(financialSummary.pending_delivery_receivables)} 
+          subtitle="Pending Delivery Receivables" 
+          icon={Truck} 
+          iconBg="bg-blue-50" 
+          iconColor="text-blue-500" 
+          loading={loading}
+        />
+        <MetricCard 
+          title="Low Stock Items" 
+          amount={String(inventorySummary.low_stock_products ?? 0)} 
+          subtitle={`${inventorySummary.out_of_stock_products ?? 0} Out of Stock`} 
+          icon={AlertTriangle} 
+          iconBg="bg-red-50" 
+          iconColor="text-red-500" 
+          loading={loading}
+        />
       </div>
 
-      {/* Charts Row */}
+      {/* Middle Row: Charts & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Area Chart with Gradient Fills */}
+        
+        {/* Area Chart: Business Overview */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm lg:col-span-2 flex flex-col">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-900">Business Overview</h3>
+            <div>
+              <h3 className="font-bold text-gray-900">Business Overview</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Revenue vs Expenses across branches (in ₹ Thousands)</p>
+            </div>
             <div className="flex gap-1 bg-gray-50 p-1 rounded-lg border border-gray-100">
-              {['7D', '30D', '90D', '1Y'].map((t, i) => (
-                <button key={t} className={`px-3 py-1 text-xs font-bold rounded-md ${i === 0 ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {['Branch Trends'].map((t) => (
+                <span key={t} className="px-2.5 py-1 text-xs font-bold rounded-md bg-blue-500 text-white shadow-xs">
                   {t}
-                </button>
+                </span>
               ))}
             </div>
           </div>
           <div className="flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={MOCK_LINE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+              <AreaChart data={lineChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.25} />
@@ -134,51 +406,55 @@ const CompanyOverview = () => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} tickFormatter={(val) => `${val}L`} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} tickFormatter={(val) => `₹${val}k`} />
                 <Tooltip
                   cursor={{ stroke: '#CBD5E1', strokeWidth: 1.5, strokeDasharray: '4 4' }}
                   contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' }}
+                  formatter={(val) => [`₹ ${(val * 1000).toLocaleString('en-IN')}`, '']}
                 />
                 <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#374151' }} />
                 <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3B82F6" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" dot={{ r: 4, strokeWidth: 2, fill: '#3B82F6' }} activeDot={{ r: 6 }} />
                 <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#EF4444" strokeWidth={3} fillOpacity={1} fill="url(#colorExpenses)" dot={{ r: 4, strokeWidth: 2, fill: '#EF4444' }} activeDot={{ r: 6 }} />
-                <Area type="monotone" dataKey="profit" name="Profit" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" dot={{ r: 4, strokeWidth: 2, fill: '#10B981' }} activeDot={{ r: 6 }} />
+                <Area type="monotone" dataKey="profit" name="Operating Result" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" dot={{ r: 4, strokeWidth: 2, fill: '#10B981' }} activeDot={{ r: 6 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Pie Chart */}
+        {/* Expense Breakdown Pie Chart */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
-          <h3 className="font-bold text-gray-900 mb-6">Expense Breakdown</h3>
+          <h3 className="font-bold text-gray-900 mb-1">Expense Breakdown</h3>
+          <p className="text-xs text-gray-500 mb-4">By recorded expense category</p>
           <div className="flex-1 flex flex-col items-center justify-center relative">
-            <div className="h-[220px] w-full relative">
+            <div className="h-[210px] w-full relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={MOCK_PIE_DATA} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value" stroke="none">
-                    {MOCK_PIE_DATA.map((entry, index) => (
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={58} outerRadius={92} paddingAngle={2} dataKey="value" stroke="none">
+                    {pieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => `₹ ${value.toLocaleString()}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  <Tooltip formatter={(value) => `₹ ${Number(value).toLocaleString('en-IN')}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-xs text-gray-500 font-medium">Total</span>
-                <span className="font-sans font-bold text-gray-900 text-lg whitespace-nowrap">₹ 1,12,000</span>
+                <span className="text-[11px] text-gray-400 font-medium">Total</span>
+                <span className="font-sans font-bold text-gray-900 text-base whitespace-nowrap">
+                  {formatCurrency(totalExpenseAmount)}
+                </span>
               </div>
             </div>
 
-            <div className="w-full mt-4 space-y-3">
-              {MOCK_PIE_DATA.map((item, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span>
-                    <span className="text-gray-600 font-medium">{item.name}</span>
+            <div className="w-full mt-4 space-y-2.5 max-h-[160px] overflow-y-auto pr-1">
+              {pieData.map((item, i) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                    <span className="text-gray-600 font-medium truncate">{item.name}</span>
                   </div>
-                  <div className="flex gap-4">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className="font-bold text-gray-900">{item.percentage}</span>
-                    <span className="text-gray-500 w-16 text-right">₹ {(item.value / 1000).toFixed(1)}K</span>
+                    <span className="text-gray-500 w-16 text-right font-mono">{formatCurrency(item.value)}</span>
                   </div>
                 </div>
               ))}
@@ -186,182 +462,208 @@ const CompanyOverview = () => {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Activity from GET /api/activity-logs/?page=1&page_size=10 */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col lg:col-span-1">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-900">Recent Activity</h3>
-            <button className="text-xs text-blue-500 font-medium hover:underline">View All</button>
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="font-bold text-gray-900">Recent Activity</h3>
+              <p className="text-xs text-gray-500">Live operational audit log</p>
+            </div>
+            <button 
+              onClick={fetchActivities}
+              className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer"
+            >
+              Refresh
+            </button>
           </div>
-          <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
-            {[
-              { text: 'Ahmed purchased 50kg Rice', sub: 'Inventory • 2 mins ago', icon: Package, color: 'text-purple-500', bg: 'bg-purple-50' },
-              { text: 'Salary for May generated', sub: 'Payroll • 1 hour ago', icon: Wallet, color: 'text-green-500', bg: 'bg-green-50' },
-              { text: 'Low stock alert for Onion', sub: 'Inventory • 2 hours ago', icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50' },
-              { text: 'Budget exceeded for Marketing', sub: 'Finance • 3 hours ago', icon: AlertCircle, color: 'text-orange-500', bg: 'bg-orange-50' },
-              { text: 'New employee joined', sub: 'HR • 5 hours ago', icon: Users, color: 'text-teal-500', bg: 'bg-teal-50' },
-              { text: 'Expense added - Office Supplies', sub: 'Finance • 6 hours ago', icon: DollarSign, color: 'text-pink-500', bg: 'bg-pink-50' },
-              { text: 'Supplier payment made', sub: 'Procurement • 1 day ago', icon: ShoppingBag, color: 'text-blue-500', bg: 'bg-blue-50' },
-              { text: 'Leave request submitted', sub: 'HR • 1 day ago', icon: CalendarDays, color: 'text-orange-500', bg: 'bg-orange-50' }
-            ].map((item, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className={`w-8 h-8 rounded-lg ${item.bg} flex items-center justify-center shrink-0`}>
-                  <item.icon size={14} className={item.color} />
+
+          <div className="space-y-3.5 overflow-y-auto pr-1 custom-scrollbar max-h-[380px] flex-1">
+            {loadingActivities ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={`act-skel-${i}`} className="flex items-center gap-3 animate-pulse">
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 shrink-0"></div>
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 bg-gray-100 rounded w-3/4"></div>
+                    <div className="h-2.5 bg-gray-100 rounded w-1/2"></div>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900 leading-tight">{item.text}</p>
-                  <p className="text-xs text-gray-500">{item.sub}</p>
-                </div>
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 shrink-0"></div>
-              </div>
-            ))}
+              ))
+            ) : activityLogs.length === 0 ? (
+              <p className="text-xs text-gray-400 py-8 text-center">No recent activity logs found.</p>
+            ) : (
+              activityLogs.map((item) => {
+                const { icon: ModIcon, color, bg } = getActivityIcon(item.module);
+                return (
+                  <div key={item.id} className="flex items-start gap-3 group">
+                    <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                      <ModIcon size={14} className={color} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-900 leading-snug line-clamp-2">
+                        {item.description || `${item.action} in ${item.module}`}
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                        <span className="font-medium text-gray-500">{item.module}</span> • {formatTimeAgo(item.created_at)} • by <span className="text-gray-600">{item.username || 'System'}</span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
+
       </div>
 
-      {/* Bottom Grids */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Bottom Grid: 3 Columns (Branch Performance, HR Summary, Alerts) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Branch Performance (Bar Chart area) */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm lg:col-span-1">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-900">Branch Performance</h3>
-            <select className="text-xs border-gray-200 rounded-md text-gray-500 outline-none">
-              <option>This Month</option>
-            </select>
+        {/* Branch Performance */}
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <h3 className="font-bold text-gray-900">Branch Performance</h3>
+              <p className="text-xs text-gray-500">Revenue & Operating Result</p>
+            </div>
+            <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
+              {branchPerformance.length} Branches
+            </span>
           </div>
-          <div className="space-y-5">
-            {MOCK_BAR_DATA.map((branch, i) => {
-              const max = MOCK_BAR_DATA[0].value;
-              const width = `${(branch.value / max) * 100}%`;
-              return (
-                <div key={i}>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span className="font-medium text-gray-700">{branch.name}</span>
-                    <span className="font-sans font-bold text-gray-900 whitespace-nowrap">₹ {(branch.value / 100000).toFixed(2)}L</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-blue-500 h-2 rounded-full" style={{ width }}></div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
 
-        {/* Top Selling Products */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm lg:col-span-1">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-900">Top Selling Products</h3>
-            <select className="text-xs border-gray-200 rounded-md text-gray-500 outline-none">
-              <option>This Month</option>
-            </select>
-          </div>
-          <div className="space-y-4">
-            {[
-              { n: 'Basmati Rice', qty: '520 Kg', val: '1,25,000' },
-              { n: 'Sunflower Oil 1L', qty: '420 Ltr', val: '95,000' },
-              { n: 'Sugar', qty: '310 Kg', val: '62,000' },
-              { n: 'Wheat Flour', qty: '290 Kg', val: '48,000' },
-              { n: 'Chilli Powder', qty: '180 Kg', val: '36,000' }
-            ].map((p, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                    <ShoppingBag size={14} className="text-blue-500" />
+          <div className="space-y-4 flex-1">
+            {branchPerformance.length === 0 ? (
+              <p className="text-xs text-gray-400 py-8 text-center">No branch performance records available.</p>
+            ) : (
+              branchPerformance.map((branch) => {
+                const maxRevenue = Math.max(...branchPerformance.map(b => b.revenue || 0), 1);
+                const width = `${Math.min(100, Math.max(8, ((branch.revenue || 0) / maxRevenue) * 100))}%`;
+                return (
+                  <div key={branch.branch_id} className="p-3 rounded-xl bg-gray-50/70 border border-gray-100">
+                    <div className="flex justify-between items-center text-xs mb-1.5">
+                      <span className="font-bold text-gray-800 truncate">{branch.branch_name}</span>
+                      <span className="font-sans font-extrabold text-gray-900">{formatCurrency(branch.revenue)}</span>
+                    </div>
+                    <div className="w-full bg-gray-200/80 rounded-full h-2 mb-2">
+                      <div className="bg-blue-600 h-2 rounded-full transition-all duration-500" style={{ width }}></div>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-gray-500">
+                      <span>Expenses: {formatCurrency(branch.expenses)}</span>
+                      <span className="font-semibold text-emerald-600">Result: {formatCurrency(branch.operating_result)}</span>
+                    </div>
                   </div>
-                  <span className="text-sm font-medium text-gray-700">{p.n}</span>
-                </div>
-                <div className="flex flex-col text-right">
-                  <span className="text-xs text-gray-500">{p.qty}</span>
-                  <span className="font-sans text-sm font-bold text-gray-900 whitespace-nowrap">₹ {p.val}</span>
-                </div>
-              </div>
-            ))}
+                );
+              })
+            )}
           </div>
         </div>
 
         {/* HR Summary */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm lg:col-span-1">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-900">HR Summary</h3>
-            <select className="text-xs border-gray-200 rounded-md text-gray-500 outline-none">
-              <option>Today</option>
-            </select>
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <h3 className="font-bold text-gray-900">HR Summary</h3>
+              <p className="text-xs text-gray-500">Today's workforce attendance status</p>
+            </div>
+            <button 
+              onClick={() => navigate('/attendance/daily')} 
+              className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>View</span>
+              <ArrowRight size={13} />
+            </button>
           </div>
-          <div className="space-y-4">
+
+          <div className="space-y-3.5 flex-1">
             {[
-              { label: 'Employees Present', count: 128, color: 'text-green-500', bg: 'bg-green-50' },
-              { label: 'Late Employees', count: 12, color: 'text-orange-500', bg: 'bg-orange-50' },
-              { label: 'Leave Requests', count: 8, color: 'text-blue-500', bg: 'bg-blue-50' },
-              { label: 'New Employees', count: 5, color: 'text-purple-500', bg: 'bg-purple-50' },
-              { label: 'Birthdays', count: 3, color: 'text-pink-500', bg: 'bg-pink-50' },
+              { label: 'Employees Present', count: attendanceSummary.present ?? 0, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
+              { label: 'Absent Today', count: attendanceSummary.absent ?? 0, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100' },
+              { label: 'Half Day Recorded', count: attendanceSummary.half_day ?? 0, color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-100' },
+              { label: 'On Approved Leave', count: attendanceSummary.leave ?? 0, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-100' },
+              { label: 'Total Active Staff', count: attendanceSummary.total_active_employees ?? 0, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
             ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between">
+              <div key={i} className={`flex items-center justify-between p-3 rounded-xl border ${item.border} ${item.bg}/40`}>
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg ${item.bg} flex items-center justify-center`}>
+                  <div className={`w-8 h-8 rounded-lg ${item.bg} flex items-center justify-center shrink-0`}>
                     <Users size={14} className={item.color} />
                   </div>
-                  <span className="text-sm font-medium text-gray-700">{item.label}</span>
+                  <span className="text-xs font-semibold text-gray-700">{item.label}</span>
                 </div>
-                <span className="text-sm font-bold text-gray-900">{item.count}</span>
+                <span className={`text-sm font-extrabold ${item.color}`}>{item.count}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Alerts & Notifications */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm lg:col-span-1">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-900">Alerts</h3>
-            <button className="text-xs text-blue-500 font-medium hover:underline">View All</button>
+        {/* Alerts & Recent Notifications from Notification Module API */}
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <h3 className="font-bold text-gray-900">Alerts</h3>
+              <p className="text-xs text-gray-500">Recent system notifications</p>
+            </div>
+            <button 
+              onClick={() => navigate('/notifications')} 
+              className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>View All</span>
+              <ArrowRight size={13} />
+            </button>
           </div>
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle size={16} className="text-red-500 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Low stock: <span className="text-red-500">23 items</span></p>
-                <p className="text-xs text-gray-500">Check inventory now</p>
-                <p className="text-[10px] text-gray-400 mt-1">10 min ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <AlertCircle size={16} className="text-orange-500 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Budget exceeded: Marketing</p>
-                <p className="text-xs text-gray-500">105% of budget used</p>
-                <p className="text-[10px] text-gray-400 mt-1">1 hour ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <AlertCircle size={16} className="text-blue-500 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Leave request pending</p>
-                <p className="text-xs text-gray-500">8 requests waiting</p>
-                <p className="text-[10px] text-gray-400 mt-1">2 hours ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <AlertTriangle size={16} className="text-red-500 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Payment due: Al Madina Store</p>
-                <p className="text-xs text-gray-500">₹ 45,000 pending</p>
-                <p className="text-[10px] text-gray-400 mt-1">3 hours ago</p>
-              </div>
-            </div>
+
+          <div className="space-y-3 flex-1 overflow-y-auto max-h-[380px] pr-1 custom-scrollbar">
+            {loadingAlerts ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={`alert-skel-${i}`} className="flex items-start gap-3 p-2.5 rounded-xl bg-gray-50 animate-pulse">
+                  <div className="w-7 h-7 rounded-lg bg-gray-200 shrink-0"></div>
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                    <div className="h-2.5 bg-gray-200 rounded w-full"></div>
+                  </div>
+                </div>
+              ))
+            ) : alerts.length === 0 ? (
+              <p className="text-xs text-gray-400 py-8 text-center">No alerts or notifications recorded.</p>
+            ) : (
+              alerts.slice(0, 5).map((alert) => {
+                const isWarning = alert.notification_type === 'WARNING' || alert.notification_type === 'ERROR';
+                return (
+                  <div 
+                    key={alert.id} 
+                    onClick={() => navigate('/notifications')}
+                    className={`p-3 rounded-xl border transition-colors cursor-pointer flex items-start gap-3 ${
+                      !alert.is_read 
+                        ? 'bg-blue-50/40 border-blue-100 hover:bg-blue-50/70' 
+                        : 'bg-white border-gray-100 hover:bg-gray-50/80'
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                      isWarning ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
+                    }`}>
+                      {isWarning ? <AlertTriangle size={14} /> : <AlertCircle size={14} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <p className="text-xs font-bold text-gray-900 truncate">{alert.title}</p>
+                        {!alert.is_read && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
+                        {alert.message}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-1 font-medium">
+                        {formatTimeAgo(alert.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
       </div>
 
-      {/* Lowest Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <MetricCard title="Cash In" amount="₹ 3,45,000" subtitle="Today" icon={Wallet} iconBg="bg-green-50" iconColor="text-green-500" />
-        <MetricCard title="Cash Out" amount="₹ 1,12,000" subtitle="Today" icon={Wallet} iconBg="bg-red-50" iconColor="text-red-500" />
-        <MetricCard title="Net Cash Flow" amount="₹ 2,33,000" subtitle="Today" icon={TrendingUp} iconBg="bg-blue-50" iconColor="text-blue-500" />
-        <MetricCard title="Budget Usage" amount="78%" subtitle="This Month" icon={Briefcase} iconBg="bg-purple-50" iconColor="text-purple-500" />
-        <MetricCard title="Pending Payments" amount="₹ 2,35,000" subtitle="Total" icon={AlertCircle} iconBg="bg-orange-50" iconColor="text-orange-500" />
-        <MetricCard title="Profit This Month" amount="₹ 15,75,000" subtitle="+14% vs last month" icon={TrendingUp} iconBg="bg-green-50" iconColor="text-green-500" />
-      </div>
     </div>
   );
 };

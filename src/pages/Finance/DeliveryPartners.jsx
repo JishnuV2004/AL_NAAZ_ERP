@@ -10,9 +10,11 @@ import {
   IoChevronBackOutline,
   IoChevronForwardOutline,
   IoChevronDownOutline,
+  IoCalendarOutline,
   IoTrashOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
+import { Calendar } from '../../components/ui/calendar';
 import { deliveryPartnerService } from '../../services/deliveryPartnerService';
 import { accountService } from '../../services/accountService';
 import ConfirmDialog from '../../components/employees/ConfirmDialog';
@@ -85,80 +87,18 @@ const CustomSelect = ({ value, onChange, options, placeholder = 'Select...', cla
   );
 };
 
-// Initial Delivery Partners Data
-const INITIAL_PARTNERS = [
-  {
-    id: 1,
-    partner: 'Swiggy',
-    branch: 'Kochi — Main Mandi',
-    status: 'ACTIVE',
-    contact: 'partner-swiggy@al-naaz.com',
-    currentCommission: '18%',
-    effectiveDate: '01 Jun 2026'
-  },
-  {
-    id: 2,
-    partner: 'Zomato',
-    branch: 'Kochi — Main Mandi',
-    status: 'ACTIVE',
-    contact: 'partner-zomato@al-naaz.com',
-    currentCommission: '20%',
-    effectiveDate: '15 Jul 2026'
-  },
-  {
-    id: 3,
-    partner: 'MandiEats',
-    branch: 'Kochi — Main Mandi',
-    status: 'INACTIVE',
-    contact: 'ops@mandieats.in',
-    currentCommission: '15%',
-    effectiveDate: '01 Mar 2026'
-  }
-];
 
-// Initial Commission Rates History Data
-const INITIAL_RATES = [
-  {
-    id: 1,
-    deliveryPartner: 1,
-    rate: '18%',
-    effectiveFrom: '01 Jun 2026',
-    effectiveTo: 'ACTIVE',
-    createdBy: 'Farhan Rasheed'
-  },
-  {
-    id: 2,
-    deliveryPartner: 1,
-    rate: '16%',
-    effectiveFrom: '01 Jan 2026',
-    effectiveTo: '31 May 2026',
-    createdBy: 'Farhan Rasheed'
-  },
-  {
-    id: 3,
-    deliveryPartner: 2,
-    rate: '20%',
-    effectiveFrom: '15 Jul 2026',
-    effectiveTo: 'ACTIVE',
-    createdBy: 'Farhan Rasheed'
-  },
-  {
-    id: 4,
-    deliveryPartner: 2,
-    rate: '22%',
-    effectiveFrom: '01 Jan 2026',
-    effectiveTo: '14 Jul 2026',
-    createdBy: 'Sana Iqbal'
-  },
-  {
-    id: 5,
-    deliveryPartner: 3,
-    rate: '15%',
-    effectiveFrom: '01 Mar 2026',
-    effectiveTo: 'ACTIVE',
-    createdBy: 'Farhan Rasheed'
+
+const formatDateTime = (dateStr) => {
+  if (!dateStr || dateStr === '-') return '-';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
   }
-];
+};
 
 const DeliveryPartners = () => {
   const [activeTab, setActiveTab] = useState('partners'); // 'partners' | 'rates'
@@ -167,7 +107,7 @@ const DeliveryPartners = () => {
   const [partners, setPartners] = useState([]);
   const [branchesList, setBranchesList] = useState([]);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -175,9 +115,41 @@ const DeliveryPartners = () => {
 
   // Rates State
   const [rates, setRates] = useState([]);
-  const [loadingRates, setLoadingRates] = useState(false);
+  const [loadingRates, setLoadingRates] = useState(true);
   const [ratesCurrentPage, setRatesCurrentPage] = useState(1);
   const [ratesTotalCount, setRatesTotalCount] = useState(0);
+
+  // Rate Modals & Action States
+  const [showAddRateModal, setShowAddRateModal] = useState(false);
+  const [editingRate, setEditingRate] = useState(null);
+  const [deletingRate, setDeletingRate] = useState(null);
+  const [isDeletingRate, setIsDeletingRate] = useState(false);
+  const [isSubmittingRate, setIsSubmittingRate] = useState(false);
+
+  const [rateForm, setRateForm] = useState({
+    delivery_partner: '',
+    commission_rate: '',
+    effective_from: new Date().toISOString().slice(0, 10),
+    effective_to: ''
+  });
+
+  const [showRateFromCalendarPopover, setShowRateFromCalendarPopover] = useState(false);
+  const rateFromCalendarRef = useRef(null);
+  const [showRateToCalendarPopover, setShowRateToCalendarPopover] = useState(false);
+  const rateToCalendarRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (rateFromCalendarRef.current && !rateFromCalendarRef.current.contains(event.target)) {
+        setShowRateFromCalendarPopover(false);
+      }
+      if (rateToCalendarRef.current && !rateToCalendarRef.current.contains(event.target)) {
+        setShowRateToCalendarPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Modals & Confirmation Popups
   const [showAddModal, setShowAddModal] = useState(false);
@@ -193,10 +165,7 @@ const DeliveryPartners = () => {
   // New Partner Form State
   const [newPartner, setNewPartner] = useState({
     partner: '',
-    branch: '',
-    contact: '',
-    commission: '',
-    effectiveDate: new Date().toISOString().split('T')[0]
+    branch: ''
   });
 
   const loadBranches = async () => {
@@ -215,7 +184,7 @@ const DeliveryPartners = () => {
     }
   };
 
-  const loadDeliveryPartners = async (page = 1) => {
+  const loadDeliveryPartners = async (page = 1, currentBranches = null) => {
     setLoading(true);
     let mapped = [];
     try {
@@ -234,32 +203,36 @@ const DeliveryPartners = () => {
       setTotalCount(count);
       setCurrentPage(page);
 
+      const branchesToUse = currentBranches || branchesList;
+
       if (list.length > 0) {
         mapped = list.map((item) => {
-          const dateStr = item.created_at
-            ? new Date(item.created_at).toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric'
-              })
-            : '';
-
           let matchedBranchName = item.branch_name;
-          if (!matchedBranchName && branchesList.length > 0) {
-            const foundBranch = branchesList.find((b) => b.id === item.branch);
+          if (!matchedBranchName && branchesToUse.length > 0) {
+            const foundBranch = branchesToUse.find((b) => b.id === item.branch || String(b.id) === String(item.branch));
             if (foundBranch) matchedBranchName = foundBranch.name;
           }
+
+          const createdByStr = item.created_by_name
+            ? item.created_by_name
+            : item.created_by === 1
+            ? 'admin'
+            : item.created_by
+            ? `User #${item.created_by}`
+            : '-';
 
           return {
             id: item.id,
             partner: item.name,
-            branch: matchedBranchName || 'Al Naaz Kayamkulam',
+            branch: matchedBranchName || (item.branch ? `Branch #${item.branch}` : '-'),
             branch_id: item.branch,
             status: item.is_active ? 'ACTIVE' : 'INACTIVE',
-            is_active: item.is_active,
-            contact: item.contact || `ops@${(item.name || '').toLowerCase().replace(/\s+/g, '')}.com`,
-            currentCommission: item.current_commission || item.commission || '18%',
-            effectiveDate: dateStr || '12 Sep 2026'
+            is_active: Boolean(item.is_active),
+            createdBy: createdByStr,
+            createdAt: formatDateTime(item.created_at),
+            updatedAt: formatDateTime(item.updated_at),
+            rawCreatedAt: item.created_at,
+            rawUpdatedAt: item.updated_at
           };
         });
         setPartners(mapped);
@@ -267,17 +240,17 @@ const DeliveryPartners = () => {
         setPartners([]);
       }
     } catch (err) {
-      console.warn('Failed to fetch delivery partners from API, using fallback data:', err);
-      setPartners(INITIAL_PARTNERS);
-      setTotalCount(INITIAL_PARTNERS.length);
-      mapped = INITIAL_PARTNERS;
+      console.warn('Failed to fetch delivery partners from API:', err);
+      setPartners([]);
+      setTotalCount(0);
+      mapped = [];
     } finally {
       setLoading(false);
     }
     return mapped;
   };
 
-  const loadCommissionRates = async (page = 1) => {
+  const loadCommissionRates = async (page = 1, currentPartners = null) => {
     setLoadingRates(true);
     try {
       const data = await deliveryPartnerService.fetchCommissionRates(page, pageSize);
@@ -295,28 +268,39 @@ const DeliveryPartners = () => {
       setRatesTotalCount(count);
       setRatesCurrentPage(page);
 
+      const partnersToSearch = (currentPartners && currentPartners.length > 0) ? currentPartners : partners;
+
       if (list.length > 0) {
         const mapped = list.map((item) => {
-          const rateStr =
-            item.commission_rate !== undefined && item.commission_rate !== null
-              ? `${parseFloat(item.commission_rate)}%`
-              : '0%';
+          const rateVal = parseFloat(item.commission_rate);
+          const rateStr = !isNaN(rateVal) ? `${rateVal}%` : (item.commission_rate ? `${item.commission_rate}%` : '0%');
 
-          const effTo = item.effective_to ? item.effective_to : 'ACTIVE';
+          const effTo = item.effective_to ? formatDateTime(item.effective_to) : 'ACTIVE';
+          const effFrom = item.effective_from ? formatDateTime(item.effective_from) : '-';
 
           const createdByStr = item.created_by_name
             ? item.created_by_name
             : item.created_by === 1
             ? 'admin'
-            : `User #${item.created_by}`;
+            : item.created_by
+            ? `User #${item.created_by}`
+            : '-';
+
+          const matchedPartner = partnersToSearch.find(
+            (p) => p.id === item.delivery_partner || String(p.id) === String(item.delivery_partner)
+          );
+          const partnerDisplayName = item.delivery_partner_name || (matchedPartner ? matchedPartner.partner : (item.delivery_partner ? `Partner #${item.delivery_partner}` : 'N/A'));
 
           return {
             id: item.id,
-            deliveryPartner: item.delivery_partner !== undefined && item.delivery_partner !== null ? item.delivery_partner : 'N/A',
+            delivery_partner: item.delivery_partner,
+            deliveryPartner: partnerDisplayName,
             rate: rateStr,
             rateRaw: item.commission_rate,
-            effectiveFrom: item.effective_from || 'N/A',
+            effectiveFrom: effFrom,
             effectiveTo: effTo,
+            rawEffectiveFrom: item.effective_from,
+            rawEffectiveTo: item.effective_to,
             createdBy: createdByStr,
             createdAt: item.created_at
           };
@@ -326,22 +310,167 @@ const DeliveryPartners = () => {
         setRates([]);
       }
     } catch (err) {
-      console.warn('Failed to fetch commission rates from API, using fallback data:', err);
-      setRates(INITIAL_RATES);
-      setRatesTotalCount(INITIAL_RATES.length);
+      console.warn('Failed to fetch commission rates from API:', err);
+      setRates([]);
+      setRatesTotalCount(0);
     } finally {
       setLoadingRates(false);
     }
   };
 
   useEffect(() => {
-    const initData = async () => {
-      await loadBranches();
-      const currentPartners = await loadDeliveryPartners(1);
-      loadCommissionRates(1, currentPartners);
-    };
-    initData();
+    loadBranches().then((branches) => {
+      loadDeliveryPartners(1, branches).then((partnersList) => {
+        loadCommissionRates(1, partnersList);
+      });
+    });
   }, []);
+
+  // Open Add Rate Modal
+  const handleOpenAddRate = () => {
+    setEditingRate(null);
+    setRateForm({
+      delivery_partner: partners.length > 0 ? partners[0].id : '',
+      commission_rate: '',
+      effective_from: new Date().toISOString().slice(0, 10),
+      effective_to: ''
+    });
+    setShowRateFromCalendarPopover(false);
+    setShowRateToCalendarPopover(false);
+    setShowAddRateModal(true);
+  };
+
+  // Open Edit Rate Modal
+  const handleOpenEditRate = (r) => {
+    setEditingRate(r);
+    setRateForm({
+      delivery_partner: r.delivery_partner || (partners.length > 0 ? partners[0].id : ''),
+      commission_rate: r.rateRaw !== undefined && r.rateRaw !== null ? String(parseFloat(r.rateRaw)) : '',
+      effective_from: r.rawEffectiveFrom || new Date().toISOString().slice(0, 10),
+      effective_to: r.rawEffectiveTo || ''
+    });
+    setShowRateFromCalendarPopover(false);
+    setShowRateToCalendarPopover(false);
+  };
+
+  // Add Commission Rate (POST /api/delivery-partner-rates/)
+  const handleAddRate = async (e) => {
+    e.preventDefault();
+    if (!rateForm.delivery_partner) {
+      toast.error('Please select a delivery partner');
+      return;
+    }
+    if (!rateForm.commission_rate) {
+      toast.error('Please enter a commission rate');
+      return;
+    }
+    if (!rateForm.effective_from) {
+      toast.error('Please select an effective from date');
+      return;
+    }
+
+    setIsSubmittingRate(true);
+    try {
+      const payload = {
+        delivery_partner: parseInt(rateForm.delivery_partner, 10),
+        commission_rate: String(rateForm.commission_rate),
+        effective_from: rateForm.effective_from,
+        effective_to: rateForm.effective_to || null
+      };
+      await deliveryPartnerService.createCommissionRate(payload);
+      toast.success('Commission rate added successfully!');
+      setShowAddRateModal(false);
+      setRateForm({
+        delivery_partner: partners[0]?.id || '',
+        commission_rate: '',
+        effective_from: new Date().toISOString().slice(0, 10),
+        effective_to: ''
+      });
+      await loadCommissionRates(1);
+    } catch (err) {
+      console.error('Failed to create commission rate:', err);
+      let msg = 'Failed to add commission rate';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') msg = err.response.data;
+        else if (err.response.data.detail) msg = err.response.data.detail;
+        else if (typeof err.response.data === 'object') {
+          const fieldErrors = Object.entries(err.response.data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`);
+          if (fieldErrors.length > 0) msg = fieldErrors.join(' | ');
+        }
+      }
+      toast.error(msg);
+    } finally {
+      setIsSubmittingRate(false);
+    }
+  };
+
+  // Update Commission Rate (PATCH /api/delivery-partner-rates/:id/)
+  const handleUpdateRate = async (e) => {
+    e.preventDefault();
+    if (!editingRate) return;
+    if (!rateForm.delivery_partner) {
+      toast.error('Please select a delivery partner');
+      return;
+    }
+    if (!rateForm.commission_rate) {
+      toast.error('Please enter a commission rate');
+      return;
+    }
+    if (!rateForm.effective_from) {
+      toast.error('Please select an effective from date');
+      return;
+    }
+
+    setIsSubmittingRate(true);
+    try {
+      const payload = {
+        delivery_partner: parseInt(rateForm.delivery_partner, 10),
+        commission_rate: String(rateForm.commission_rate),
+        effective_from: rateForm.effective_from,
+        effective_to: rateForm.effective_to || null
+      };
+      await deliveryPartnerService.updateCommissionRate(editingRate.id, payload);
+      toast.success(`Commission rate #${editingRate.id} updated successfully!`);
+      setEditingRate(null);
+      await loadCommissionRates(ratesCurrentPage);
+    } catch (err) {
+      console.error('Failed to update commission rate:', err);
+      let msg = 'Failed to update commission rate';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') msg = err.response.data;
+        else if (err.response.data.detail) msg = err.response.data.detail;
+        else if (typeof err.response.data === 'object') {
+          const fieldErrors = Object.entries(err.response.data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`);
+          if (fieldErrors.length > 0) msg = fieldErrors.join(' | ');
+        }
+      }
+      toast.error(msg);
+    } finally {
+      setIsSubmittingRate(false);
+    }
+  };
+
+  // Delete Commission Rate (DELETE /api/delivery-partner-rates/:id/)
+  const handleConfirmDeleteRate = async () => {
+    if (!deletingRate) return;
+    setIsDeletingRate(true);
+    try {
+      await deliveryPartnerService.deleteCommissionRate(deletingRate.id);
+      toast.success(`Commission rate #${deletingRate.id} deleted successfully!`);
+      setDeletingRate(null);
+      await loadCommissionRates(ratesCurrentPage);
+    } catch (err) {
+      console.error('Failed to delete commission rate:', err);
+      let msg = 'Failed to delete commission rate';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') msg = err.response.data;
+        else if (err.response.data.detail) msg = err.response.data.detail;
+      }
+      toast.error(msg);
+    } finally {
+      setIsDeletingRate(false);
+    }
+  };
 
   // Confirm and Toggle Active/Inactive Status
   const handleConfirmToggleStatus = async () => {
@@ -387,10 +516,7 @@ const DeliveryPartners = () => {
       setShowAddModal(false);
       setNewPartner({
         partner: '',
-        branch: branchesList[0]?.id || '',
-        contact: '',
-        commission: '',
-        effectiveDate: new Date().toISOString().split('T')[0]
+        branch: branchesList[0]?.id || ''
       });
       await loadDeliveryPartners(1);
     } catch (err) {
@@ -523,6 +649,16 @@ const DeliveryPartners = () => {
             <span>+ Add Partner</span>
           </button>
         )}
+
+        {activeTab === 'rates' && (
+          <button
+            onClick={handleOpenAddRate}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
+          >
+            <IoAddOutline size={16} />
+            <span>+ Add Commission Rate</span>
+          </button>
+        )}
       </div>
 
       {/* Main Outer Container with Tab Navigation */}
@@ -561,12 +697,13 @@ const DeliveryPartners = () => {
                 <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead>
                     <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
-                      <th className="py-3.5 px-4">Partner</th>
+                      <th className="py-3.5 px-4">Partner ID</th>
+                      <th className="py-3.5 px-4">Partner Name</th>
                       <th className="py-3.5 px-4">Branch</th>
                       <th className="py-3.5 px-4">Status</th>
-                      <th className="py-3.5 px-4">Contact</th>
-                      <th className="py-3.5 px-4">Current Commission</th>
-                      <th className="py-3.5 px-4">Effective Date</th>
+                      <th className="py-3.5 px-4">Created By</th>
+                      <th className="py-3.5 px-4">Created Date</th>
+                      <th className="py-3.5 px-4">Last Updated</th>
                       <th className="py-3.5 px-4 text-center">Actions</th>
                     </tr>
                   </thead>
@@ -574,18 +711,22 @@ const DeliveryPartners = () => {
                     {loading ? (
                       [...Array(10)].map((_, i) => (
                         <tr key={i} className="animate-pulse h-[54px]">
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-32"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-36"></div></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-12"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-36"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
                           <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-16 mx-auto"></div></td>
                         </tr>
                       ))
                     ) : partners.length > 0 ? (
                       partners.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
+                          {/* Partner ID */}
+                          <td className="py-3.5 px-4 font-bold text-gray-900">#{p.id}</td>
+
                           {/* Partner Name */}
                           <td className="py-3.5 px-4 font-bold text-gray-900">{p.partner}</td>
 
@@ -607,14 +748,14 @@ const DeliveryPartners = () => {
                             )}
                           </td>
 
-                          {/* Contact Email */}
-                          <td className="py-3.5 px-4 font-medium text-gray-600">{p.contact}</td>
+                          {/* Created By */}
+                          <td className="py-3.5 px-4 font-medium text-gray-600">{p.createdBy}</td>
 
-                          {/* Current Commission */}
-                          <td className="py-3.5 px-4 font-bold text-gray-900 tabular-nums">{p.currentCommission}</td>
+                          {/* Created Date */}
+                          <td className="py-3.5 px-4 font-medium text-gray-800">{p.createdAt}</td>
 
-                          {/* Effective Date */}
-                          <td className="py-3.5 px-4 font-medium text-gray-800">{p.effectiveDate}</td>
+                          {/* Last Updated */}
+                          <td className="py-3.5 px-4 font-medium text-gray-600">{p.updatedAt}</td>
 
                           {/* Action Buttons */}
                           <td className="py-3.5 px-4 text-center">
@@ -668,7 +809,7 @@ const DeliveryPartners = () => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="7" className="py-12 text-center text-gray-400 font-medium">
+                        <td colSpan="8" className="py-12 text-center text-gray-400 font-medium">
                           No delivery partners found.
                         </td>
                       </tr>
@@ -748,27 +889,34 @@ const DeliveryPartners = () => {
                 <table className="w-full text-left border-collapse min-w-[750px]">
                   <thead>
                     <tr className="bg-[#F8F9FA] border-b border-gray-200 text-xs uppercase tracking-wider text-gray-600 font-bold">
+                      <th className="py-3.5 px-4">Rate ID</th>
                       <th className="py-3.5 px-4">Delivery Partner</th>
                       <th className="py-3.5 px-4">Rate</th>
                       <th className="py-3.5 px-4">Effective From</th>
                       <th className="py-3.5 px-4">Effective To</th>
                       <th className="py-3.5 px-4">Created By</th>
+                      <th className="py-3.5 px-4 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs bg-white">
                     {loadingRates ? (
                       [...Array(10)].map((_, i) => (
                         <tr key={i} className="animate-pulse h-[54px]">
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-12"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-28"></div></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-16"></div></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
                           <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
-                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                          <td className="py-3.5 px-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                          <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-16 mx-auto"></div></td>
                         </tr>
                       ))
                     ) : rates.length > 0 ? (
                       rates.map((r) => (
                         <tr key={r.id} className="hover:bg-gray-50/70 transition-colors h-[54px]">
+                          {/* Rate ID */}
+                          <td className="py-3.5 px-4 font-bold text-gray-900">#{r.id}</td>
+
                           {/* Delivery Partner */}
                           <td className="py-3.5 px-4 font-semibold text-gray-900">{r.deliveryPartner}</td>
 
@@ -792,11 +940,36 @@ const DeliveryPartners = () => {
 
                           {/* Created By */}
                           <td className="py-3.5 px-4 font-medium text-gray-700">{r.createdBy}</td>
+
+                          {/* Actions */}
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {/* Edit */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditRate(r)}
+                                className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
+                                title="Edit Commission Rate"
+                              >
+                                <IoPencilOutline size={15} />
+                              </button>
+
+                              {/* Delete */}
+                              <button
+                                type="button"
+                                onClick={() => setDeletingRate(r)}
+                                className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer border border-gray-200"
+                                title="Delete Commission Rate"
+                              >
+                                <IoTrashOutline size={15} />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="5" className="py-12 text-center text-gray-400 font-medium">
+                        <td colSpan="7" className="py-12 text-center text-gray-400 font-medium">
                           No commission rates found.
                         </td>
                       </tr>
@@ -1017,9 +1190,9 @@ const DeliveryPartners = () => {
             <div className="p-5 space-y-4 text-xs">
               <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-100 flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-blue-800 font-semibold">Active Commission Rate</p>
-                  <p className="text-xl font-extrabold text-blue-900 tabular-nums">
-                    {viewingPartner.currentCommission}
+                  <p className="text-xs text-blue-800 font-semibold">Partner Platform</p>
+                  <p className="text-xl font-extrabold text-blue-900">
+                    {viewingPartner.partner}
                   </p>
                 </div>
                 <span className={`px-2.5 py-1 text-[11px] font-bold rounded-md ${
@@ -1031,16 +1204,20 @@ const DeliveryPartners = () => {
 
               <div className="space-y-2 border-t border-gray-100 pt-3">
                 <div className="flex justify-between py-1.5 border-b border-gray-50 text-gray-700">
-                  <span>Contact Email:</span>
-                  <span className="font-semibold text-gray-900">{viewingPartner.contact}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-gray-50 text-gray-700">
-                  <span>Effective From:</span>
-                  <span className="font-bold text-gray-900">{viewingPartner.effectiveDate}</span>
-                </div>
-                <div className="flex justify-between py-1.5 text-gray-700">
                   <span>Branch:</span>
                   <span className="font-bold text-gray-900">{viewingPartner.branch}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-gray-50 text-gray-700">
+                  <span>Created By:</span>
+                  <span className="font-semibold text-gray-900">{viewingPartner.createdBy}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-gray-50 text-gray-700">
+                  <span>Created Date:</span>
+                  <span className="font-bold text-gray-900">{viewingPartner.createdAt}</span>
+                </div>
+                <div className="flex justify-between py-1.5 text-gray-700">
+                  <span>Last Updated:</span>
+                  <span className="font-bold text-gray-900">{viewingPartner.updatedAt}</span>
                 </div>
               </div>
             </div>
@@ -1091,6 +1268,191 @@ const DeliveryPartners = () => {
         confirmText={togglingPartner?.is_active ? "Deactivate" : "Activate"}
         isDestructive={togglingPartner?.is_active}
         isProcessing={isToggling}
+      />
+
+      {/* Add / Edit Commission Rate Modal */}
+      {(showAddRateModal || editingRate) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-lg relative animate-in zoom-in-95 duration-150 font-sans">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 rounded-t-2xl">
+              <h3 className="text-base font-bold text-gray-900">
+                {editingRate ? `Edit Commission Rate #${editingRate.id}` : '+ Add Commission Rate'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowAddRateModal(false);
+                  setEditingRate(null);
+                  setShowRateFromCalendarPopover(false);
+                  setShowRateToCalendarPopover(false);
+                }}
+                className="text-gray-400 hover:text-gray-700 cursor-pointer"
+              >
+                <IoCloseOutline size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={editingRate ? handleUpdateRate : handleAddRate} className="p-5 space-y-4 text-xs">
+              {/* Delivery Partner */}
+              <div>
+                <label className="block font-bold text-gray-700 uppercase mb-1">
+                  Delivery Partner <span className="text-red-500">*</span>
+                </label>
+                <CustomSelect
+                  value={rateForm.delivery_partner}
+                  onChange={(val) => setRateForm({ ...rateForm, delivery_partner: val })}
+                  options={
+                    partners.length > 0
+                      ? partners.map((p) => ({ label: p.partner, value: p.id }))
+                      : [{ label: 'No partners available', value: '' }]
+                  }
+                  placeholder="Select Delivery Partner"
+                />
+              </div>
+
+              {/* Commission Rate (%) */}
+              <div>
+                <label className="block font-bold text-gray-700 uppercase mb-1">
+                  Commission Rate (%) <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    placeholder="e.g. 30"
+                    value={rateForm.commission_rate}
+                    onChange={(e) => setRateForm({ ...rateForm, commission_rate: e.target.value })}
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium pr-8"
+                    required
+                  />
+                  <span className="absolute right-3 top-2.5 text-gray-400 font-bold">%</span>
+                </div>
+              </div>
+
+              {/* Date Ranges Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Effective From */}
+                <div className={`relative ${showRateFromCalendarPopover ? 'z-50' : 'z-20'}`} ref={rateFromCalendarRef}>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Effective From <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRateFromCalendarPopover(!showRateFromCalendarPopover);
+                      setShowRateToCalendarPopover(false);
+                    }}
+                    className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 hover:border-blue-400 font-medium cursor-pointer shadow-2xs"
+                  >
+                    <span>{rateForm.effective_from ? formatDateTime(rateForm.effective_from) : 'Select Date'}</span>
+                    <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
+                  </button>
+
+                  {showRateFromCalendarPopover && (
+                    <div className="absolute left-0 top-full mt-1.5 z-[90] shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 animate-in fade-in zoom-in-95 duration-100">
+                      <Calendar
+                        value={rateForm.effective_from || new Date().toISOString().slice(0, 10)}
+                        onChange={(newDate) => {
+                          setRateForm({ ...rateForm, effective_from: newDate });
+                          setShowRateFromCalendarPopover(false);
+                        }}
+                        onClose={() => setShowRateFromCalendarPopover(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Effective To */}
+                <div className={`relative ${showRateToCalendarPopover ? 'z-50' : 'z-10'}`} ref={rateToCalendarRef}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-gray-700 uppercase">
+                      Effective To
+                    </label>
+                    {rateForm.effective_to && (
+                      <button
+                        type="button"
+                        onClick={() => setRateForm({ ...rateForm, effective_to: '' })}
+                        className="text-[11px] text-blue-600 hover:underline cursor-pointer"
+                      >
+                        Clear (Active)
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRateToCalendarPopover(!showRateToCalendarPopover);
+                      setShowRateFromCalendarPopover(false);
+                    }}
+                    className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white text-gray-800 hover:border-blue-400 font-medium cursor-pointer shadow-2xs"
+                  >
+                    <span className={rateForm.effective_to ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+                      {rateForm.effective_to ? formatDateTime(rateForm.effective_to) : 'None / Active'}
+                    </span>
+                    <IoCalendarOutline className="text-gray-400 text-sm shrink-0" />
+                  </button>
+
+                  {showRateToCalendarPopover && (
+                    <div className="absolute right-0 top-full mt-1.5 z-[90] shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 animate-in fade-in zoom-in-95 duration-100">
+                      <Calendar
+                        value={rateForm.effective_to || new Date().toISOString().slice(0, 10)}
+                        onChange={(newDate) => {
+                          setRateForm({ ...rateForm, effective_to: newDate });
+                          setShowRateToCalendarPopover(false);
+                        }}
+                        onClose={() => setShowRateToCalendarPopover(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="relative z-0 pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={isSubmittingRate}
+                  onClick={() => {
+                    setShowAddRateModal(false);
+                    setEditingRate(null);
+                    setShowRateFromCalendarPopover(false);
+                    setShowRateToCalendarPopover(false);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRate}
+                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-2"
+                >
+                  {isSubmittingRate ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>{editingRate ? 'Update Rate' : 'Save Rate'}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Commission Rate Popup */}
+      <ConfirmDialog
+        isOpen={!!deletingRate}
+        onClose={() => setDeletingRate(null)}
+        onConfirm={handleConfirmDeleteRate}
+        title="Delete Commission Rate"
+        message={`Are you sure you want to delete commission rate #${deletingRate?.id} (${deletingRate?.rate})? This operation cannot be undone.`}
+        confirmText="Delete Rate"
+        isDestructive={true}
+        isProcessing={isDeletingRate}
       />
 
     </div>

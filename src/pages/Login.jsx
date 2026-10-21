@@ -158,12 +158,6 @@ const Login = () => {
             >
               {isLoading ? <ButtonLoader /> : 'Sign In'}
             </button>
-
-            <div className="mt-4 text-center text-[11px] text-gray-500">
-              <p>Demo accounts:</p>
-              <p className="mt-1"><span className="font-bold">admin</span> / <span className="font-bold">admin123</span> (Full Access)</p>
-              <p><span className="font-bold">manager</span> / <span className="font-bold">manager123</span> (Restricted Access)</p>
-            </div>
           </form>
 
         </div>

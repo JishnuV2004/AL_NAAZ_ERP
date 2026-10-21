@@ -77,120 +77,6 @@ const getAvatarColor = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// Comprehensive ERP Attendance Logs generator across multiple months & years
-const generateAttendanceLogs = (employeeId, employeeName) => [
-  // September 2026
-  {
-    id: 1,
-    date: '2026-09-09',
-    formattedDate: '09 Sep 2026',
-    dayName: 'Wednesday',
-    status: 'PRESENT',
-    markedRole: 'Biometric Gate System',
-    remarks: 'On time arrival'
-  },
-  {
-    id: 2,
-    date: '2026-09-08',
-    formattedDate: '08 Sep 2026',
-    dayName: 'Tuesday',
-    status: 'PRESENT',
-    markedRole: 'HR Manager',
-    remarks: 'Approved OT +45 mins'
-  },
-  {
-    id: 3,
-    date: '2026-09-07',
-    formattedDate: '07 Sep 2026',
-    dayName: 'Monday',
-    status: 'PRESENT',
-    markedRole: 'Employee Mobile App',
-    remarks: 'Late arrival (18 mins)'
-  },
-  {
-    id: 4,
-    date: '2026-09-06',
-    formattedDate: '06 Sep 2026',
-    dayName: 'Sunday',
-    status: 'ABSENT',
-    markedRole: 'System Auto-Mark',
-    remarks: 'Unexcused absence'
-  },
-  {
-    id: 5,
-    date: '2026-09-05',
-    formattedDate: '05 Sep 2026',
-    dayName: 'Saturday',
-    status: 'HALF DAY',
-    markedRole: 'HR Manager',
-    remarks: 'Half day approved by HR'
-  },
-  {
-    id: 6,
-    date: '2026-09-04',
-    formattedDate: '04 Sep 2026',
-    dayName: 'Friday',
-    status: 'LEAVE',
-    markedRole: 'Leave Portal (Admin)',
-    remarks: 'Casual Leave Approved'
-  },
-  {
-    id: 7,
-    date: '2026-09-03',
-    formattedDate: '03 Sep 2026',
-    dayName: 'Thursday',
-    status: 'PRESENT',
-    markedRole: 'Branch Manager',
-    remarks: 'On time'
-  },
-  {
-    id: 8,
-    date: '2026-09-02',
-    formattedDate: '02 Sep 2026',
-    dayName: 'Wednesday',
-    status: 'PRESENT',
-    markedRole: 'Biometric Gate System',
-    remarks: 'On time'
-  },
-  {
-    id: 9,
-    date: '2026-09-01',
-    formattedDate: '01 Sep 2026',
-    dayName: 'Tuesday',
-    status: 'PRESENT',
-    markedRole: 'Biometric Gate System',
-    remarks: 'On time'
-  },
-
-  // August 2026
-  {
-    id: 10,
-    date: '2026-08-31',
-    formattedDate: '31 Aug 2026',
-    dayName: 'Monday',
-    status: 'PRESENT',
-    markedRole: 'System Admin',
-    remarks: 'On time'
-  },
-  {
-    id: 11,
-    date: '2026-08-30',
-    formattedDate: '30 Aug 2026',
-    dayName: 'Sunday',
-    status: 'PRESENT',
-    markedRole: 'Branch Manager',
-    remarks: 'Overtime 15m'
-  },
-  {
-    id: 12,
-    date: '2026-08-25',
-    formattedDate: '25 Aug 2026',
-    dayName: 'Tuesday',
-    status: 'PRESENT',
-    markedRole: 'Biometric Gate System',
-    remarks: 'On time'
-  }
-];
 
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -198,8 +84,6 @@ const monthNames = [
 ];
 
 const dayHeadings = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-
 
 
 // Custom Select Component for stylish, non-system theme dropdowns
@@ -229,9 +113,8 @@ const CustomSelect = ({ value, onChange, options, placeholder, className = '' })
       >
         <span className="truncate">{displayLabel}</span>
         <IoChevronDownOutline
-          className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${
-            isOpen ? 'rotate-180' : ''
-          }`}
+          className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? 'rotate-180' : ''
+            }`}
           size={13}
         />
       </button>
@@ -250,11 +133,10 @@ const CustomSelect = ({ value, onChange, options, placeholder, className = '' })
                   onChange(val);
                   setIsOpen(false);
                 }}
-                className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                  isSelected
-                    ? 'bg-blue-50 text-blue-600 font-bold'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
+                className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${isSelected
+                  ? 'bg-blue-50 text-blue-600 font-bold'
+                  : 'text-gray-700 hover:bg-gray-50'
+                  }`}
               >
                 <span className="truncate">{label}</span>
                 {isSelected && <IoCheckmarkOutline size={15} className="text-blue-600 shrink-0 ml-2" />}
@@ -306,8 +188,8 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
         const rawData = Array.isArray(res.data)
           ? res.data
           : Array.isArray(res.data?.results)
-          ? res.data.results
-          : [];
+            ? res.data.results
+            : [];
 
         if (rawData.length > 0) {
           const mapped = rawData.map((item, idx) => {
@@ -322,7 +204,7 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
                 formattedDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
               }
-            } catch (e) {}
+            } catch (e) { }
 
             return {
               id: item.id || idx + 1,
@@ -411,7 +293,7 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
 
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-200 font-sans pb-10">
-      
+
       {/* 1. Header Bar */}
       <div className="space-y-2">
         <div>
@@ -435,7 +317,7 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
         {/* 2. Employee Profile Info & Range Calendar Bar Header */}
         <div className="p-5 sm:p-6 bg-white border-b border-gray-100 space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
-            
+
             {/* Left: Avatar + Name + Metadata */}
             <div className="flex items-center gap-4">
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-base shrink-0 border shadow-xs ${getAvatarColor(employee.name)}`}>
@@ -488,7 +370,7 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
 
           {/* 3. Range Calendar Filter Controls */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1 border-t border-gray-100">
-            
+
             {/* 2-Month Range Calendar Trigger & Reset Button */}
             <div className="flex items-center gap-2">
               <div className="relative">
@@ -505,9 +387,9 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
                 {/* Centered Range Calendar Popup Modal */}
                 {showRangeCalendar && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-                    <div 
-                      className="fixed inset-0" 
-                      onClick={() => setShowRangeCalendar(false)} 
+                    <div
+                      className="fixed inset-0"
+                      onClick={() => setShowRangeCalendar(false)}
                     />
                     <div className="relative z-10 w-[600px] max-w-[95vw] animate-in zoom-in-95 duration-150 font-sans shadow-2xl">
                       <RangeCalendar
@@ -554,11 +436,10 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
                 <button
                   key={tab.id}
                   onClick={() => setStatusTab(tab.id)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
-                    statusTab === tab.id
-                      ? 'bg-white text-gray-900 shadow-xs'
-                      : 'text-gray-500 hover:text-gray-800'
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap cursor-pointer ${statusTab === tab.id
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-800'
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -614,7 +495,7 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
                   <>
                     {paginatedLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-gray-50/70 transition-colors h-[52px]">
-                        
+
                         {/* Date & Day */}
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
@@ -685,11 +566,10 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
                     <button
                       key={idx + 1}
                       onClick={() => setCurrentPage(idx + 1)}
-                      className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold transition-colors ${
-                        currentPage === idx + 1
-                          ? 'bg-blue-600 text-white'
-                          : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
-                      }`}
+                      className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold transition-colors ${currentPage === idx + 1
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
                     >
                       {idx + 1}
                     </button>
@@ -701,8 +581,8 @@ const EmployeeAttendanceHistoryModal = ({ employee, onClose }) => {
                   >
                     <IoChevronForwardOutline size={13} />
                   </button>
+                </div>
               </div>
-            </div>
             </div>
           </div>
         </div>

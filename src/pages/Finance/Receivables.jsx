@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   CreditCard, ShoppingBag, Landmark, CheckCircle2,
-  HelpCircle, ArrowLeftRight, ChevronDown,
-  Info, Send, BarChart2, ChevronLeft, ChevronRight
+  ArrowLeftRight,
+  Info, Send, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -12,97 +12,9 @@ import toast from 'react-hot-toast';
 import { receivableService } from '../../services/receivableService';
 import { accountService } from '../../services/accountService';
 
-const FALLBACK_RECEIVABLES = [
-  {
-    id: 4,
-    branch: 1,
-    branch_name: 'Al Naaz Kayamkulam',
-    daily_sales_payment: 15,
-    payment_method: 'FOOD_DELIVERY',
-    platform: '',
-    receivable_account: 4,
-    delivery_partner: 1,
-    delivery_partner_name: 'Swiggy',
-    gross_amount: '8000.00',
-    commission_rate: '20.00',
-    commission_amount: '1600.00',
-    expected_net_amount: '6400.00',
-    settled_amount: '8000.00',
-    outstanding_amount: '0.00',
-    status: 'SETTLED',
-    business_date: '2026-09-12',
-    created_by: 1,
-    created_at: '2026-09-12T14:13:54.163276+05:30',
-    updated_at: '2026-09-12T14:38:39.510839+05:30'
-  },
-  {
-    id: 3,
-    branch: 1,
-    branch_name: 'Al Naaz Kayamkulam',
-    daily_sales_payment: 14,
-    payment_method: 'CARD',
-    platform: '',
-    receivable_account: 3,
-    delivery_partner: null,
-    gross_amount: '3000.00',
-    commission_rate: '0.00',
-    commission_amount: '0.00',
-    expected_net_amount: '3000.00',
-    settled_amount: '0.00',
-    outstanding_amount: '3000.00',
-    status: 'PENDING',
-    business_date: '2026-09-12',
-    created_by: 1,
-    created_at: '2026-09-12T14:13:53.735145+05:30',
-    updated_at: '2026-09-12T14:13:53.735155+05:30'
-  },
-  {
-    id: 2,
-    branch: 1,
-    branch_name: 'Al Naaz Kayamkulam',
-    daily_sales_payment: 8,
-    payment_method: 'FOOD_DELIVERY',
-    platform: 'Swiggy',
-    receivable_account: 4,
-    delivery_partner: null,
-    gross_amount: '8000.00',
-    commission_rate: null,
-    commission_amount: null,
-    expected_net_amount: null,
-    settled_amount: '8000.00',
-    outstanding_amount: '0.00',
-    status: 'SETTLED',
-    business_date: '2026-09-11',
-    created_by: 1,
-    created_at: '2026-09-11T21:53:57.365786+05:30',
-    updated_at: '2026-09-11T22:24:41.538841+05:30'
-  },
-  {
-    id: 1,
-    branch: 1,
-    branch_name: 'Al Naaz Kayamkulam',
-    daily_sales_payment: 7,
-    payment_method: 'CARD',
-    platform: '',
-    receivable_account: 3,
-    delivery_partner: null,
-    gross_amount: '3000.00',
-    commission_rate: null,
-    commission_amount: null,
-    expected_net_amount: null,
-    settled_amount: '0.00',
-    outstanding_amount: '3000.00',
-    status: 'PENDING',
-    business_date: '2026-09-11',
-    created_by: 1,
-    created_at: '2026-09-11T21:53:57.051949+05:30',
-    updated_at: '2026-09-11T21:53:57.051965+05:30'
-  }
-];
-
 const Receivables = () => {
   const [receivables, setReceivables] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -219,17 +131,9 @@ const Receivables = () => {
         setReceivables([]);
       }
     } catch (err) {
-      console.warn('Failed to fetch receivables from API, using fallback data:', err);
-      const mapped = FALLBACK_RECEIVABLES.map(mapReceivableItem);
-      setReceivables(mapped);
-      setTotalCount(mapped.length);
-
-      const pending = mapped.filter((r) => r.outstandingAmount > 0 || r.status === 'PENDING');
-      if (pending.length > 0 && !selectedReceivableId) {
-        setSelectedReceivableId(pending[0].id);
-        setSettlementAmount(pending[0].outstandingAmount.toString());
-        setReferenceNote(`${pending[0].platform} settlement - ${pending[0].reference}`);
-      }
+      console.error('Failed to fetch receivables from API:', err);
+      setReceivables([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -276,15 +180,44 @@ const Receivables = () => {
     { name: 'Others', value: Math.max(0, totalOutstanding - (foodDeliveryAmt + cardReceivableAmt)), percentage: '0%', color: '#10B981' }
   ];
 
-  // Bar Chart Data: Receivables vs Settlements by business date
-  const barChartData = [
-    { month: 'Apr', Outstanding: 12000, Settled: 6500 },
-    { month: 'May', Outstanding: 22000, Settled: 14500 },
-    { month: 'Jun', Outstanding: 26000, Settled: 33000 },
-    { month: 'Jul', Outstanding: 27000, Settled: 40000 },
-    { month: 'Aug', Outstanding: 46000, Settled: 31000 },
-    { month: 'Sep', Outstanding: totalOutstanding, Settled: totalSettled }
-  ];
+  // Bar Chart Data: Receivables vs Settlements by business date (Actual data)
+  const barChartData = useMemo(() => {
+    if (!receivables || receivables.length === 0) return [];
+
+    const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const map = {};
+
+    receivables.forEach((r) => {
+      const dStr = r.businessDate || (r.date && r.date !== '-' ? r.date : 'Other');
+      if (!map[dStr]) {
+        let label = dStr;
+        if (dStr.includes('-')) {
+          const parts = dStr.split('-');
+          if (parts.length === 3) {
+            const mIdx = parseInt(parts[1], 10) - 1;
+            const day = parseInt(parts[2], 10);
+            label = `${day} ${monthNamesShort[mIdx] || parts[1]}`;
+          }
+        }
+        map[dStr] = {
+          dateKey: dStr,
+          month: label,
+          Outstanding: 0,
+          Settled: 0
+        };
+      }
+      map[dStr].Outstanding += parseFloat(r.outstandingAmount || r.outstanding || 0);
+      map[dStr].Settled += parseFloat(r.settledAmount || 0);
+    });
+
+    return Object.values(map)
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+      .map((item) => ({
+        month: item.month,
+        Outstanding: Math.round(item.Outstanding * 100) / 100,
+        Settled: Math.round(item.Settled * 100) / 100
+      }));
+  }, [receivables]);
 
   // Handle row selection for quick settlement
   const handleSelectRowToSettle = (row) => {
@@ -358,6 +291,23 @@ const Receivables = () => {
     );
   };
 
+  // Custom Tooltip with white card background and clean aesthetics
+  const CustomBarChartTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white px-3.5 py-2.5 rounded-xl border border-slate-200/90 shadow-lg text-xs font-sans">
+          <p className="font-bold text-slate-800 mb-1.5">{label}</p>
+          {payload.map((entry, index) => (
+            <p key={`item-${index}`} className="font-semibold text-xs py-0.5" style={{ color: entry.color || entry.fill }}>
+              {entry.name} : ₹ {Number(entry.value).toLocaleString('en-IN')}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }} className="space-y-4 text-slate-800 pb-6 w-full">
       {/* Top Header */}
@@ -372,27 +322,6 @@ const Receivables = () => {
           <p className="text-xs text-slate-500 font-normal mt-0.5">
             Track and settle payments from card processors and food delivery platforms.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => toast.success('Reports options opened')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-800 text-xs font-semibold rounded-lg border border-slate-200/90 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
-          >
-            <BarChart2 className="w-3.5 h-3.5 text-slate-700" />
-            <span>View Reports</span>
-            <ChevronDown className="w-3 h-3 text-slate-400" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => toast.success('Help guide opened')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-800 text-xs font-semibold rounded-lg border border-slate-200/90 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-slate-700" />
-            <span>Help</span>
-          </button>
         </div>
       </div>
 
@@ -497,19 +426,25 @@ const Receivables = () => {
               </div>
 
               <div className="h-56 w-full pt-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barChartData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                    <YAxis width={60} tick={<CustomYAxisTick />} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      formatter={(val, name) => [`₹ ${Number(val).toLocaleString('en-IN')}`, name]}
-                      contentStyle={{ backgroundColor: '#0F172A', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
-                    />
-                    <Bar dataKey="Outstanding" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={14} />
-                    <Bar dataKey="Settled" fill="#10B981" radius={[4, 4, 0, 0]} barSize={14} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {barChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barChartData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                      <YAxis width={60} tick={<CustomYAxisTick />} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        content={<CustomBarChartTooltip />}
+                        cursor={{ fill: 'rgba(241, 245, 249, 0.6)' }}
+                      />
+                      <Bar dataKey="Outstanding" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={barChartData.length <= 2 ? 28 : barChartData.length <= 4 ? 20 : 14} />
+                      <Bar dataKey="Settled" fill="#10B981" radius={[4, 4, 0, 0]} barSize={barChartData.length <= 2 ? 28 : barChartData.length <= 4 ? 20 : 14} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400 font-medium">
+                    No receivables or settlements data to display
+                  </div>
+                )}
               </div>
             </div>
 
