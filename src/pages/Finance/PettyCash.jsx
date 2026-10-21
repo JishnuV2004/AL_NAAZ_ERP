@@ -175,22 +175,30 @@ const PettyCash = () => {
       setBranchesList(brList);
 
       // 2. Identify target Petty Cash account
-      let targetAccId = location.state?.accountId;
+      const targetAccId = location.state?.accountId;
       let matchedAcc = null;
 
       if (targetAccId) {
-        matchedAcc = accList.find((a) => String(a.id) === String(targetAccId));
+        matchedAcc = accList.find((a) => String(a.id || a.account_id) === String(targetAccId));
       }
       if (!matchedAcc) {
         matchedAcc = accList.find(
-          (a) => (a.account_type === 'PETTY_CASH' || a.type === 'PETTY_CASH' || (a.name || '').toLowerCase().includes('petty cash'))
+          (a) => (a.account_type === 'PETTY_CASH' || a.type === 'PETTY_CASH' || (a.name || a.account_name || '').toLowerCase().includes('petty cash'))
         );
       }
       if (!matchedAcc && accList.length > 0) {
         matchedAcc = accList[0];
       }
 
-      const accountId = matchedAcc ? matchedAcc.id : (targetAccId || 1);
+      const accountId = matchedAcc ? (matchedAcc.id || matchedAcc.account_id) : targetAccId;
+
+      if (!accountId) {
+        // No accounts exist in the system yet
+        setAccount(null);
+        setTransactions([]);
+        setLoading(false);
+        return;
+      }
 
       // 3. Fetch detailed account data, transactions, and live balance
       const [detailRes, txnsRes, balRes] = await Promise.allSettled([
@@ -199,7 +207,18 @@ const PettyCash = () => {
         accountService.getAccountBalance(accountId)
       ]);
 
-      let accData = matchedAcc || { id: accountId, name: 'Petty Cash', account_type: 'PETTY_CASH' };
+      let accData = matchedAcc
+        ? {
+            ...matchedAcc,
+            id: matchedAcc.id || matchedAcc.account_id || accountId,
+            name: matchedAcc.name || matchedAcc.account_name || 'Petty Cash',
+            account_type: matchedAcc.account_type || matchedAcc.type || 'PETTY_CASH',
+            branch_name: matchedAcc.branch_name || matchedAcc.branch?.name || '',
+            current_balance: matchedAcc.balance ?? matchedAcc.current_balance ?? 0,
+            balance: matchedAcc.balance ?? matchedAcc.current_balance ?? 0
+          }
+        : { id: accountId, name: 'Petty Cash', account_type: 'PETTY_CASH', current_balance: 0, balance: 0 };
+
       if (detailRes.status === 'fulfilled' && detailRes.value) {
         accData = { ...accData, ...detailRes.value };
       }
@@ -264,10 +283,11 @@ const PettyCash = () => {
   // Transfer modal opening
   const handleOpenTransfer = () => {
     if (!account) return;
-    const otherAccounts = allAccounts.filter((a) => String(a.id) !== String(account.id));
-    const defaultToId = otherAccounts.length > 0 ? otherAccounts[0].id : '';
+    const currentId = account.id || account.account_id;
+    const otherAccounts = allAccounts.filter((a) => String(a.id || a.account_id) !== String(currentId));
+    const defaultToId = otherAccounts.length > 0 ? (otherAccounts[0].id || otherAccounts[0].account_id) : '';
     setTransferData({
-      from_account: account.id,
+      from_account: currentId,
       to_account: defaultToId,
       amount: '',
       transaction_date: getTodayDateString(),
@@ -654,12 +674,17 @@ const PettyCash = () => {
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium"
                 >
                   {allAccounts
-                    .filter((acc) => String(acc.id) !== String(transferData.from_account))
-                    .map((acc) => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.name} ({acc.account_type || acc.type || 'ACCOUNT'})
-                      </option>
-                    ))}
+                    .filter((acc) => String(acc.id || acc.account_id) !== String(transferData.from_account))
+                    .map((acc) => {
+                      const aId = acc.id || acc.account_id;
+                      const aName = acc.name || acc.account_name || 'Account';
+                      const aType = acc.account_type || acc.type || 'ACCOUNT';
+                      return (
+                        <option key={aId} value={aId}>
+                          {aName} ({aType})
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
             </div>

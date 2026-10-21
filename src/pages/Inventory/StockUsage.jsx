@@ -162,8 +162,7 @@ const StockUsage = () => {
     }
   };
 
-  // Combine fetched usages with fallback defaults if empty
-  const rawList = Array.isArray(usages) && usages.length > 0 ? usages : DEFAULT_USAGES;
+  const rawList = Array.isArray(usages) ? usages : [];
 
   const filteredUsages = rawList.filter((item) => {
     if (!searchTerm.trim()) return true;

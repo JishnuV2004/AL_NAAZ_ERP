@@ -96,14 +96,10 @@ const Stock = () => {
       const data = Array.isArray(response.data)
         ? response.data
         : response.data?.results || [];
-      if (data && data.length > 0) {
-        setStockItems(data);
-      } else {
-        setStockItems(INITIAL_STOCK_DATA);
-      }
+      setStockItems(data || []);
     } catch (error) {
-      console.error('Failed to fetch stock from /api/stock/:', error);
-      setStockItems(INITIAL_STOCK_DATA);
+      console.warn('Failed to fetch stock from /api/stock/:', error);
+      setStockItems([]);
     } finally {
       setLoading(false);
     }
