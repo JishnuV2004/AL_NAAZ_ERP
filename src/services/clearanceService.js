@@ -222,34 +222,24 @@ export const clearanceService = {
     }
   },
 
-  // Flat list of all payments: aggregated from items list
-  getAllPayments: async (employeeFilter = 'All employees') => {
+  // Fetch list of payments: GET /clearance/payments/
+  getPayments: async () => {
     try {
-      const items = await clearanceService.getItems();
-      const all = [];
-      if (Array.isArray(items)) {
-        items.forEach((item) => {
-          if (Array.isArray(item.payments)) {
-            item.payments.forEach((p) => {
-              all.push({
-                ...p,
-                itemId: item.id,
-                itemName: item.item_name,
-                employee: item.employee_name,
-                employeeId: item.employee
-              });
-            });
-          }
-        });
+      const response = await axiosInstance.get('/clearance/payments/');
+      const data = response?.data;
+      if (Array.isArray(data)) {
+        return data;
+      } else if (data && Array.isArray(data.results)) {
+        return data.results;
       }
-
-      if (employeeFilter && employeeFilter !== 'All employees') {
-        return all.filter((p) => String(p.employee).toLowerCase() === String(employeeFilter).toLowerCase());
-      }
-      return all;
+      return [];
     } catch (err) {
-      console.warn('Failed to load all payments:', err);
+      console.warn('Clearance payments GET API failed:', err.message);
       return [];
     }
+  },
+
+  getAllPayments: async () => {
+    return clearanceService.getPayments();
   }
 };

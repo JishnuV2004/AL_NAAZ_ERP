@@ -64,7 +64,6 @@ const ClearanceDetails = () => {
     loadData();
   }, [id]);
 
-  // POST https://al-naaz.onrender.com/api/clearance/items/:id/approve-manager/
   const handleApproveManager = async () => {
     setActionLoading(true);
     try {
@@ -81,7 +80,6 @@ const ClearanceDetails = () => {
     }
   };
 
-  // POST https://al-naaz.onrender.com/api/clearance/items/:id/approve-admin/
   const handleApproveAdmin = async () => {
     setActionLoading(true);
     try {
@@ -196,8 +194,7 @@ const ClearanceDetails = () => {
 
 
 
-  // POST https://al-naaz.onrender.com/api/clearance/payments/
-  // Payload: { issued_item, amount, payment_method, payment_date, reference, notes }
+
   const handleRecordPayment = async (e) => {
     e.preventDefault();
     const amt = parseFloat(paymentData.amount);
