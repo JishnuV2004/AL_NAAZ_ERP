@@ -69,6 +69,17 @@ export const inventoryService = {
       return [];
     }
   },
+  fetchLowStock: async (branchId) => {
+    try {
+      const url = branchId ? `/stock/low-stock/?branch=${branchId}` : '/stock/low-stock/';
+      const response = await axiosInstance.get(url);
+      const data = response.data.results ? response.data.results : response.data;
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Failed to fetch low stock from API:', err);
+      throw err;
+    }
+  },
   addProduct: async (data) => {
     const store = useInventoryStore.getState();
     const loadingToast = toast.loading('Adding product...');

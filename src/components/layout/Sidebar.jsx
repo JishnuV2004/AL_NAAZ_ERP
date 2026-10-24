@@ -43,7 +43,9 @@ const MENU_GROUPS = [
       { name: 'Employees', path: '/hr/employees' },
       { name: 'Departments', path: '/hr/departments' },
       { name: 'Employee Documents', path: '/hr/employeedocuments' },
-      { name: 'Leave', path: '/hr/leavevacation' }
+      { name: 'Leave', path: '/hr/leavevacation' },
+      { name: 'Clearance Items', path: '/hr/clearance-items' },
+      { name: 'Payments', path: '/hr/clearance-payments' }
     ]
   },
   {

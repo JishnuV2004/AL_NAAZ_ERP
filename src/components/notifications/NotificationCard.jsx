@@ -12,7 +12,8 @@ import {
   IoNotificationsOutline,
   IoInformationCircleOutline,
   IoAlertCircleOutline,
-  IoCheckmarkCircleOutline
+  IoCheckmarkCircleOutline,
+  IoShieldCheckmarkOutline
 } from 'react-icons/io5';
 
 // Format time as "9:58 AM" or "Oct 17, 2026 • 3:56 PM"
@@ -43,6 +44,14 @@ export const formatTimeDisplay = (dateString) => {
 // Module config for icon and styling
 const getModuleStyle = (moduleName = '') => {
   const mod = String(moduleName).toUpperCase();
+  if (mod === 'CLEARANCE') {
+    return {
+      icon: IoShieldCheckmarkOutline,
+      bg: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+      badge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      label: 'Clearance'
+    };
+  }
   if (mod === 'FINANCE') {
     return {
       icon: IoReceiptOutline,
@@ -94,6 +103,13 @@ const getModuleStyle = (moduleName = '') => {
 // Notification type badge
 const getTypeBadge = (type = '') => {
   const t = String(type).toUpperCase();
+  if (t === 'APPROVAL') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+        <IoShieldCheckmarkOutline size={11} /> APPROVAL
+      </span>
+    );
+  }
   if (t === 'ERROR' || t === 'CRITICAL') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">

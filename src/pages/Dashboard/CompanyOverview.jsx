@@ -90,11 +90,11 @@ const CompanyOverview = () => {
 
   // Filters
   const [selectedBranch, setSelectedBranch] = useState('all');
-  const [selectedPeriod, setSelectedPeriod] = useState('month');
 
   // API Data States
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
+  const [availableBranches, setAvailableBranches] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [alerts, setAlerts] = useState([]);
@@ -108,11 +108,20 @@ const CompanyOverview = () => {
       if (selectedBranch && selectedBranch !== 'all') {
         params.branch = selectedBranch;
       }
-      if (selectedPeriod && selectedPeriod !== 'all') {
-        params.period = selectedPeriod;
-      }
       const data = await getDashboardSummary(params);
       setDashboardData(data);
+      if (data?.branch_performance && Array.isArray(data.branch_performance)) {
+        setAvailableBranches(prev => {
+          const map = new Map();
+          prev.forEach(b => map.set(b.id, b));
+          data.branch_performance.forEach(b => {
+            if (b.branch_id && b.branch_name) {
+              map.set(b.branch_id, { id: b.branch_id, name: b.branch_name });
+            }
+          });
+          return Array.from(map.values());
+        });
+      }
     } catch (err) {
       console.error('Failed to fetch dashboard summary:', err);
     } finally {
@@ -160,7 +169,7 @@ const CompanyOverview = () => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedBranch, selectedPeriod]);
+  }, [selectedBranch]);
 
   useEffect(() => {
     fetchActivities();
@@ -173,44 +182,52 @@ const CompanyOverview = () => {
   const branchPerformance = dashboardData?.branch_performance || [];
   const rawExpenseBreakdown = dashboardData?.expense_breakdown || [];
 
-  // Available branches list from API or default branches
-  const branchOptions = branchPerformance.length > 0 
-    ? branchPerformance.map(b => ({ id: b.branch_id, name: b.branch_name }))
-    : [
-        { id: 1, name: 'Al Naaz Kayamkulam' },
-        { id: 2, name: 'Al Naaz Kochi' }
-      ];
+  // Available branches list strictly from API response
+  const branchOptions = availableBranches.length > 0
+    ? availableBranches
+    : branchPerformance.map(b => ({ id: b.branch_id, name: b.branch_name }));
 
-  // Prepare Expense Breakdown Pie Data
-  const totalExpenseAmount = rawExpenseBreakdown.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0) || financialSummary?.monthly_expenses || 0;
-  const pieData = rawExpenseBreakdown.length > 0
-    ? rawExpenseBreakdown.map((item, idx) => {
-        const val = parseFloat(item.amount) || 0;
-        const pct = totalExpenseAmount > 0 ? Math.round((val / totalExpenseAmount) * 100) : 0;
+  // Prepare Expense Breakdown Pie Data strictly from API response
+  const totalExpenseAmount = rawExpenseBreakdown.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const pieData = rawExpenseBreakdown.map((item, idx) => {
+    const val = parseFloat(item.amount) || 0;
+    const pct = totalExpenseAmount > 0 ? Math.round((val / totalExpenseAmount) * 100) : 0;
+    return {
+      name: item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : `Cat #${item.category_id}`,
+      value: val,
+      color: PIE_COLORS[idx % PIE_COLORS.length],
+      percentage: `${pct}%`
+    };
+  });
+
+  // Dynamic Chart Data based on yearly_chart (Month-based)
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const rawYearlyChart = dashboardData?.yearly_chart || [];
+  const monthlyChartData = rawYearlyChart.length > 0
+    ? rawYearlyChart.map(m => {
+        const rev = Number(m.revenue) || 0;
+        const exp = Number(m.expenses) || 0;
+        const opResult = rev - exp;
         return {
-          name: item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : `Cat #${item.category_id}`,
-          value: val,
-          color: PIE_COLORS[idx % PIE_COLORS.length],
-          percentage: `${pct}%`
+          month: m.month,
+          name: m.month_name ? m.month_name.slice(0, 3) : `M${m.month}`,
+          fullName: m.month_name || `Month ${m.month}`,
+          revenue: rev,
+          expenses: exp,
+          profit: opResult
         };
       })
-    : [
-        { name: 'Others', value: 900, color: '#3B82F6', percentage: '64%' },
-        { name: 'Purchase', value: 250, color: '#FACC15', percentage: '18%' },
-        { name: 'Chicken', value: 250, color: '#EF4444', percentage: '18%' }
-      ];
-
-  // Dynamic Chart Data based on Branch Performance or Financial Summary
-  const lineChartData = branchPerformance.length > 0
-    ? branchPerformance.map(b => ({
-        name: b.branch_name?.replace('Al Naaz ', '') || `Branch #${b.branch_id}`,
-        revenue: (b.revenue || 0) / 1000,
-        expenses: (b.expenses || 0) / 1000,
-        profit: (b.operating_result || 0) / 1000
-      }))
-    : [
-        { name: 'Revenue', revenue: (financialSummary.monthly_revenue || 7300) / 1000, expenses: (financialSummary.monthly_expenses || 1400) / 1000, profit: (financialSummary.operating_profit || 5900) / 1000 }
-      ];
+    : MONTH_NAMES.map((name, idx) => ({
+        month: idx + 1,
+        name: name.slice(0, 3),
+        fullName: name,
+        revenue: 0,
+        expenses: 0,
+        profit: 0
+      }));
 
   // Period label display
   const periodData = dashboardData?.period;
@@ -254,24 +271,7 @@ const CompanyOverview = () => {
             </div>
           </div>
 
-          {/* Period Filter */}
-          <div className="relative">
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="appearance-none bg-white pl-4 pr-10 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
-            >
-              <option value="month">This Month</option>
-              <option value="today">Today</option>
-              <option value="year">This Year</option>
-              <option value="all">All Time</option>
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-              <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-              </svg>
-            </div>
-          </div>
+
 
           {/* Period Display */}
           <div className="flex items-center gap-2 bg-white px-3.5 py-2 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 shadow-xs">
@@ -377,19 +377,17 @@ const CompanyOverview = () => {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h3 className="font-bold text-gray-900">Business Overview</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Revenue vs Expenses across branches (in ₹ Thousands)</p>
+              <p className="text-xs text-gray-500 mt-0.5">Revenue vs Expenses across months</p>
             </div>
             <div className="flex gap-1 bg-gray-50 p-1 rounded-lg border border-gray-100">
-              {['Branch Trends'].map((t) => (
-                <span key={t} className="px-2.5 py-1 text-xs font-bold rounded-md bg-blue-500 text-white shadow-xs">
-                  {t}
-                </span>
-              ))}
+              <span className="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-50 text-blue-700 border border-blue-100">
+                Monthly Trend {dashboardData?.period?.year ? `• ${dashboardData.period.year}` : ''}
+              </span>
             </div>
           </div>
           <div className="flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={lineChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+              <AreaChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.25} />
@@ -405,17 +403,37 @@ const CompanyOverview = () => {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94A3B8' }} tickFormatter={(val) => `₹${val}k`} />
+                <XAxis dataKey="name" interval={0} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B', fontWeight: 500 }} dy={8} />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#64748B' }}
+                  tickFormatter={(val) => {
+                    if (val === 0) return '₹0';
+                    if (Math.abs(val) >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+                    if (Math.abs(val) >= 1000) return `₹${(val / 1000).toFixed(0)}k`;
+                    return `₹${val}`;
+                  }}
+                />
                 <Tooltip
                   cursor={{ stroke: '#CBD5E1', strokeWidth: 1.5, strokeDasharray: '4 4' }}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' }}
-                  formatter={(val) => [`₹ ${(val * 1000).toLocaleString('en-IN')}`, '']}
+                  contentStyle={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: '12px',
+                    border: '1px solid #E2E8F0',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                    fontSize: '12px'
+                  }}
+                  formatter={(val, name) => [`₹ ${Number(val).toLocaleString('en-IN')}`, name]}
+                  labelFormatter={(label, payload) => {
+                    const item = payload?.[0]?.payload;
+                    return item?.fullName || label;
+                  }}
                 />
                 <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#374151' }} />
-                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3B82F6" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" dot={{ r: 4, strokeWidth: 2, fill: '#3B82F6' }} activeDot={{ r: 6 }} />
-                <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#EF4444" strokeWidth={3} fillOpacity={1} fill="url(#colorExpenses)" dot={{ r: 4, strokeWidth: 2, fill: '#EF4444' }} activeDot={{ r: 6 }} />
-                <Area type="monotone" dataKey="profit" name="Operating Result" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" dot={{ r: 4, strokeWidth: 2, fill: '#10B981' }} activeDot={{ r: 6 }} />
+                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3B82F6" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" dot={{ r: 3, strokeWidth: 2, fill: '#3B82F6' }} activeDot={{ r: 5 }} />
+                <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#EF4444" strokeWidth={3} fillOpacity={1} fill="url(#colorExpenses)" dot={{ r: 3, strokeWidth: 2, fill: '#EF4444' }} activeDot={{ r: 5 }} />
+                <Area type="monotone" dataKey="profit" name="Operating Result" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" dot={{ r: 3, strokeWidth: 2, fill: '#10B981' }} activeDot={{ r: 5 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -425,41 +443,64 @@ const CompanyOverview = () => {
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
           <h3 className="font-bold text-gray-900 mb-1">Expense Breakdown</h3>
           <p className="text-xs text-gray-500 mb-4">By recorded expense category</p>
-          <div className="flex-1 flex flex-col items-center justify-center relative">
-            <div className="h-[210px] w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={58} outerRadius={92} paddingAngle={2} dataKey="value" stroke="none">
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => `₹ ${Number(value).toLocaleString('en-IN')}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[11px] text-gray-400 font-medium">Total</span>
-                <span className="font-sans font-bold text-gray-900 text-base whitespace-nowrap">
-                  {formatCurrency(totalExpenseAmount)}
-                </span>
+          
+          {loading ? (
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[280px]">
+              <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs text-gray-400 mt-2 font-medium">Loading expense breakdown...</span>
+            </div>
+          ) : pieData.length > 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center relative">
+              <div className="h-[210px] w-full relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={58} outerRadius={92} paddingAngle={2} dataKey="value" stroke="none">
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value) => `₹ ${Number(value).toLocaleString('en-IN')}`} 
+                      contentStyle={{ 
+                        backgroundColor: '#ffffff', 
+                        borderRadius: '12px', 
+                        border: '1px solid #E2E8F0', 
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                        color: '#0F172A',
+                        fontSize: '12px',
+                        fontWeight: '600'
+                      }} 
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[11px] text-gray-400 font-medium">Total</span>
+                  <span className="font-sans font-bold text-gray-900 text-base whitespace-nowrap">
+                    {formatCurrency(totalExpenseAmount)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="w-full mt-4 space-y-2.5 max-h-[160px] overflow-y-auto pr-1">
+                {pieData.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                      <span className="text-gray-600 font-medium truncate">{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-bold text-gray-900">{item.percentage}</span>
+                      <span className="text-gray-500 w-16 text-right font-mono">{formatCurrency(item.value)}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-
-            <div className="w-full mt-4 space-y-2.5 max-h-[160px] overflow-y-auto pr-1">
-              {pieData.map((item, i) => (
-                <div key={i} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
-                    <span className="text-gray-600 font-medium truncate">{item.name}</span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="font-bold text-gray-900">{item.percentage}</span>
-                    <span className="text-gray-500 w-16 text-right font-mono">{formatCurrency(item.value)}</span>
-                  </div>
-                </div>
-              ))}
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[280px] text-gray-400">
+              <p className="text-xs font-medium">No expense breakdown recorded</p>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Recent Activity from GET /api/activity-logs/?page=1&page_size=10 */}

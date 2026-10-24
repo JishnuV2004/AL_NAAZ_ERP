@@ -17,17 +17,27 @@ import {
   IoCalendarOutline,
   IoCubeOutline,
   IoReceiptOutline,
-  IoLayersOutline
+  IoLayersOutline,
+  IoShieldCheckmarkOutline,
+  IoFilterOutline
 } from 'react-icons/io5';
 
 // Allowed modules according to user specifications
 const MODULE_TABS = [
   { id: 'ALL', name: 'All', icon: IoLayersOutline },
+  { id: 'CLEARANCE', name: 'Clearance', icon: IoShieldCheckmarkOutline },
+  { id: 'FINANCE', name: 'Finance', icon: IoReceiptOutline },
   { id: 'EMPLOYEES', name: 'Employees', icon: IoPeopleOutline },
   { id: 'ADVANCE', name: 'Advance', icon: IoCashOutline },
   { id: 'ATTENDANCE', name: 'Attendance', icon: IoCalendarOutline },
-  { id: 'INVENTORY', name: 'Inventory', icon: IoCubeOutline },
-  { id: 'FINANCE', name: 'Finance', icon: IoReceiptOutline }
+  { id: 'INVENTORY', name: 'Inventory', icon: IoCubeOutline }
+];
+
+const TYPE_FILTERS = [
+  { id: 'ALL', name: 'All Types' },
+  { id: 'APPROVAL', name: 'Approvals' },
+  { id: 'INFO', name: 'Info' },
+  { id: 'WARNING', name: 'Warnings' }
 ];
 
 const Notifications = () => {
@@ -55,6 +65,7 @@ const Notifications = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, UNREAD, READ
+  const [typeFilter, setTypeFilter] = useState('ALL'); // ALL, APPROVAL, INFO, WARNING
 
   // Load initial notifications & count of all notifications
   useEffect(() => {
@@ -62,20 +73,22 @@ const Notifications = () => {
     fetchUnreadCount();
   }, []);
 
-  // Fetch when module or status filter changes
+  // Fetch when module, type, or status filter changes
   useEffect(() => {
     const activeFilters = {
       module: filters.module || 'ALL',
+      notification_type: typeFilter,
       is_read: statusFilter === 'UNREAD' ? false : statusFilter === 'READ' ? true : 'ALL',
       search: searchTerm.trim()
     };
     fetchNotifications(1, activeFilters);
-  }, [filters.module, statusFilter]);
+  }, [filters.module, typeFilter, statusFilter]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     const activeFilters = {
       module: filters.module || 'ALL',
+      notification_type: typeFilter,
       is_read: statusFilter === 'UNREAD' ? false : statusFilter === 'READ' ? true : 'ALL',
       search: searchTerm.trim()
     };
@@ -85,12 +98,14 @@ const Notifications = () => {
   const handleResetFilters = () => {
     setSearchTerm('');
     setStatusFilter('ALL');
+    setTypeFilter('ALL');
     setModuleFilter('ALL');
   };
 
   const handlePageChange = (newPage) => {
     const activeFilters = {
       module: filters.module || 'ALL',
+      notification_type: typeFilter,
       is_read: statusFilter === 'UNREAD' ? false : statusFilter === 'READ' ? true : 'ALL',
       search: searchTerm.trim()
     };
@@ -272,8 +287,8 @@ const Notifications = () => {
         </div>
       </div>
 
-      {/* 4. Search and Read Status Controls */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+      {/* 4. Search, Notification Type, and Read Status Controls */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Search form */}
           <form onSubmit={handleSearchSubmit} className="relative flex-1">
@@ -309,7 +324,7 @@ const Notifications = () => {
               ))}
             </div>
 
-            {(searchTerm || statusFilter !== 'ALL' || filters.module !== 'ALL') && (
+            {(searchTerm || statusFilter !== 'ALL' || typeFilter !== 'ALL' || filters.module !== 'ALL') && (
               <button
                 type="button"
                 onClick={handleResetFilters}
@@ -319,6 +334,37 @@ const Notifications = () => {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Notification Type Filters (ALL, APPROVAL, INFO, WARNING) */}
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-100 flex-wrap">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 mr-1">
+            <IoFilterOutline size={13} />
+            <span>Type:</span>
+          </span>
+          {TYPE_FILTERS.map((t) => {
+            const isSelected = typeFilter === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTypeFilter(t.id)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  isSelected
+                    ? t.id === 'APPROVAL'
+                      ? 'bg-amber-500 text-white shadow-2xs'
+                      : t.id === 'INFO'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : t.id === 'WARNING'
+                      ? 'bg-rose-600 text-white shadow-2xs'
+                      : 'bg-gray-800 text-white shadow-2xs'
+                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
+                }`}
+              >
+                {t.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -366,7 +412,7 @@ const Notifications = () => {
             <p className="mt-1 max-w-sm text-xs text-gray-500">
               There are no notifications matching the selected module or filter criteria.
             </p>
-            {(searchTerm || statusFilter !== 'ALL' || filters.module !== 'ALL') && (
+            {(searchTerm || statusFilter !== 'ALL' || typeFilter !== 'ALL' || filters.module !== 'ALL') && (
               <button
                 onClick={handleResetFilters}
                 className="mt-4 inline-flex items-center space-x-1.5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"

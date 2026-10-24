@@ -15,11 +15,13 @@ import {
   IoCalendarOutline,
   IoInformationCircleOutline,
   IoCheckmarkCircleOutline,
-  IoRefreshOutline
+  IoRefreshOutline,
+  IoShieldCheckmarkOutline
 } from 'react-icons/io5';
 
 const getModuleIcon = (module = '') => {
   const mod = String(module).toUpperCase();
+  if (mod === 'CLEARANCE') return IoShieldCheckmarkOutline;
   if (mod === 'FINANCE') return IoReceiptOutline;
   if (mod === 'EMPLOYEES') return IoPeopleOutline;
   if (mod === 'ADVANCE') return IoCashOutline;

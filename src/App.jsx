@@ -25,6 +25,9 @@ import Departments from './pages/HR/Departments';
 import DepartmentDetails from './pages/HR/DepartmentDetails';
 import EmployeeDocuments from './pages/HR/EmployeeDocuments';
 import LeaveVacation from './pages/HR/LeaveVacation';
+import ClearanceItems from './pages/HR/ClearanceItems';
+import ClearanceDetails from './pages/HR/ClearanceDetails';
+import ClearancePayments from './pages/HR/ClearancePayments';
 import DailyAttendance from './pages/Attendance/DailyAttendance';
 import Overtime from './pages/Attendance/Overtime';
 import AttendanceReports from './pages/Attendance/AttendanceReports';
@@ -63,13 +66,6 @@ import OtherContacts from './pages/BusinessContacts/OtherContacts';
 import Notifications from './pages/Notifications';
 import ActivityLogs from './pages/Audit/ActivityLogs';
 import CompanyOverview from './pages/Dashboard/CompanyOverview';
-import BranchOverview from './pages/Dashboard/BranchOverview';
-import Finance from './pages/Dashboard/Finance';
-import HR from './pages/Dashboard/HR';
-import Inventory from './pages/Dashboard/Inventory';
-import DashboardSuppliers from './pages/Dashboard/Suppliers';
-import DashboardBudgets from './pages/Dashboard/Budgets';
-import Alerts from './pages/Dashboard/Alerts';
 
 
 // Layout wrapper for protected pages
@@ -118,6 +114,11 @@ function App() {
           <Route path="/hr/departments/:id" element={<Layout><DepartmentDetails /></Layout>} />
           <Route path="/hr/employeedocuments" element={<Layout><EmployeeDocuments /></Layout>} />
           <Route path="/hr/leavevacation" element={<Layout><LeaveVacation /></Layout>} />
+          <Route path="/hr/clearance-items" element={<Layout><ClearanceItems /></Layout>} />
+          <Route path="/hr/clearance-items/:id" element={<Layout><ClearanceDetails /></Layout>} />
+          <Route path="/hr/clearance" element={<Navigate to="/hr/clearance-items" replace />} />
+          <Route path="/hr/clearance-payments" element={<Layout><ClearancePayments /></Layout>} />
+          <Route path="/hr/payments" element={<Layout><ClearancePayments /></Layout>} />
           <Route path="/attendance/dailyattendance" element={<Layout><DailyAttendance /></Layout>} />
           <Route path="/attendance/overtime" element={<Layout><Overtime /></Layout>} />
           <Route path="/attendance/attendancereports" element={<Layout><AttendanceReports /></Layout>} />
@@ -161,13 +162,6 @@ function App() {
           <Route path="/audit/activitylogs" element={<Layout><ActivityLogs /></Layout>} />
           <Route path="/dashboard" element={<Layout><CompanyOverview /></Layout>} />
           <Route path="/dashboard/companyoverview" element={<Layout><CompanyOverview /></Layout>} />
-          <Route path="/dashboard/branchoverview" element={<Layout><BranchOverview /></Layout>} />
-          <Route path="/dashboard/finance" element={<Layout><Finance /></Layout>} />
-          <Route path="/dashboard/hr" element={<Layout><HR /></Layout>} />
-          <Route path="/dashboard/inventory" element={<Layout><Inventory /></Layout>} />
-          <Route path="/dashboard/suppliers" element={<Layout><DashboardSuppliers /></Layout>} />
-          <Route path="/dashboard/budgets" element={<Layout><DashboardBudgets /></Layout>} />
-          <Route path="/dashboard/alerts" element={<Layout><Alerts /></Layout>} />
 
         </Route>
 

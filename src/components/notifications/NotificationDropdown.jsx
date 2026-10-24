@@ -21,8 +21,11 @@ import {
 
 const getDropdownModuleInfo = (module = '') => {
   const mod = String(module || '').toLowerCase();
+  if (mod.includes('clearance')) {
+    return { label: 'Clearance', icon: IoShieldCheckmarkOutline, bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+  }
   if (mod.includes('expense') || mod.includes('finance')) {
-    return { label: 'Finance', icon: IoReceiptOutline, bg: 'bg-rose-50 text-rose-700 border-rose-200' };
+    return { label: 'Finance', icon: IoReceiptOutline, bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
   }
   if (mod.includes('budget')) {
     return { label: 'Budget', icon: IoPieChartOutline, bg: 'bg-amber-50 text-amber-700 border-amber-200' };

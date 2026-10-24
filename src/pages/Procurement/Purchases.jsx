@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   IoSearchOutline,
   IoAddOutline,
@@ -38,6 +38,8 @@ const defaultForm = {
 
 const Purchases = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const autoOpenedRef = useRef(false);
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -125,6 +127,26 @@ const Purchases = () => {
     });
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const shouldOpen =
+      location.state?.openModal ||
+      location.state?.openAddModal ||
+      params.get('create') === 'true' ||
+      params.get('new') === 'true';
+
+    if (shouldOpen && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      handleOpenAddModal();
+      if (params.get('create') || params.get('new')) {
+        params.delete('create');
+        params.delete('new');
+        const newSearch = params.toString() ? `?${params.toString()}` : '';
+        navigate(`/procurement/purchases${newSearch}`, { replace: true, state: {} });
+      }
+    }
+  }, [location, suppliersList, accountsList, productsList, navigate]);
 
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...formData.items];

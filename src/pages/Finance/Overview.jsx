@@ -234,7 +234,7 @@ const Overview = () => {
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }} className="space-y-4 text-slate-800 pb-10">
-      
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -290,7 +290,7 @@ const Overview = () => {
 
       {/* Row 1: Top 4 Summary Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        
+
         {/* Card 1: Total Financial Position */}
         <div className="bg-white p-5 rounded-[20px] border border-gray-100 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow min-h-[140px]">
           <div className="flex items-start gap-3 mb-4">
@@ -387,7 +387,7 @@ const Overview = () => {
 
       {/* Row 2: Middle Charts & Quick Actions (3 Columns Layout) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        
+
         {/* Col 1: Account Balances Bar Chart (4 cols) */}
         <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200/80 shadow-2xs p-4 flex flex-col justify-between">
           <div>
@@ -435,7 +435,7 @@ const Overview = () => {
                 <div>
                   <h2 className="text-base font-bold text-slate-900 leading-tight">Income vs Expenses</h2>
                   <p className="text-xs text-slate-500 font-normal mt-0.5">
-                    {incomeExpenses.start_date && incomeExpenses.end_date 
+                    {incomeExpenses.start_date && incomeExpenses.end_date
                       ? `${formatDate(incomeExpenses.start_date)} - ${formatDate(incomeExpenses.end_date)}`
                       : 'Based on posted transactions'}
                   </p>
@@ -603,7 +603,7 @@ const Overview = () => {
 
       {/* Row 3: Financial Accounts Table & Recent Transactions (2 Columns Layout) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        
+
         {/* Left Column: Financial Accounts (~6 cols) */}
         <div className="lg:col-span-6 bg-white rounded-xl border border-slate-200/80 shadow-2xs p-4 flex flex-col justify-between">
           <div>
@@ -636,11 +636,10 @@ const Overview = () => {
                   key={tab.key}
                   type="button"
                   onClick={() => setAccountTab(tab.key)}
-                  className={`px-3 py-1 rounded-full font-medium text-xs transition-all cursor-pointer ${
-                    accountTab === tab.key
+                  className={`px-3 py-1 rounded-full font-medium text-xs transition-all cursor-pointer ${accountTab === tab.key
                       ? 'bg-blue-600 text-white shadow-2xs font-semibold'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -692,23 +691,21 @@ const Overview = () => {
                           </td>
 
                           <td className="py-2.5 px-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              acc.account_type === 'CASH' ? 'bg-slate-100 text-slate-700' :
-                              acc.account_type === 'BANK' ? 'bg-blue-50 text-blue-700' :
-                              acc.account_type === 'UPI' ? 'bg-purple-50 text-purple-700' :
-                              acc.account_type === 'RECEIVABLE' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' :
-                              acc.account_type === 'PETTY_CASH' ? 'bg-cyan-50 text-cyan-700' :
-                              'bg-rose-50 text-rose-700 border border-rose-200/60'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${acc.account_type === 'CASH' ? 'bg-slate-100 text-slate-700' :
+                                acc.account_type === 'BANK' ? 'bg-blue-50 text-blue-700' :
+                                  acc.account_type === 'UPI' ? 'bg-purple-50 text-purple-700' :
+                                    acc.account_type === 'RECEIVABLE' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' :
+                                      acc.account_type === 'PETTY_CASH' ? 'bg-cyan-50 text-cyan-700' :
+                                        'bg-rose-50 text-rose-700 border border-rose-200/60'
+                              }`}>
                               {acc.account_type}
                             </span>
                           </td>
 
                           <td className="py-2.5 px-2 text-slate-600 truncate max-w-[120px]">{acc.branch_name}</td>
 
-                          <td className={`py-2.5 px-2 text-right font-bold text-xs tabular-nums ${
-                            isNegative ? 'text-rose-600' : 'text-slate-900'
-                          }`}>
+                          <td className={`py-2.5 px-2 text-right font-bold text-xs tabular-nums ${isNegative ? 'text-rose-600' : 'text-slate-900'
+                            }`}>
                             {formatCurrency(acc.balance)}
                           </td>
 
@@ -786,15 +783,13 @@ const Overview = () => {
                             {tx.account_name}
                           </td>
                           <td className="py-2.5 px-2 text-center whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isIncoming ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isIncoming ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                              }`}>
                               {isIncoming ? 'In' : 'Out'}
                             </span>
                           </td>
-                          <td className={`py-2.5 px-2 text-right font-bold text-xs tabular-nums whitespace-nowrap ${
-                            isIncoming ? 'text-emerald-600' : 'text-rose-600'
-                          }`}>
+                          <td className={`py-2.5 px-2 text-right font-bold text-xs tabular-nums whitespace-nowrap ${isIncoming ? 'text-emerald-600' : 'text-rose-600'
+                            }`}>
                             {isIncoming ? '+ ' : '- '}{formatCurrency(tx.amount)}
                           </td>
                         </tr>
@@ -812,7 +807,7 @@ const Overview = () => {
       {/* Row 4: Bottom 2 Columns Layout (Pending Receivables & Pending Payables) */}
       {/* Cash Flow Summary has been removed as requested */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        
+
         {/* Col 1: Pending Receivables (~6 cols) */}
         <div id="pending-receivables" className="bg-white rounded-xl border border-slate-200/80 shadow-2xs p-4 flex flex-col justify-between">
           <div>
@@ -942,9 +937,8 @@ const Overview = () => {
                           {formatCurrency(item.outstanding_amount)}
                         </td>
                         <td className="py-2.5 px-2 text-center whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            item.status === 'OPEN' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.status === 'OPEN' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
                             {item.status}
                           </span>
                         </td>

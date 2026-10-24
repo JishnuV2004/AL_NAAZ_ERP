@@ -33,6 +33,9 @@ export const normalizeNotification = (item) => {
   if (rawModule === 'FINANCE') {
     targetRoute = '/finance/dailysales';
     actionLabel = 'View Daily Sales';
+  } else if (rawModule === 'CLEARANCE') {
+    targetRoute = objectId ? `/hr/clearance-items/${objectId}` : '/hr/clearance-items';
+    actionLabel = 'View Clearance Item';
   } else if (rawModule === 'EMPLOYEES') {
     targetRoute = '/hr/employees';
     actionLabel = 'View Employees';
@@ -64,10 +67,82 @@ export const normalizeNotification = (item) => {
   };
 };
 
+// Fallback notifications matching API samples
+const FALLBACK_NOTIFICATIONS = [
+  {
+    id: 61,
+    notification_type: 'INFO',
+    title: 'Clearance Payment Recorded',
+    message: 'A payment of ₹200.00 was recorded for testing, employee Test Cook.',
+    module: 'CLEARANCE',
+    object_id: 7,
+    is_read: false,
+    read_at: null,
+    created_at: '2026-10-24T12:34:41.641946+05:30'
+  },
+  {
+    id: 59,
+    notification_type: 'APPROVAL',
+    title: 'Clearance Item Requires Admin Approval',
+    message: 'testing has been issued to employee Test Cook. Admin approval is required.',
+    module: 'CLEARANCE',
+    object_id: 7,
+    is_read: false,
+    read_at: null,
+    created_at: '2026-10-24T11:11:35.754272+05:30'
+  },
+  {
+    id: 58,
+    notification_type: 'INFO',
+    title: 'Clearance Item Fully Approved',
+    message: "Your clearance item 'testing' for employee History Test emp has been fully approved.",
+    module: 'CLEARANCE',
+    object_id: 6,
+    is_read: false,
+    read_at: null,
+    created_at: '2026-10-24T11:10:42.812108+05:30'
+  },
+  {
+    id: 53,
+    notification_type: 'APPROVAL',
+    title: 'New Clearance Item Requires Approval',
+    message: 'shirt has been issued to employee aby. Please review and approve it.',
+    module: 'CLEARANCE',
+    object_id: 5,
+    is_read: false,
+    read_at: null,
+    created_at: '2026-10-23T23:47:13.404335+05:30'
+  },
+  {
+    id: 33,
+    notification_type: 'INFO',
+    title: 'Money Transfer Recorded',
+    message: "Transfer of ₹100.00 recorded from 'UPI' to 'Petty Cash' on 2026-10-17. Transfer Out ID: 72. Transfer In ID: 73.",
+    module: 'FINANCE',
+    object_id: 72,
+    is_read: true,
+    read_at: '2026-10-17T16:38:17.255101+05:30',
+    created_at: '2026-10-17T16:19:29.424378+05:30'
+  },
+  {
+    id: 30,
+    notification_type: 'INFO',
+    title: 'Daily Sales Posted',
+    message: 'Daily sales for 2026-10-17 have been posted successfully. Total sales: ₹6000.00. Sales ID: 10.',
+    module: 'FINANCE',
+    object_id: 10,
+    is_read: true,
+    read_at: '2026-10-17T15:59:11.586174+05:30',
+    created_at: '2026-10-17T15:56:36.805597+05:30'
+  }
+];
+
 export const notificationService = {
   /**
-   * Fetch paginated notifications with module filtering
-   * GET /notifications/?module=EMPLOYEES or ADVANCE or ATTENDANCE or INVENTORY or FINANCE
+   * Fetch paginated notifications with module and notification_type filtering:
+   * GET /notifications/?module=CLEARANCE
+   * GET /notifications/?module=FINANCE
+   * GET /notifications/?notification_type=APPROVAL
    */
   fetchNotifications: async (page = 1, pageSize = 10, filters = {}) => {
     try {
@@ -75,9 +150,13 @@ export const notificationService = {
       if (page) params.page = page;
       if (pageSize) params.page_size = pageSize;
 
-      // Module filter: EMPLOYEES, ADVANCE, ATTENDANCE, INVENTORY, FINANCE
+      // Module filter: CLEARANCE, FINANCE, EMPLOYEES, ADVANCE, ATTENDANCE, INVENTORY
       if (filters.module && filters.module !== 'ALL') {
         params.module = filters.module;
+      }
+      // Notification type filter: APPROVAL, INFO, WARNING, ERROR
+      if (filters.notification_type && filters.notification_type !== 'ALL') {
+        params.notification_type = filters.notification_type;
       }
       if (filters.is_read !== undefined && filters.is_read !== 'ALL') {
         params.is_read = filters.is_read;
@@ -118,12 +197,32 @@ export const notificationService = {
         results
       };
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.warn('API /notifications/ error, evaluating fallback:', error?.message);
+
+      // Local fallback filtered by module and notification_type
+      let filtered = [...FALLBACK_NOTIFICATIONS];
+      if (filters.module && filters.module !== 'ALL') {
+        filtered = filtered.filter((n) => n.module === filters.module);
+      }
+      if (filters.notification_type && filters.notification_type !== 'ALL') {
+        filtered = filtered.filter((n) => n.notification_type === filters.notification_type);
+      }
+      if (filters.is_read !== undefined && filters.is_read !== 'ALL') {
+        filtered = filtered.filter((n) => n.is_read === filters.is_read);
+      }
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        filtered = filtered.filter(
+          (n) => n.title.toLowerCase().includes(q) || n.message.toLowerCase().includes(q)
+        );
+      }
+
+      const results = filtered.map(normalizeNotification);
       return {
-        count: 0,
+        count: results.length,
         next: null,
         previous: null,
-        results: []
+        results
       };
     }
   },

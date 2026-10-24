@@ -18,8 +18,11 @@ export const useNotificationStore = create((set, get) => ({
   hasPrev: false,
 
   // Active filters: module can be 'ALL', 'EMPLOYEES', 'ADVANCE', 'ATTENDANCE', 'INVENTORY', 'FINANCE'
+  // Active filters: module can be 'ALL', 'CLEARANCE', 'FINANCE', 'EMPLOYEES', 'ADVANCE', 'ATTENDANCE', 'INVENTORY'
+  // notification_type can be 'ALL', 'APPROVAL', 'INFO', 'WARNING', 'ERROR'
   filters: {
     module: 'ALL',
+    notification_type: 'ALL',
     is_read: 'ALL',
     search: ''
   },
@@ -45,11 +48,6 @@ export const useNotificationStore = create((set, get) => ({
     }
   },
 
-  setPage: (page) => {
-    set({ page });
-    get().fetchNotifications(page);
-  },
-
   setPage: (newPage) => {
     const pageNum = Math.max(1, parseInt(newPage, 10) || 1);
     set({ page: pageNum });
@@ -58,6 +56,12 @@ export const useNotificationStore = create((set, get) => ({
 
   setModuleFilter: (moduleName) => {
     const updatedFilters = { ...get().filters, module: moduleName };
+    set({ filters: updatedFilters, page: 1 });
+    get().fetchNotifications(1, updatedFilters);
+  },
+
+  setNotificationTypeFilter: (notificationType) => {
+    const updatedFilters = { ...get().filters, notification_type: notificationType };
     set({ filters: updatedFilters, page: 1 });
     get().fetchNotifications(1, updatedFilters);
   },
@@ -71,6 +75,7 @@ export const useNotificationStore = create((set, get) => ({
   resetFilters: () => {
     const defaultFilters = {
       module: 'ALL',
+      notification_type: 'ALL',
       is_read: 'ALL',
       search: ''
     };
