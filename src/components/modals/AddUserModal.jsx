@@ -214,7 +214,7 @@ const AddUserModal = ({ isOpen, onClose, onUserCreated }) => {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. jishnu"
+                  placeholder="Enter username"
                   value={formData.username}
                   onChange={(e) => {
                     setFormData({ ...formData, username: e.target.value });
@@ -234,7 +234,7 @@ const AddUserModal = ({ isOpen, onClose, onUserCreated }) => {
                 </label>
                 <input
                   type="email"
-                  placeholder="e.g. user@gmail.com"
+                  placeholder="Enter email address"
                   value={formData.email}
                   onChange={(e) => {
                     setFormData({ ...formData, email: e.target.value });
@@ -255,7 +255,7 @@ const AddUserModal = ({ isOpen, onClose, onUserCreated }) => {
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Defaults to Alnaaz@123 (min 8 chars)"
+                    placeholder="Enter password (optional)"
                     minLength={8}
                     value={formData.password}
                     onChange={(e) => {
@@ -295,7 +295,7 @@ const AddUserModal = ({ isOpen, onClose, onUserCreated }) => {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 9876543210"
+                  placeholder="Enter phone number"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-gray-900 transition-all text-sm font-medium"

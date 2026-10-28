@@ -140,6 +140,7 @@ const EditUserModal = ({ isOpen, onClose, user, userId, onUserUpdated }) => {
                 </label>
                 <input
                   type="text"
+                  placeholder="Enter username"
                   value={formData.name}
                   onChange={(e) => {
                     setFormData({ ...formData, name: e.target.value });
@@ -158,6 +159,7 @@ const EditUserModal = ({ isOpen, onClose, user, userId, onUserUpdated }) => {
                 </label>
                 <input
                   type="email"
+                  placeholder="Enter email address"
                   value={formData.email}
                   onChange={(e) => {
                     setFormData({ ...formData, email: e.target.value });
@@ -176,6 +178,7 @@ const EditUserModal = ({ isOpen, onClose, user, userId, onUserUpdated }) => {
                 </label>
                 <input
                   type="text"
+                  placeholder="Enter phone number"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-gray-900 transition-all text-sm font-medium"
