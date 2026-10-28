@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { authService } from '../../services/authService';
 import { useNotificationStore } from '../../store/notificationStore';
@@ -74,7 +74,7 @@ const MENU_GROUPS = [
     icon: Package,
     links: [
       { name: 'Products', path: '/inventory/products' },
-      { name: 'Categories', path: '/inventory/categories' },
+      { name: 'Product Categories', path: '/inventory/categories' },
       { name: 'Stock', path: '/inventory/stock' },
       { name: 'Stock Usage', path: '/inventory/stockusage' },
       { name: 'Stock Adjustments', path: '/inventory/stockadjustments' },
@@ -105,6 +105,7 @@ const MENU_GROUPS = [
       { name: 'Workflow Reference', path: '/finance/workflowreference' },
       { name: 'Receivables', path: '/finance/receivables' },
       { name: 'Expenses', path: '/finance/expenses' },
+      { name: 'Categories', path: '/finance/categories' },
       { name: 'Petty Cash', path: '/finance/pettycash' },
       { name: 'Cash Transfers', path: '/finance/cashtransfers' },
       { name: 'Supplier Payables', path: '/finance/supplierpayables' },
@@ -285,17 +286,21 @@ const Sidebar = () => {
 
       {/* User Profile */}
       <div className={`p-4 border-t border-[#1E2336] bg-[#12141D] flex ${!isHovered ? 'flex-col items-center gap-4' : 'justify-between items-center'}`}>
-        <div className={`flex items-center ${isHovered ? 'gap-3' : 'justify-center w-full'}`}>
-          <div className="w-10 h-10 shrink-0 rounded-full bg-[#1E2336] flex items-center justify-center text-white font-bold border border-[#2E364F]">
+        <Link
+          to="/profile"
+          className={`flex items-center group cursor-pointer transition-opacity hover:opacity-90 ${isHovered ? 'gap-3' : 'justify-center w-full'}`}
+          title="View & Edit Profile"
+        >
+          <div className="w-10 h-10 shrink-0 rounded-full bg-[#1E2336] flex items-center justify-center text-white font-bold border border-[#2E364F] group-hover:border-blue-500 transition-colors">
             {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
           </div>
           {isHovered && (
             <div className="overflow-hidden whitespace-nowrap">
-              <p className="text-sm font-medium text-white">{user?.name || user?.username || 'Admin User'}</p>
+              <p className="text-sm font-medium text-white group-hover:text-blue-400 transition-colors">{user?.name || user?.username || 'Admin User'}</p>
               <p className="text-xs text-[#94A3B8]">{user?.role || 'Super Admin'}</p>
             </div>
           )}
-        </div>
+        </Link>
 
         <button
           onClick={() => setShowLogoutModal(true)}

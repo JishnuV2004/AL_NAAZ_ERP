@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { Menu, Clock, Calendar } from 'lucide-react';
 import NotificationBell from '../notifications/NotificationBell';
@@ -87,15 +87,21 @@ const Navbar = () => {
         <NotificationBell />
 
         {/* User Profile */}
-        <div className="flex items-center gap-3 ml-2 border-l border-gray-200 pl-4">
+        <Link
+          to="/profile"
+          className="flex items-center gap-3 ml-2 border-l border-gray-200 pl-4 group hover:opacity-90 transition-opacity cursor-pointer"
+          title="View & Edit Profile"
+        >
           <div className="flex flex-col text-right hidden md:block">
-            <span className="text-sm font-bold text-gray-900 block leading-tight">{displayName}</span>
+            <span className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors block leading-tight">
+              {displayName}
+            </span>
             {displayRole && <span className="text-xs text-gray-500">{displayRole}</span>}
           </div>
-          <div className="h-10 w-10 rounded-full bg-blue-50 border-2 border-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center font-bold text-blue-600">
+          <div className="h-10 w-10 rounded-full bg-blue-50 border-2 border-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center font-bold text-blue-600 group-hover:ring-2 group-hover:ring-blue-500/30 transition-all">
             {avatarInitial}
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   );

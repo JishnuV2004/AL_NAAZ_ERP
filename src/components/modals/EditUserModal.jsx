@@ -189,13 +189,13 @@ const EditUserModal = ({ isOpen, onClose, user, userId, onUserUpdated }) => {
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-gray-900 transition-all text-sm font-medium"
+                  className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-gray-900 transition-all text-sm font-medium cursor-pointer"
                 >
                   <option value="STAFF">Staff (STAFF)</option>
-                  <option value="MANAGER">Branch Manager (MANAGER)</option>
-                  <option value="SUPERADMIN">Super Admin (SUPERADMIN)</option>
-                  <option value="CASHIER">Cashier (CASHIER)</option>
-                  <option value="KITCHEN">Kitchen Staff (KITCHEN)</option>
+                  <option value="MANAGER">Manager (MANAGER)</option>
+                  {formData.role && !['STAFF', 'MANAGER'].includes(formData.role) && (
+                    <option value={formData.role}>{formData.role}</option>
+                  )}
                 </select>
               </div>
 

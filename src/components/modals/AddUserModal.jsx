@@ -69,9 +69,18 @@ const AddUserModal = ({ isOpen, onClose, onUserCreated }) => {
       newErrors.email = 'Invalid email address';
     }
 
+    // Password validation: If entered, must be at least 8 characters
+    if (formData.password && formData.password.length < 8) {
+      newErrors.password = 'Ensure this field has at least 8 characters.';
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      toast.error('Please fill in all required fields correctly');
+      if (newErrors.password) {
+        toast.error(newErrors.password);
+      } else {
+        toast.error('Please fill in all required fields correctly');
+      }
       return;
     }
 
@@ -85,7 +94,12 @@ const AddUserModal = ({ isOpen, onClose, onUserCreated }) => {
       setStep(2);
     } catch (err) {
       console.error('Error creating user:', err);
+      const passwordErr = err.response?.data?.password?.[0];
+      if (passwordErr) {
+        setErrors((prev) => ({ ...prev, password: passwordErr }));
+      }
       const apiErrMsg =
+        err.response?.data?.password?.[0] ||
         err.response?.data?.username?.[0] ||
         err.response?.data?.email?.[0] ||
         err.response?.data?.detail ||
@@ -241,20 +255,37 @@ const AddUserModal = ({ isOpen, onClose, onUserCreated }) => {
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Defaults to Alnaaz@123"
+                    placeholder="Defaults to Alnaaz@123 (min 8 chars)"
+                    minLength={8}
                     value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full pl-3.5 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-gray-900 transition-all text-sm font-medium"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ ...formData, password: val });
+                      if (errors.password) {
+                        if (!val || val.length >= 8) {
+                          setErrors((prev) => ({ ...prev, password: '' }));
+                        }
+                      }
+                    }}
+                    className={`w-full pl-3.5 pr-10 py-2 bg-gray-50 border ${
+                      errors.password ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'
+                    } rounded-xl outline-none focus:bg-white focus:border-gray-900 transition-all text-sm font-medium`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1">Leave empty to use default secure password.</p>
+                {errors.password ? (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.password}</p>
+                ) : (
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Must be at least 8 characters. Leave empty to use default secure password.
+                  </p>
+                )}
               </div>
 
               {/* Phone Number */}
@@ -279,13 +310,10 @@ const AddUserModal = ({ isOpen, onClose, onUserCreated }) => {
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full sm:w-1/2 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-gray-900 transition-all text-sm font-medium"
+                  className="w-full sm:w-1/2 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-gray-900 transition-all text-sm font-medium cursor-pointer"
                 >
                   <option value="STAFF">Staff (STAFF)</option>
-                  <option value="MANAGER">Branch Manager (MANAGER)</option>
-                  <option value="SUPERADMIN">Super Admin (SUPERADMIN)</option>
-                  <option value="CASHIER">Cashier (CASHIER)</option>
-                  <option value="KITCHEN">Kitchen Staff (KITCHEN)</option>
+                  <option value="MANAGER">Manager (MANAGER)</option>
                 </select>
               </div>
             </div>

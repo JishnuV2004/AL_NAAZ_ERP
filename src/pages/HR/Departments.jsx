@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  IoAddOutline, IoBusinessOutline, IoPeopleOutline, IoWalletOutline, 
+  IoAddOutline, IoBusinessOutline, IoPeopleOutline, 
   IoSettingsOutline, IoEllipsisVertical, IoPencilOutline, IoTrashOutline, 
   IoStorefrontOutline, IoRefreshOutline, IoAlertCircleOutline,
   IoChevronDownOutline, IoCheckmarkOutline, IoToggleOutline 

@@ -526,13 +526,24 @@ const EmployeeFormModal = ({ isOpen, onClose, mode, employeeData, accessibleBran
                   <div className="absolute left-0 mt-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
                     <Calendar
                       value={form.joining_date}
-                      onChange={(newDate) => {
+                      updateOnViewChange={true}
+                      onChange={(newDate, meta) => {
+                        setForm(prev => ({ ...prev, joining_date: newDate }));
+                        if (meta?.isDayClick) {
+                          setShowCalendarPopover(false);
+                        }
+                        if (errors.joining_date) {
+                          setErrors(prev => ({ ...prev, joining_date: undefined }));
+                        }
+                      }}
+                      onDayClick={(newDate) => {
                         setForm(prev => ({ ...prev, joining_date: newDate }));
                         setShowCalendarPopover(false);
                         if (errors.joining_date) {
                           setErrors(prev => ({ ...prev, joining_date: undefined }));
                         }
                       }}
+                      onClose={() => setShowCalendarPopover(false)}
                     />
                   </div>
                 )}

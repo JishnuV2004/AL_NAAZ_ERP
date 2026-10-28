@@ -249,7 +249,8 @@ export function RangeCalendar({
     nextY = viewYear + 1;
   }
 
-  const yearsList = Array.from({ length: 11 }, (_, i) => 2020 + i);
+  const currentYear = new Date().getFullYear();
+  const yearsList = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
 
   return (
     <div
@@ -350,16 +351,48 @@ export function RangeCalendar({
   );
 }
 
+/**
+ * Helper to compute updated date string (YYYY-MM-DD) when year or month changes,
+ * preserving current day clamped to the number of days in the new month.
+ */
+const computeUpdatedDate = (targetYear, targetMonth, currentVal) => {
+  let day = 1;
+  const dateStr = toDateString(currentVal);
+  if (dateStr && dateStr.includes('-')) {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const parsedDay = parseInt(parts[2], 10);
+      if (!isNaN(parsedDay) && parsedDay >= 1 && parsedDay <= 31) {
+        day = parsedDay;
+      }
+    }
+  } else {
+    day = new Date().getDate();
+  }
+
+  const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const clampedDay = Math.min(day, daysInMonth);
+
+  const yStr = String(targetYear);
+  const mStr = String(targetMonth + 1).padStart(2, '0');
+  const dStr = String(clampedDay).padStart(2, '0');
+  return `${yStr}-${mStr}-${dStr}`;
+};
+
 export function Calendar({
   value,
   onChange,
+  onDayClick,
   className = '',
   captionLayout = 'dropdown',
-  onClose
+  onClose,
+  updateOnViewChange = false,
+  minYear,
+  maxYear
 }) {
-  const currentDateStr = toDateString(value) || '2026-09-10';
-  const initialYear = currentDateStr ? parseInt(currentDateStr.split('-')[0], 10) : 2026;
-  const initialMonth = currentDateStr ? parseInt(currentDateStr.split('-')[1], 10) - 1 : 8; // Sep = 8
+  const currentDateStr = toDateString(value) || new Date().toISOString().split('T')[0];
+  const initialYear = currentDateStr ? parseInt(currentDateStr.split('-')[0], 10) : new Date().getFullYear();
+  const initialMonth = currentDateStr ? parseInt(currentDateStr.split('-')[1], 10) - 1 : new Date().getMonth();
 
   const [viewYear, setViewYear] = useState(initialYear);
   const [viewMonth, setViewMonth] = useState(initialMonth);
@@ -375,27 +408,58 @@ export function Calendar({
     }
   }, [value]);
 
+  const handleYearChange = (newYear) => {
+    setViewYear(newYear);
+    if (updateOnViewChange && onChange) {
+      const newDateStr = computeUpdatedDate(newYear, viewMonth, value);
+      onChange(newDateStr, { isDayClick: false, source: 'year' });
+    }
+  };
+
+  const handleMonthChange = (newMonth) => {
+    setViewMonth(newMonth);
+    if (updateOnViewChange && onChange) {
+      const newDateStr = computeUpdatedDate(viewYear, newMonth, value);
+      onChange(newDateStr, { isDayClick: false, source: 'month' });
+    }
+  };
+
   const handlePrevMonth = () => {
-    if (viewMonth === 0) {
-      setViewMonth(11);
-      setViewYear(viewYear - 1);
-    } else {
-      setViewMonth(viewMonth - 1);
+    let newM = viewMonth - 1;
+    let newY = viewYear;
+    if (newM < 0) {
+      newM = 11;
+      newY = viewYear - 1;
+    }
+    setViewMonth(newM);
+    setViewYear(newY);
+    if (updateOnViewChange && onChange) {
+      const newDateStr = computeUpdatedDate(newY, newM, value);
+      onChange(newDateStr, { isDayClick: false, source: 'prev' });
     }
   };
 
   const handleNextMonth = () => {
-    if (viewMonth === 11) {
-      setViewMonth(0);
-      setViewYear(viewYear + 1);
-    } else {
-      setViewMonth(viewMonth + 1);
+    let newM = viewMonth + 1;
+    let newY = viewYear;
+    if (newM > 11) {
+      newM = 0;
+      newY = viewYear + 1;
+    }
+    setViewMonth(newM);
+    setViewYear(newY);
+    if (updateOnViewChange && onChange) {
+      const newDateStr = computeUpdatedDate(newY, newM, value);
+      onChange(newDateStr, { isDayClick: false, source: 'next' });
     }
   };
 
   const handleDaySelect = (dateStr) => {
+    if (onDayClick) {
+      onDayClick(dateStr);
+    }
     if (onChange) {
-      onChange(dateStr);
+      onChange(dateStr, { isDayClick: true, source: 'day' });
     }
   };
 
@@ -441,7 +505,12 @@ export function Calendar({
     }
   }
 
-  const yearsList = Array.from({ length: 11 }, (_, i) => 2020 + i);
+  const currentYear = new Date().getFullYear();
+  const defaultMinYear = currentYear - 5;
+  const defaultMaxYear = currentYear + 5;
+  const startYear = Math.min(minYear ?? defaultMinYear, viewYear);
+  const endYear = Math.max(maxYear ?? defaultMaxYear, viewYear);
+  const yearsList = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
   const selectedDateStr = toDateString(value);
 
   return (
@@ -462,7 +531,7 @@ export function Calendar({
           <div className="relative flex items-center bg-slate-100 hover:bg-slate-200/80 border border-slate-200/90 rounded-lg px-2.5 py-1 text-slate-800 font-bold text-xs transition-colors cursor-pointer">
             <select
               value={viewMonth}
-              onChange={(e) => setViewMonth(parseInt(e.target.value, 10))}
+              onChange={(e) => handleMonthChange(parseInt(e.target.value, 10))}
               className="appearance-none bg-transparent pr-4 text-slate-800 font-bold text-xs cursor-pointer focus:outline-none"
             >
               {monthNamesShort.map((mName, idx) => (
@@ -478,7 +547,7 @@ export function Calendar({
           <div className="relative flex items-center bg-slate-100 hover:bg-slate-200/80 border border-slate-200/90 rounded-lg px-2.5 py-1 text-slate-800 font-bold text-xs transition-colors cursor-pointer">
             <select
               value={viewYear}
-              onChange={(e) => setViewYear(parseInt(e.target.value, 10))}
+              onChange={(e) => handleYearChange(parseInt(e.target.value, 10))}
               className="appearance-none bg-transparent pr-4 text-slate-800 font-bold text-xs cursor-pointer focus:outline-none"
             >
               {yearsList.map((yVal) => (
@@ -537,6 +606,29 @@ export function Calendar({
             </button>
           );
         })}
+      </div>
+
+      {/* Footer: Quick "Today" action & optional "Done" button */}
+      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs px-1">
+        <button
+          type="button"
+          onClick={() => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            handleDaySelect(todayStr);
+          }}
+          className="text-[#C9A227] hover:text-[#B38F1E] font-bold transition-colors cursor-pointer"
+        >
+          Today
+        </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors cursor-pointer"
+          >
+            Done
+          </button>
+        )}
       </div>
     </div>
   );

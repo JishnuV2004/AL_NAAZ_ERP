@@ -17,5 +17,13 @@ export const useAuthStore = create((set) => ({
     localStorage.removeItem('al_naaz_token');
     localStorage.removeItem('al_naaz_user');
     set({ token: null, user: null, isAuthenticated: false });
+  },
+
+  updateUser: (updatedUser) => {
+    set((state) => {
+      const merged = { ...state.user, ...updatedUser };
+      localStorage.setItem('al_naaz_user', JSON.stringify(merged));
+      return { user: merged };
+    });
   }
 }));

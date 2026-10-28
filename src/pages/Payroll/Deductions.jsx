@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   IoSearchOutline,
   IoFilterOutline,
-  IoDownloadOutline,
   IoCalendarOutline,
   IoChevronDownOutline,
   IoAddOutline,
@@ -25,124 +24,16 @@ import {
 } from 'react-icons/io5';
 import { Calendar } from '../../components/ui/calendar';
 import toast from 'react-hot-toast';
+import { getEmployees } from '../../api/employees.api';
 
-const mockEmployeesList = [
-  { empId: 'EMP-0004', name: 'Test Employee cook KYLM', department: 'Kitchen', designation: 'Head Cook' },
-  { empId: 'EMP-0006', name: 'Manager Created Employee', department: 'Management', designation: 'Assistant Manager' },
-  { empId: 'EMP-0007', name: 'aby', department: 'Service', designation: 'Captain' },
-  { empId: 'EMP-0008', name: 'asif', department: 'Accounts', designation: 'Accountant' },
-  { empId: 'EMP-0009', name: 'Rashid Khan', department: 'Kitchen', designation: 'Sous Chef' },
-  { empId: 'EMP-0010', name: 'Mohammed Ali', department: 'Service', designation: 'Waiter' }
-];
-
-const mockDeductionsData = [
-  {
-    id: 'DED-2026-101',
-    monthYear: 'September 2026',
-    createdDate: '05 Sep 2026',
-    empId: 'EMP-0006',
-    name: 'Manager Created Employee',
-    avatar: 'https://i.pravatar.cc/150?u=emp2',
-    department: 'Management',
-    designation: 'Assistant Manager',
-    category: 'Attendance Absence',
-    deductionType: 'Unexcused Absence (1 Day)',
-    frequency: 'One-Time',
-    amount: 833.33,
-    status: 'APPLIED',
-    reason: '1 day unexcused absence without prior leave request',
-    approvedBy: 'HR Manager',
-    breakdown: [
-      { item: 'Daily Rate Basis', calc: '₹25,000 / 30 days', amount: 833.33 }
-    ]
-  },
-  {
-    id: 'DED-2026-102',
-    monthYear: 'September 2026',
-    createdDate: '01 Sep 2026',
-    empId: 'EMP-0004',
-    name: 'Test Employee cook KYLM',
-    avatar: 'https://i.pravatar.cc/150?u=emp1',
-    department: 'Kitchen',
-    designation: 'Head Cook',
-    category: 'Statutory Deduction',
-    deductionType: 'Provident Fund (PF)',
-    frequency: 'Recurring Monthly',
-    amount: 1800.00,
-    status: 'APPLIED',
-    reason: 'Standard monthly employee PF contribution (12% of basic)',
-    approvedBy: 'System Auto-Rule',
-    breakdown: [
-      { item: 'Employee PF Share', calc: '12% of ₹15,000 basic', amount: 1800.00 }
-    ]
-  },
-  {
-    id: 'DED-2026-103',
-    monthYear: 'September 2026',
-    createdDate: '08 Sep 2026',
-    empId: 'EMP-0007',
-    name: 'aby',
-    avatar: 'https://i.pravatar.cc/150?u=emp3',
-    department: 'Service',
-    designation: 'Captain',
-    category: 'Disciplinary Fine',
-    deductionType: 'Late Entry Penalty',
-    frequency: 'One-Time',
-    amount: 250.00,
-    status: 'APPLIED',
-    reason: '3 consecutive late check-ins exceeding 30 minutes grace period',
-    approvedBy: 'Shift Supervisor',
-    breakdown: [
-      { item: 'Late Penalty (3 instances)', calc: '₹83.33 x 3', amount: 250.00 }
-    ]
-  },
-  {
-    id: 'DED-2026-104',
-    monthYear: 'September 2026',
-    createdDate: '10 Sep 2026',
-    empId: 'EMP-0008',
-    name: 'asif',
-    avatar: 'https://i.pravatar.cc/150?u=emp4',
-    department: 'Accounts',
-    designation: 'Accountant',
-    category: 'Damage Fine',
-    deductionType: 'Equipment Damage Loss',
-    frequency: 'One-Time',
-    amount: 1500.00,
-    status: 'PENDING',
-    reason: 'POS thermal printer physical breakage during cash drawer audit',
-    approvedBy: 'Pending Admin Signoff',
-    breakdown: [
-      { item: 'Hardware Repair Recovery', calc: '50% shared repair cost', amount: 1500.00 }
-    ]
-  },
-  {
-    id: 'DED-2026-105',
-    monthYear: 'August 2026',
-    createdDate: '28 Aug 2026',
-    empId: 'EMP-0009',
-    name: 'Rashid Khan',
-    avatar: 'https://i.pravatar.cc/150?u=emp5',
-    department: 'Kitchen',
-    designation: 'Sous Chef',
-    category: 'Attendance Absence',
-    deductionType: 'Half-Day Absence',
-    frequency: 'One-Time',
-    amount: 500.00,
-    status: 'WAIVED',
-    reason: 'Half-day absence waived by Head Chef due to overtime coverage',
-    approvedBy: 'Head Chef',
-    breakdown: [
-      { item: 'Absence Fine Waived', calc: 'Waived via OT Compensation', amount: 0.00 }
-    ]
-  }
-];
-
-const formatCurrency = (amount) =>
-  `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatCurrency = (amount) => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : (amount || 0);
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const Deductions = () => {
-  const [deductionsList, setDeductionsList] = useState(mockDeductionsData);
+  const [deductionsList, setDeductionsList] = useState([]);
+  const [employeesList, setEmployeesList] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
@@ -157,7 +48,7 @@ const Deductions = () => {
 
   // Form State
   const [formData, setFormData] = useState({
-    empId: 'EMP-0004',
+    empId: '',
     category: 'Attendance Absence',
     deductionType: 'Unexcused Absence',
     frequency: 'One-Time',
@@ -165,6 +56,23 @@ const Deductions = () => {
     amount: '',
     reason: ''
   });
+
+  useEffect(() => {
+    const fetchEmployeesList = async () => {
+      try {
+        const data = await getEmployees();
+        if (Array.isArray(data)) {
+          setEmployeesList(data);
+          if (data.length > 0) {
+            setFormData(prev => ({ ...prev, empId: String(data[0].id) }));
+          }
+        }
+      } catch (e) {
+        setEmployeesList([]);
+      }
+    };
+    fetchEmployeesList();
+  }, []);
 
   useEffect(() => {
     const handleGlobalClick = (e) => {
@@ -176,13 +84,17 @@ const Deductions = () => {
     return () => document.removeEventListener('mousedown', handleGlobalClick);
   }, []);
 
+  // Dynamic filter dropdowns based on actual records
+  const departments = ['All Departments', ...new Set(deductionsList.map((d) => d.department).filter(Boolean))];
+  const categories = ['All Categories', ...new Set(deductionsList.map((d) => d.category).filter(Boolean))];
+
   // Filtered List
   const filteredDeductions = deductionsList.filter((ded) => {
     const matchesSearch =
-      ded.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ded.empId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ded.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ded.deductionType.toLowerCase().includes(searchQuery.toLowerCase());
+      (ded.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (ded.empId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (String(ded.id) || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (ded.deductionType || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory =
       categoryFilter === 'All Categories' || ded.category === categoryFilter;
@@ -252,18 +164,22 @@ const Deductions = () => {
       return;
     }
 
-    const selectedEmp = mockEmployeesList.find((e) => e.empId === formData.empId) || mockEmployeesList[0];
+    const selectedEmp = employeesList.find((e) => String(e.id) === String(formData.empId) || e.empId === formData.empId);
+    const empName = selectedEmp?.name || selectedEmp?.employee_name || 'Staff';
+    const empCode = selectedEmp?.empId || `EMP-${String(selectedEmp?.id || 1).padStart(4, '0')}`;
+    const empDept = selectedEmp?.department || selectedEmp?.branch_name || 'General';
+    const empDesig = selectedEmp?.designation || 'Staff';
     const amountVal = parseFloat(formData.amount);
 
     const newDeduction = {
-      id: `DED-2026-${Math.floor(100 + Math.random() * 900)}`,
+      id: `DED-${Date.now().toString().slice(-4)}`,
       monthYear: formData.monthYear,
-      createdDate: '14 Sep 2026',
-      empId: selectedEmp.empId,
-      name: selectedEmp.name,
-      avatar: `https://i.pravatar.cc/150?u=${selectedEmp.empId}`,
-      department: selectedEmp.department,
-      designation: selectedEmp.designation,
+      createdDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      empId: empCode,
+      name: empName,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(empName)}&background=rose&color=fff`,
+      department: empDept,
+      designation: empDesig,
       category: formData.category,
       deductionType: formData.deductionType,
       frequency: formData.frequency,
@@ -280,7 +196,7 @@ const Deductions = () => {
     setShowAddModal(false);
     toast.success(`Deduction ${newDeduction.id} created successfully!`);
     setFormData({
-      empId: 'EMP-0004',
+      empId: employeesList[0]?.id ? String(employeesList[0].id) : '',
       category: 'Attendance Absence',
       deductionType: 'Unexcused Absence',
       frequency: 'One-Time',
@@ -307,14 +223,7 @@ const Deductions = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => toast.success('Deductions log exported to CSV')}
-            className="px-3.5 py-2 bg-white text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <IoDownloadOutline size={16} /> Export CSV
-          </button>
+        <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
@@ -334,7 +243,7 @@ const Deductions = () => {
               <IoRemoveCircleOutline size={22} />
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500 mb-0.5">Total Deducted (Sep)</p>
+              <p className="text-xs font-medium text-slate-500 mb-0.5">Total Deducted</p>
               <h3 className="text-xl font-extrabold text-slate-900 font-mono tracking-tight">{formatCurrency(totalMonthlyDeductions)}</h3>
               <p className="text-[11px] text-rose-600 font-semibold mt-0.5">Applied to Payroll</p>
             </div>
@@ -412,11 +321,11 @@ const Deductions = () => {
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="w-full text-xs font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
             >
-              <option value="All Categories">All Categories</option>
-              <option value="Statutory Deduction">Statutory (PF/ESI)</option>
-              <option value="Attendance Absence">Attendance Absence</option>
-              <option value="Disciplinary Fine">Disciplinary Fine</option>
-              <option value="Damage Fine">Damage Fine</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -428,11 +337,11 @@ const Deductions = () => {
               onChange={(e) => setDepartmentFilter(e.target.value)}
               className="w-full text-xs font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
             >
-              <option value="All Departments">All Departments</option>
-              <option value="Kitchen">Kitchen</option>
-              <option value="Management">Management</option>
-              <option value="Service">Service</option>
-              <option value="Accounts">Accounts</option>
+              {departments.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -486,8 +395,8 @@ const Deductions = () => {
             <tbody className="divide-y divide-slate-100 bg-white text-xs">
               {filteredDeductions.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="p-8 text-center text-slate-400 font-medium">
-                    No salary deductions found matching the filters.
+                  <td colSpan="8" className="p-12 text-center text-slate-400 font-medium">
+                    No salary deductions found.
                   </td>
                 </tr>
               ) : (
@@ -663,11 +572,15 @@ const Deductions = () => {
                   className="w-full text-xs font-semibold border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
                   required
                 >
-                  {mockEmployeesList.map((emp) => (
-                    <option key={emp.empId} value={emp.empId}>
-                      {emp.name} ({emp.empId}) - {emp.department}
-                    </option>
-                  ))}
+                  {employeesList.length === 0 ? (
+                    <option value="">No employees found</option>
+                  ) : (
+                    employeesList.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name || emp.employee_name} ({emp.empId || `EMP-${String(emp.id).padStart(4, '0')}`}) - {emp.department || emp.branch_name || 'Staff'}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 

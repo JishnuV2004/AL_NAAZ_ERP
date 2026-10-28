@@ -87,7 +87,7 @@ export const inventoryService = {
     try {
       const payload = {
         name: data.name,
-        category: data.category.toLowerCase(),
+        category: data.category ? String(data.category).trim() : '',
         unit: data.unit,
         minimum_stock: Number(data.minStock).toFixed(2),
         is_active: data.status === 'Active'
@@ -112,7 +112,7 @@ export const inventoryService = {
     try {
       const payload = {
         name: data.name,
-        category: data.category.toLowerCase(),
+        category: data.category ? String(data.category).trim() : '',
         unit: data.unit,
         minimum_stock: Number(data.minStock).toFixed(2),
         is_active: data.status === 'Active'
@@ -392,14 +392,22 @@ export const inventoryService = {
   // PRODUCT CATEGORIES
   fetchProductCategories: async () => {
     try {
-      const response = await axiosInstance.get('/product-categories/');
+      const response = await axiosInstance.get('/product-categories/?page_size=1000');
       const data = response.data;
       if (Array.isArray(data)) return data;
       if (data && Array.isArray(data.results)) return data.results;
       return [];
     } catch (err) {
-      console.error('Failed to fetch product categories:', err);
-      throw err;
+      try {
+        const fallback = await axiosInstance.get('/product-categories/');
+        const data = fallback.data;
+        if (Array.isArray(data)) return data;
+        if (data && Array.isArray(data.results)) return data.results;
+        return [];
+      } catch (innerErr) {
+        console.error('Failed to fetch product categories:', innerErr);
+        throw innerErr;
+      }
     }
   },
 

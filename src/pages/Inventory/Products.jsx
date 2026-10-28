@@ -15,7 +15,7 @@ import { inventoryService } from '../../services/inventoryService';
 
 const defaultForm = {
   name: '',
-  category: 'Vegetables',
+  category: '',
   unit: 'KG',
   minStock: '10.00',
   is_active: true
@@ -24,6 +24,8 @@ const defaultForm = {
 const Products = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
+  const [productCategories, setProductCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -43,6 +45,19 @@ const Products = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const loadCategories = async () => {
+    setCategoriesLoading(true);
+    try {
+      const data = await inventoryService.fetchProductCategories();
+      setProductCategories(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load product categories:', err);
+      setProductCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
 
   const loadProducts = async (pageToLoad = 1) => {
     setLoading(true);
@@ -74,19 +89,25 @@ const Products = () => {
 
   useEffect(() => {
     loadProducts(1);
+    loadCategories();
   }, []);
 
   const handleOpenAdd = () => {
+    loadCategories();
     setEditingProduct(null);
-    setFormData(defaultForm);
+    setFormData({
+      ...defaultForm,
+      category: ''
+    });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (product) => {
+    loadCategories();
     setEditingProduct(product);
     setFormData({
       name: product.name || '',
-      category: product.category || 'Vegetables',
+      category: product.category || '',
       unit: product.unit || 'KG',
       minStock: product.minimum_stock !== undefined ? product.minimum_stock : '10.00',
       is_active: product.is_active !== undefined ? product.is_active : true
@@ -98,6 +119,10 @@ const Products = () => {
     e.preventDefault();
     if (!formData.name.trim()) {
       toast.error('Product name is required');
+      return;
+    }
+    if (!formData.category) {
+      toast.error('Please select a category');
       return;
     }
 
@@ -227,15 +252,17 @@ const Products = () => {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="bg-gray-50 border border-gray-200 text-gray-700 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:border-blue-500"
+              className="bg-gray-50 border border-gray-200 text-gray-700 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:border-blue-500 capitalize"
             >
               <option value="All">All Categories</option>
-              <option value="Vegetable">Vegetables</option>
-              <option value="Grains">Grains</option>
-              <option value="Meat & Poultry">Meat & Poultry</option>
-              <option value="Cooking">Cooking</option>
-              <option value="Beverages">Beverages</option>
-              <option value="Other">Other</option>
+              {productCategories.map((cat, idx) => {
+                const catName = typeof cat === 'string' ? cat : (cat.name || cat.category_name || cat.title || '');
+                return (
+                  <option key={cat.id || catName || idx} value={catName}>
+                    {catName}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -435,18 +462,22 @@ const Products = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Category</label>
+              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Category *</label>
               <select
-                value={formData.category}
+                required
+                value={formData.category || ''}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium capitalize"
+                className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white font-medium capitalize cursor-pointer"
               >
-                <option value="vegetable">Vegetables</option>
-                <option value="grains">Grains</option>
-                <option value="meat & poultry">Meat & Poultry</option>
-                <option value="cooking">Cooking</option>
-                <option value="beverages">Beverages</option>
-                <option value="other">Other</option>
+                <option value="">-- Select Category --</option>
+                {productCategories.map((cat, idx) => {
+                  const catName = typeof cat === 'string' ? cat : (cat.name || cat.category_name || cat.title || '');
+                  return (
+                    <option key={cat.id || catName || idx} value={catName}>
+                      {catName}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

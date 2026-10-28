@@ -89,11 +89,3 @@ export const mockRolesList = [
   'Branch Manager',
   'Kitchen Staff'
 ];
-
-export const mockBranchesList = [
-  { id: 'koc_01', name: 'Kochi Main' },
-  { id: 'cal_01', name: 'Calicut Center' },
-  { id: 'tvm_01', name: 'Trivandrum South' },
-  { id: 'dxb_01', name: 'Dubai Marina' },
-  { id: 'blr_01', name: 'Bangalore Hub' }
-];

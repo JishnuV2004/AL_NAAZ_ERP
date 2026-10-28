@@ -16,7 +16,6 @@ export const normalizeDepartment = (d) => {
     status: d.is_active !== false ? 'Active' : 'Inactive',
     head: d.head || 'Unassigned',
     employeeCount: d.employee_count || d.employeeCount || 0,
-    budget: d.budget || '100,000',
     description: d.description || `Handles ${d.name || 'department'} operations.`
   };
 };

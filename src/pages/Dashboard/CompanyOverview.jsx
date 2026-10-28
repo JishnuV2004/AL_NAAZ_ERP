@@ -369,8 +369,8 @@ const CompanyOverview = () => {
         />
       </div>
 
-      {/* Middle Row: Charts & Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Row 3: Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Area Chart: Business Overview */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm lg:col-span-2 flex flex-col">
@@ -440,7 +440,7 @@ const CompanyOverview = () => {
         </div>
 
         {/* Expense Breakdown Pie Chart */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col lg:col-span-1">
           <h3 className="font-bold text-gray-900 mb-1">Expense Breakdown</h3>
           <p className="text-xs text-gray-500 mb-4">By recorded expense category</p>
           
@@ -503,61 +503,10 @@ const CompanyOverview = () => {
           )}
         </div>
 
-        {/* Recent Activity from GET /api/activity-logs/?page=1&page_size=10 */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col lg:col-span-1">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h3 className="font-bold text-gray-900">Recent Activity</h3>
-              <p className="text-xs text-gray-500">Live operational audit log</p>
-            </div>
-            <button 
-              onClick={fetchActivities}
-              className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer"
-            >
-              Refresh
-            </button>
-          </div>
-
-          <div className="space-y-3.5 overflow-y-auto pr-1 custom-scrollbar max-h-[380px] flex-1">
-            {loadingActivities ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <div key={`act-skel-${i}`} className="flex items-center gap-3 animate-pulse">
-                  <div className="w-8 h-8 rounded-lg bg-gray-100 shrink-0"></div>
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 bg-gray-100 rounded w-3/4"></div>
-                    <div className="h-2.5 bg-gray-100 rounded w-1/2"></div>
-                  </div>
-                </div>
-              ))
-            ) : activityLogs.length === 0 ? (
-              <p className="text-xs text-gray-400 py-8 text-center">No recent activity logs found.</p>
-            ) : (
-              activityLogs.map((item) => {
-                const { icon: ModIcon, color, bg } = getActivityIcon(item.module);
-                return (
-                  <div key={item.id} className="flex items-start gap-3 group">
-                    <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
-                      <ModIcon size={14} className={color} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-900 leading-snug line-clamp-2">
-                        {item.description || `${item.action} in ${item.module}`}
-                      </p>
-                      <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                        <span className="font-medium text-gray-500">{item.module}</span> • {formatTimeAgo(item.created_at)} • by <span className="text-gray-600">{item.username || 'System'}</span>
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
       </div>
 
-      {/* Bottom Grid: 3 Columns (Branch Performance, HR Summary, Alerts) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Row 4: 4 Columns (Branch Performance, HR Summary, Alerts, Recent Activity) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
         {/* Branch Performance */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
@@ -694,6 +643,67 @@ const CompanyOverview = () => {
                       </p>
                       <p className="text-[10px] text-gray-400 mt-1 font-medium">
                         {formatTimeAgo(alert.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <h3 className="font-bold text-gray-900">Recent Activity</h3>
+              <p className="text-xs text-gray-500">Live operational audit log</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={fetchActivities}
+                className="text-xs text-gray-400 hover:text-blue-600 font-semibold p-1 transition-colors cursor-pointer"
+                title="Refresh logs"
+              >
+                <RefreshCw size={13} className={loadingActivities ? 'animate-spin' : ''} />
+              </button>
+              <button
+                onClick={() => navigate('/audit/activitylogs')}
+                className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>View</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3 flex-1 overflow-y-auto max-h-[380px] pr-1 custom-scrollbar">
+            {loadingActivities ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={`act-skel-${i}`} className="flex items-start gap-3 p-2.5 rounded-xl bg-gray-50 animate-pulse">
+                  <div className="w-8 h-8 rounded-lg bg-gray-200 shrink-0"></div>
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-2.5 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </div>
+              ))
+            ) : activityLogs.length === 0 ? (
+              <p className="text-xs text-gray-400 py-8 text-center">No recent activity logs found.</p>
+            ) : (
+              activityLogs.slice(0, 5).map((item) => {
+                const { icon: ModIcon, color, bg } = getActivityIcon(item.module);
+                return (
+                  <div key={item.id} className="p-3 rounded-xl bg-gray-50/70 border border-gray-100 hover:bg-gray-50 transition-colors flex items-start gap-3 group">
+                    <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                      <ModIcon size={14} className={color} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-900 leading-snug line-clamp-2">
+                        {item.description || `${item.action} in ${item.module}`}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-1 truncate">
+                        <span className="font-semibold text-gray-600">{item.module}</span> • {formatTimeAgo(item.created_at)} • by <span className="text-gray-700 font-medium">{item.username || 'System'}</span>
                       </p>
                     </div>
                   </div>

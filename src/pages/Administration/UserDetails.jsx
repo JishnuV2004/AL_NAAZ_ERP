@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Edit3, Shield, MapPin, Mail, Phone, Calendar, Clock, 
-  Building2, Activity, UserCheck, UserX, Loader2
+  Building2, UserCheck, UserX, Loader2
 } from 'lucide-react';
 import { getUserById, toggleUserStatus } from '../../api/users.api';
 import toast from 'react-hot-toast';
@@ -239,16 +239,6 @@ const UserDetails = () => {
         >
           Branch Access ({user.assignedBranches?.length || 1})
         </button>
-        <button
-          onClick={() => setActiveTab('activity')}
-          className={`pb-2.5 text-xs sm:text-sm font-bold border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'activity'
-              ? 'border-gray-900 text-gray-900'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Security & Logs
-        </button>
       </div>
 
       {/* Tab Contents */}
@@ -366,29 +356,6 @@ const UserDetails = () => {
                     Primary
                   </span>
                 )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'activity' && (
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
-          <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">Recent Security Activity</h3>
-          
-          <div className="divide-y divide-gray-100">
-            {(user.activityLogs || []).map((log) => (
-              <div key={log.id} className="py-3 flex items-center justify-between text-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center">
-                    <Activity size={16} />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{log.action}</p>
-                    <p className="text-xs text-gray-400">IP: {log.ip}</p>
-                  </div>
-                </div>
-                <span className="text-xs text-gray-500 font-medium">{log.timestamp}</span>
               </div>
             ))}
           </div>

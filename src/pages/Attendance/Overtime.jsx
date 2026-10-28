@@ -16,92 +16,9 @@ import {
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 
-const initialOvertimeData = [
-  {
-    id: 'OT-101',
-    employee: {
-      id: 4,
-      name: 'Test Employee cook KYLM',
-      empCode: 'EMP-0004',
-      department: 'Kitchen'
-    },
-    date: '2026-09-24',
-    regularHours: 8,
-    otHours: 2.5,
-    reason: 'Dinner rush shift extension & kitchen prep',
-    status: 'Pending',
-    ratePerHour: 150,
-    estimatedCost: 375.00
-  },
-  {
-    id: 'OT-102',
-    employee: {
-      id: 6,
-      name: 'Manager Created Employee',
-      empCode: 'EMP-0006',
-      department: 'Management'
-    },
-    date: '2026-09-23',
-    regularHours: 8,
-    otHours: 3.0,
-    reason: 'Monthly inventory audit & staff shift scheduling',
-    status: 'Pending',
-    ratePerHour: 200,
-    estimatedCost: 600.00
-  },
-  {
-    id: 'OT-103',
-    employee: {
-      id: 7,
-      name: 'aby',
-      empCode: 'EMP-0007',
-      department: 'Service'
-    },
-    date: '2026-09-22',
-    regularHours: 8,
-    otHours: 2.0,
-    reason: 'VIP Banquet function service cover',
-    status: 'Approved',
-    ratePerHour: 120,
-    estimatedCost: 240.00
-  },
-  {
-    id: 'OT-104',
-    employee: {
-      id: 8,
-      name: 'asif',
-      empCode: 'EMP-0008',
-      department: 'Accounts'
-    },
-    date: '2026-09-20',
-    regularHours: 8,
-    otHours: 4.0,
-    reason: 'Quarterly financial ledger reconciliation',
-    status: 'Approved',
-    ratePerHour: 180,
-    estimatedCost: 720.00
-  },
-  {
-    id: 'OT-105',
-    employee: {
-      id: 4,
-      name: 'Test Employee cook KYLM',
-      empCode: 'EMP-0004',
-      department: 'Kitchen'
-    },
-    date: '2026-09-18',
-    regularHours: 8,
-    otHours: 1.5,
-    reason: 'Unscheduled catering order preparation',
-    status: 'Rejected',
-    ratePerHour: 150,
-    estimatedCost: 225.00
-  }
-];
-
 const Overtime = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState(initialOvertimeData);
+  const [data, setData] = useState([]);
   const [activeTab, setActiveTab] = useState('Pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
@@ -110,10 +27,13 @@ const Overtime = () => {
   const pendingCount = data.filter((r) => r.status === 'Pending').length;
   const approvedHours = data
     .filter((r) => r.status === 'Approved')
-    .reduce((sum, r) => sum + r.otHours, 0);
+    .reduce((sum, r) => sum + (r.otHours || 0), 0);
   const totalCost = data
     .filter((r) => r.status === 'Approved')
-    .reduce((sum, r) => sum + r.estimatedCost, 0);
+    .reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
+
+  // Dynamic Departments
+  const departments = ['All', ...new Set(data.map((r) => r.employee?.department).filter(Boolean))];
 
   // Filter list
   const filteredData = data.filter((record) => {
@@ -122,14 +42,14 @@ const Overtime = () => {
     if (activeTab === 'History' && record.status === 'Pending') return false;
 
     // Dept Filter
-    if (deptFilter !== 'All' && record.employee.department !== deptFilter) return false;
+    if (deptFilter !== 'All' && record.employee?.department !== deptFilter) return false;
 
     // Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      const nameMatch = record.employee.name.toLowerCase().includes(q);
-      const codeMatch = record.employee.empCode.toLowerCase().includes(q);
-      const reasonMatch = record.reason.toLowerCase().includes(q);
+      const nameMatch = (record.employee?.name || '').toLowerCase().includes(q);
+      const codeMatch = (record.employee?.empCode || '').toLowerCase().includes(q);
+      const reasonMatch = (record.reason || '').toLowerCase().includes(q);
       if (!nameMatch && !codeMatch && !reasonMatch) return false;
     }
 
@@ -209,13 +129,6 @@ const Overtime = () => {
             className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
           >
             <IoDocumentTextOutline size={15} /> Attendance Reports
-          </button>
-          <button
-            type="button"
-            onClick={() => toast.success('Exporting overtime report PDF...')}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-          >
-            <IoDocumentTextOutline size={16} /> Export OT Report
           </button>
         </div>
       </div>
@@ -318,11 +231,11 @@ const Overtime = () => {
               onChange={(e) => setDeptFilter(e.target.value)}
               className="w-full border border-gray-200 rounded-xl text-xs px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
-              <option value="All">All Departments</option>
-              <option value="Kitchen">Kitchen</option>
-              <option value="Management">Management</option>
-              <option value="Service">Service</option>
-              <option value="Accounts">Accounts</option>
+              {departments.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept === 'All' ? 'All Departments' : dept}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -347,7 +260,7 @@ const Overtime = () => {
               {filteredData.length > 0 ? (
                 filteredData.map((record) => {
                   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    record.employee.name
+                    record.employee?.name || 'Staff'
                   )}&background=0D8ABC&color=fff`;
 
                   return (
@@ -368,21 +281,23 @@ const Overtime = () => {
                               className="font-bold text-gray-900 hover:text-blue-600 transition-colors text-left block truncate cursor-pointer"
                               title="View Employee Profile"
                             >
-                              {record.employee.name}
+                              {record.employee?.name || 'Staff'}
                             </button>
                             <span className="text-[11px] text-gray-400 font-mono block">
-                              {record.employee.empCode} • {record.employee.department}
+                              {record.employee?.empCode || '-'} • {record.employee?.department || 'General'}
                             </span>
                           </div>
                         </div>
                       </td>
 
                       <td className="p-3.5 font-medium text-gray-800 whitespace-nowrap">
-                        {new Date(record.date).toLocaleDateString('en-GB', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
+                        {record.date ? (
+                          new Date(record.date).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                          })
+                        ) : '-'}
                       </td>
 
                       <td className="p-3.5 text-center text-gray-600 font-medium whitespace-nowrap">
@@ -396,7 +311,7 @@ const Overtime = () => {
                       </td>
 
                       <td className="p-3.5 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
-                        ₹{record.estimatedCost.toFixed(2)}
+                        ₹{(record.estimatedCost || 0).toFixed(2)}
                       </td>
 
                       <td className="p-3.5 text-gray-500 max-w-[220px] truncate" title={record.reason}>
@@ -414,7 +329,7 @@ const Overtime = () => {
                           <button
                             type="button"
                             onClick={() =>
-                              navigate(`/payroll/employee-salary-history?empId=${record.employee.empCode}`)
+                              navigate(`/payroll/employee-salary-history?empId=${record.employee?.empCode || ''}`)
                             }
                             className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                             title="View Employee Salary History"
@@ -460,8 +375,8 @@ const Overtime = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-gray-500">
-                    No overtime records found in this category.
+                  <td colSpan={8} className="p-12 text-center text-gray-400">
+                    No overtime records found.
                   </td>
                 </tr>
               )}

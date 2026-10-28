@@ -53,6 +53,7 @@ import FinancialAccounts from './pages/Finance/FinancialAccounts';
 import WorkflowReference from './pages/Finance/WorkflowReference';
 import Receivables from './pages/Finance/Receivables';
 import Expenses from './pages/Finance/Expenses';
+import FinanceCategories from './pages/Finance/Categories';
 import PettyCash from './pages/Finance/PettyCash';
 import CashTransfers from './pages/Finance/CashTransfers';
 import SupplierPayables from './pages/Finance/SupplierPayables';
@@ -66,6 +67,7 @@ import OtherContacts from './pages/BusinessContacts/OtherContacts';
 import Notifications from './pages/Notifications';
 import ActivityLogs from './pages/Audit/ActivityLogs';
 import CompanyOverview from './pages/Dashboard/CompanyOverview';
+import Profile from './pages/Profile';
 
 
 // Layout wrapper for protected pages
@@ -146,6 +148,7 @@ function App() {
           <Route path="/finance/workflowreference" element={<Layout><WorkflowReference /></Layout>} />
           <Route path="/finance/receivables" element={<Layout><Receivables /></Layout>} />
           <Route path="/finance/expenses" element={<Layout><Expenses /></Layout>} />
+          <Route path="/finance/categories" element={<Layout><FinanceCategories /></Layout>} />
           <Route path="/finance/pettycash" element={<Layout><PettyCash /></Layout>} />
           <Route path="/finance/transactions" element={<Navigate to="/finance/overview" replace />} />
           <Route path="/finance/cashtransfers" element={<Layout><Transactions /></Layout>} />
@@ -162,6 +165,9 @@ function App() {
           <Route path="/audit/activitylogs" element={<Layout><ActivityLogs /></Layout>} />
           <Route path="/dashboard" element={<Layout><CompanyOverview /></Layout>} />
           <Route path="/dashboard/companyoverview" element={<Layout><CompanyOverview /></Layout>} />
+          <Route path="/profile" element={<Layout><Profile /></Layout>} />
+          <Route path="/user/profile" element={<Navigate to="/profile" replace />} />
+          <Route path="/settings/profile" element={<Navigate to="/profile" replace />} />
 
         </Route>
 

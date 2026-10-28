@@ -1,508 +1,728 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  IoAddOutline,
-  IoCheckmarkOutline,
-  IoCloseOutline,
   IoCalendarOutline,
   IoTimeOutline,
-  IoAirplaneOutline,
-  IoMedkitOutline,
   IoSearchOutline,
   IoFilterOutline,
   IoEyeOutline,
-  IoPersonOutline,
   IoAlertCircleOutline,
   IoCheckmarkCircleOutline,
-  IoDocumentTextOutline,
-  IoTrashOutline,
-  IoArrowForwardOutline
+  IoCloseOutline,
+  IoRefreshOutline,
+  IoPersonOutline,
+  IoChevronBackOutline,
+  IoChevronForwardOutline,
+  IoChevronDownOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
+import { getLeaves } from '../../api/leaves.api';
+import { getBranches } from '../../api/users.api';
+import { getEmployees } from '../../api/employees.api';
+import { Calendar } from '../../components/ui/calendar';
 
-// Initial Mock Leave & Vacation Data
-const initialLeaves = [
-  {
-    id: 'LV-2001',
-    empId: 'EMP-0004',
-    employeeName: 'Test Employee cook KYLM',
-    department: 'Kitchen',
-    type: 'Annual Leave',
-    startDate: '2026-09-01',
-    endDate: '2026-09-15',
-    days: 15,
-    reason: 'Annual family vacation trip to home country',
-    status: 'Approved',
-    appliedDate: '2026-08-20',
-    approvedBy: 'Admin Manager'
-  },
-  {
-    id: 'LV-2002',
-    empId: 'EMP-0006',
-    employeeName: 'Manager Created Employee',
-    department: 'Management',
-    type: 'Sick Leave',
-    startDate: '2026-08-25',
-    endDate: '2026-08-26',
-    days: 2,
-    reason: 'High fever and severe flu doctor recommendation',
-    status: 'Approved',
-    appliedDate: '2026-08-24',
-    approvedBy: 'Admin Manager'
-  },
-  {
-    id: 'LV-2003',
-    empId: 'EMP-0007',
-    employeeName: 'aby',
-    department: 'Service',
-    type: 'Emergency Leave',
-    startDate: '2026-09-28',
-    endDate: '2026-09-30',
-    days: 3,
-    reason: 'Urgent personal family emergency at native town',
-    status: 'Pending',
-    appliedDate: '2026-09-24',
-    approvedBy: null
-  },
-  {
-    id: 'LV-2004',
-    empId: 'EMP-0008',
-    employeeName: 'asif',
-    department: 'Accounts',
-    type: 'Unpaid Leave',
-    startDate: '2026-10-01',
-    endDate: '2026-10-05',
-    days: 5,
-    reason: 'Personal matters and passport renewal process',
-    status: 'Pending',
-    appliedDate: '2026-09-22',
-    approvedBy: null
-  },
-  {
-    id: 'LV-2005',
-    empId: 'EMP-0004',
-    employeeName: 'Test Employee cook KYLM',
-    department: 'Kitchen',
-    type: 'Annual Leave',
-    startDate: '2026-07-10',
-    endDate: '2026-07-25',
-    days: 15,
-    reason: 'Traveling abroad for personal events',
-    status: 'Rejected',
-    appliedDate: '2026-07-01',
-    approvedBy: 'HR Admin'
-  }
+const MONTH_OPTIONS = [
+  { value: '1', label: '01 - January' },
+  { value: '2', label: '02 - February' },
+  { value: '3', label: '03 - March' },
+  { value: '4', label: '04 - April' },
+  { value: '5', label: '05 - May' },
+  { value: '6', label: '06 - June' },
+  { value: '7', label: '07 - July' },
+  { value: '8', label: '08 - August' },
+  { value: '9', label: '09 - September' },
+  { value: '10', label: '10 - October' },
+  { value: '11', label: '11 - November' },
+  { value: '12', label: '12 - December' }
+];
+
+const currentYearNum = new Date().getFullYear();
+const YEAR_OPTIONS = [
+  currentYearNum + 1,
+  currentYearNum,
+  currentYearNum - 1,
+  currentYearNum - 2,
+  currentYearNum - 3
 ];
 
 const LeaveVacation = () => {
   const navigate = useNavigate();
-  const [leaves, setLeaves] = useState(initialLeaves);
-  const [activeTab, setActiveTab] = useState('Pending');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState('All');
 
-  // Modals
-  const [showRequestModal, setShowRequestModal] = useState(false);
+  // Data states
+  const [leaves, setLeaves] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Reference Image Filters:
+  // branch, employee, end_date, is_paid, month, search, start_date, year
+  const initialFilters = {
+    branch: 'All',
+    employee: 'All',
+    start_date: '',
+    end_date: '',
+    is_paid: 'All', // 'All' | 'true' | 'false'
+    month: 'All',
+    year: 'All',
+    search: ''
+  };
+
+  const [filters, setFilters] = useState(initialFilters);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Calendar popover states & refs
+  const [showStartCalendar, setShowStartCalendar] = useState(false);
+  const [showEndCalendar, setShowEndCalendar] = useState(false);
+  const startCalendarRef = useRef(null);
+  const endCalendarRef = useRef(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  // View Details Modal State
   const [selectedLeave, setSelectedLeave] = useState(null);
 
-  // New Leave Form State
-  const [newLeave, setNewLeave] = useState({
-    empId: 'EMP-0004',
-    employeeName: 'Test Employee cook KYLM',
-    department: 'Kitchen',
-    type: 'Annual Leave',
-    startDate: '',
-    endDate: '',
-    reason: ''
-  });
-
-  // Calculate Stats
-  const stats = {
-    pending: leaves.filter((l) => l.status === 'Pending').length,
-    approved: leaves.filter((l) => l.status === 'Approved').length,
-    rejected: leaves.filter((l) => l.status === 'Rejected').length,
-    totalDaysApproved: leaves
-      .filter((l) => l.status === 'Approved')
-      .reduce((sum, l) => sum + l.days, 0)
-  };
-
-  // Filter Leaves List
-  const filteredLeaves = leaves.filter((item) => {
-    // Tab Status Filter
-    if (activeTab !== 'All' && item.status !== activeTab) {
-      return false;
-    }
-    // Type Filter
-    if (typeFilter !== 'All' && item.type !== typeFilter) {
-      return false;
-    }
-    // Search Query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const nameMatch = (item.employeeName || '').toLowerCase().includes(q);
-      const empIdMatch = (item.empId || '').toLowerCase().includes(q);
-      const reasonMatch = (item.reason || '').toLowerCase().includes(q);
-      const reqIdMatch = (item.id || '').toLowerCase().includes(q);
-      if (!nameMatch && !empIdMatch && !reasonMatch && !reqIdMatch) {
-        return false;
+  // Close calendar popovers on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (startCalendarRef.current && !startCalendarRef.current.contains(event.target)) {
+        setShowStartCalendar(false);
       }
-    }
-    return true;
-  });
-
-  const getLeaveIcon = (type) => {
-    if (type.includes('Sick')) return <IoMedkitOutline className="text-rose-500" size={18} />;
-    if (type.includes('Annual')) return <IoAirplaneOutline className="text-blue-500" size={18} />;
-    return <IoTimeOutline className="text-amber-500" size={18} />;
-  };
-
-  // Handlers
-  const handleApprove = (id) => {
-    setLeaves((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, status: 'Approved', approvedBy: 'Admin User' } : l))
-    );
-    toast.success(`Leave request ${id} approved successfully!`);
-    if (selectedLeave && selectedLeave.id === id) {
-      setSelectedLeave((prev) => ({ ...prev, status: 'Approved', approvedBy: 'Admin User' }));
-    }
-  };
-
-  const handleReject = (id) => {
-    setLeaves((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, status: 'Rejected', approvedBy: 'Admin User' } : l))
-    );
-    toast.error(`Leave request ${id} marked as rejected.`);
-    if (selectedLeave && selectedLeave.id === id) {
-      setSelectedLeave((prev) => ({ ...prev, status: 'Rejected', approvedBy: 'Admin User' }));
-    }
-  };
-
-  const handleDelete = (id) => {
-    setLeaves((prev) => prev.filter((l) => l.id !== id));
-    toast.success(`Leave record ${id} removed.`);
-    if (selectedLeave && selectedLeave.id === id) {
-      setSelectedLeave(null);
-    }
-  };
-
-  const handleCreateSubmit = (e) => {
-    e.preventDefault();
-    if (!newLeave.startDate || !newLeave.endDate) {
-      toast.error('Please select both start and end dates.');
-      return;
-    }
-
-    const start = new Date(newLeave.startDate);
-    const end = new Date(newLeave.endDate);
-    if (end < start) {
-      toast.error('End date cannot be earlier than start date.');
-      return;
-    }
-
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    const createdRecord = {
-      id: `LV-${Math.floor(2000 + Math.random() * 9000)}`,
-      empId: newLeave.empId,
-      employeeName: newLeave.employeeName,
-      department: newLeave.department,
-      type: newLeave.type,
-      startDate: newLeave.startDate,
-      endDate: newLeave.endDate,
-      days: diffDays,
-      reason: newLeave.reason || 'Leave request submitted by HR',
-      status: 'Pending',
-      appliedDate: new Date().toISOString().split('T')[0],
-      approvedBy: null
+      if (endCalendarRef.current && !endCalendarRef.current.contains(event.target)) {
+        setShowEndCalendar(false);
+      }
     };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-    setLeaves([createdRecord, ...leaves]);
-    toast.success('Leave request submitted successfully!');
-    setShowRequestModal(false);
-    setNewLeave({
-      empId: 'EMP-0004',
-      employeeName: 'Test Employee cook KYLM',
-      department: 'Kitchen',
-      type: 'Annual Leave',
-      startDate: '',
-      endDate: '',
-      reason: ''
-    });
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(filters.search);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [filters.search]);
+
+  // Load branches & employees on mount
+  useEffect(() => {
+    const loadDropdownData = async () => {
+      try {
+        const [branchList, employeeList] = await Promise.all([
+          getBranches().catch(() => []),
+          getEmployees().catch(() => [])
+        ]);
+        setBranches(Array.isArray(branchList) ? branchList : []);
+        setEmployees(Array.isArray(employeeList) ? employeeList : []);
+      } catch (err) {
+        console.warn('Failed to load initial metadata:', err);
+      }
+    };
+    loadDropdownData();
+  }, []);
+
+  // Fetch leaves from API whenever filters change
+  const fetchLeaves = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const activeFilters = {
+        ...filters,
+        search: debouncedSearch
+      };
+      const res = await getLeaves(activeFilters);
+      const list = Array.isArray(res) ? res : (res?.results || []);
+      setLeaves(list);
+      setCurrentPage(1);
+    } catch (err) {
+      console.error('Failed to fetch leaves:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to fetch leave records';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchLeaves();
+  }, [
+    filters.branch,
+    filters.employee,
+    filters.start_date,
+    filters.end_date,
+    filters.is_paid,
+    filters.month,
+    filters.year,
+    debouncedSearch
+  ]);
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    setCurrentPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setFilters(initialFilters);
+    setShowStartCalendar(false);
+    setShowEndCalendar(false);
+    setCurrentPage(1);
+    toast.success('Filters reset to default');
+  };
+
+  // Filtered employees for dropdown based on branch selection if branch is chosen
+  const filteredEmployeeOptions = useMemo(() => {
+    if (filters.branch === 'All') return employees;
+    return employees.filter(emp => {
+      const empBranchId = typeof emp.branch === 'object' ? emp.branch?.id : emp.branch;
+      return String(empBranchId) === String(filters.branch);
+    });
+  }, [employees, filters.branch]);
+
+  // Filter leaves according to is_paid filter (true or false)
+  const displayLeaves = useMemo(() => {
+    return leaves.filter((leave) => {
+      if (filters.is_paid === 'true' || filters.is_paid === true) {
+        return Boolean(leave.is_paid) === true;
+      }
+      if (filters.is_paid === 'false' || filters.is_paid === false) {
+        return Boolean(leave.is_paid) === false;
+      }
+      return true;
+    });
+  }, [leaves, filters.is_paid]);
+
+  // Stats calculation
+  const stats = useMemo(() => {
+    const total = displayLeaves.length;
+    const paid = displayLeaves.filter(l => Boolean(l.is_paid) === true).length;
+    const unpaid = displayLeaves.filter(l => Boolean(l.is_paid) === false).length;
+    const uniqueEmployees = new Set(displayLeaves.map(l => l.employee)).size;
+    return { total, paid, unpaid, uniqueEmployees };
+  }, [displayLeaves]);
+
+  // Standard Pagination Calculation
+  const totalItems = displayLeaves.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
+  const startIndex = totalItems > 0 ? (currentPage - 1) * ITEMS_PER_PAGE : 0;
+  const endItem = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
+  const paginatedLeaves = displayLeaves.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  // Formatter helpers
+  const formatDateDisplay = (dateStr) => {
+    if (!dateStr) return '—';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      return dateStr;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatDateTimeDisplay = (isoStr) => {
+    if (!isoStr) return '—';
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return isoStr;
+    }
+  };
+
+  const hasActiveFilters = Boolean(
+    filters.branch !== 'All' ||
+    filters.employee !== 'All' ||
+    filters.start_date ||
+    filters.end_date ||
+    filters.is_paid !== 'All' ||
+    filters.month !== 'All' ||
+    filters.year !== 'All' ||
+    filters.search.trim()
+  );
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-300 font-sans">
-      
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Leave & Vacation Management</h1>
+          <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Leave & Attendance Management</h1>
           <p className="text-xs text-gray-500 font-medium mt-1">
-            Review time off requests, track employee vacation balances, and manage leave approvals.
+            Track employee leave records, verify paid vs unpaid absences, and filter by branch or date range.
           </p>
         </div>
-        <button
-          onClick={() => setShowRequestModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-        >
-          <IoAddOutline size={18} />
-          <span>Request Leave</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={fetchLeaves}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh Data"
+          >
+            <IoRefreshOutline size={16} className={loading ? 'animate-spin text-[#1E5E45]' : ''} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Pending Card */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+        {/* Total Leaves */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 mb-1">Pending Requests</p>
-            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{stats.pending}</h3>
-            <p className="text-[10px] font-medium text-amber-600 mt-1">Requires HR Approval</p>
+            <p className="text-xs font-semibold text-gray-500 mb-1">Total Leaves</p>
+            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{stats.total}</h3>
+            <p className="text-[10px] font-medium text-gray-400 mt-1">Recorded in system</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <IoTimeOutline size={24} />
+          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <IoCalendarOutline size={24} />
           </div>
         </div>
 
-        {/* Approved Card */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+        {/* Paid Leaves */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 mb-1">Approved Requests</p>
-            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{stats.approved}</h3>
-            <p className="text-[10px] font-medium text-emerald-600 mt-1">Granted Time Off</p>
+            <p className="text-xs font-semibold text-gray-500 mb-1">Paid Leaves</p>
+            <h3 className="text-2xl font-bold text-emerald-600 tabular-nums">{stats.paid}</h3>
+            <p className="text-[10px] font-medium text-emerald-600 mt-1">Compensated days</p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <IoCheckmarkCircleOutline size={24} />
           </div>
         </div>
 
-        {/* Rejected Card */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+        {/* Unpaid Leaves */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 mb-1">Rejected Requests</p>
-            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{stats.rejected}</h3>
-            <p className="text-[10px] font-medium text-rose-600 mt-1">Declined Time Off</p>
+            <p className="text-xs font-semibold text-gray-500 mb-1">Unpaid Leaves</p>
+            <h3 className="text-2xl font-bold text-amber-600 tabular-nums">{stats.unpaid}</h3>
+            <p className="text-[10px] font-medium text-amber-600 mt-1">Loss of pay (LOP)</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-            <IoCloseOutline size={24} />
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <IoTimeOutline size={24} />
           </div>
         </div>
 
-        {/* Total Days Approved */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+        {/* Employees on Leave */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 mb-1">Vacation Days Used</p>
-            <h3 className="text-2xl font-bold text-gray-900 tabular-nums">{stats.totalDaysApproved} Days</h3>
-            <p className="text-[10px] font-medium text-blue-600 mt-1">Total Approved Days</p>
+            <p className="text-xs font-semibold text-gray-500 mb-1">Staff Affected</p>
+            <h3 className="text-2xl font-bold text-purple-600 tabular-nums">{stats.uniqueEmployees}</h3>
+            <p className="text-[10px] font-medium text-purple-600 mt-1">Distinct employees</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <IoAirplaneOutline size={24} />
+          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+            <IoPersonOutline size={24} />
           </div>
         </div>
       </div>
 
-      {/* Main Table Container */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
-        
-        {/* Status Tabs Bar */}
-        <div className="flex px-4 border-b border-gray-100 bg-gray-50/50 overflow-x-auto">
-          {['Pending', 'Approved', 'Rejected', 'All'].map((tab) => {
-            const count = tab === 'All' ? leaves.length : stats[tab.toLowerCase()] || 0;
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`whitespace-nowrap px-5 py-3.5 text-xs font-bold transition-colors relative cursor-pointer ${
-                  activeTab === tab ? 'text-blue-600' : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                {tab} <span className="ml-1 text-[11px] opacity-80">({count})</span>
-                {activeTab === tab && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full"></div>
-                )}
-              </button>
-            );
-          })}
+      {/* API Reference Filters Section */}
+      <div className="bg-white rounded-2xl border border-gray-200/90 shadow-xs p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-[#1E5E45]/10 text-[#1E5E45] flex items-center justify-center">
+              <IoFilterOutline size={18} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">Leave Query Filters</h2>
+              <p className="text-[11px] text-gray-500">Filter leave records by branch, employee, date range, or paid status.</p>
+            </div>
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <IoCloseOutline size={16} /> Reset All Filters
+            </button>
+          )}
         </div>
 
-        {/* Search & Filter Toolbar */}
-        <div className="p-4 border-b border-gray-100 bg-white grid grid-cols-1 sm:grid-cols-3 gap-3">
-          
-          {/* Search Input */}
-          <div className="relative sm:col-span-2">
-            <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search by Employee Name, ID, Request # or Reason..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs bg-white text-gray-800 focus:outline-none focus:border-blue-500 transition-colors"
-            />
+        {/* Grid of the 8 Parameters matching the API Reference */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs font-sans">
+
+          {/* 1. search: Search employee name */}
+          <div>
+            <label className="block font-bold text-gray-600 uppercase tracking-wider text-[11px] mb-1.5">
+              Search Employee Name
+            </label>
+            <div className="relative">
+              <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+              <input
+                type="text"
+                placeholder="Type employee name..."
+                value={filters.search}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5E45]/20 focus:border-[#1E5E45] transition-all font-medium text-xs"
+              />
+            </div>
           </div>
 
-          {/* Type Filter Dropdown */}
-          <div className="flex items-center gap-2">
-            <IoFilterOutline size={16} className="text-gray-400 shrink-0" />
+          {/* 2. branch: Filter by branch ID */}
+          <div>
+            <label className="block font-bold text-gray-600 uppercase tracking-wider text-[11px] mb-1.5">
+              Branch
+            </label>
+            <div className="relative">
+              <select
+                value={filters.branch}
+                onChange={(e) => handleFilterChange('branch', e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50/50 hover:bg-white text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5E45]/20 focus:border-[#1E5E45] transition-all font-medium text-xs cursor-pointer"
+              >
+                <option value="All">All Branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} {b.code ? `(${b.code})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 3. employee: Filter by employee ID */}
+          <div>
+            <label className="block font-bold text-gray-600 uppercase tracking-wider text-[11px] mb-1.5">
+              Employee
+            </label>
             <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl text-xs px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer"
+              value={filters.employee}
+              onChange={(e) => handleFilterChange('employee', e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50/50 hover:bg-white text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5E45]/20 focus:border-[#1E5E45] transition-all font-medium text-xs cursor-pointer"
             >
-              <option value="All">All Leave Types</option>
-              <option value="Annual Leave">Annual Leave</option>
-              <option value="Sick Leave">Sick Leave</option>
-              <option value="Emergency Leave">Emergency Leave</option>
-              <option value="Unpaid Leave">Unpaid Leave</option>
+              <option value="All">All Employees</option>
+              {filteredEmployeeOptions.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} (EMP-{String(emp.id).padStart(3, '0')})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4. is_paid: Filter by paid or unpaid leave (true or false) */}
+          <div>
+            <label className="block font-bold text-gray-600 uppercase tracking-wider text-[11px] mb-1.5">
+              Paid / Unpaid
+            </label>
+            <select
+              value={filters.is_paid}
+              onChange={(e) => handleFilterChange('is_paid', e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50/50 hover:bg-white text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5E45]/20 focus:border-[#1E5E45] transition-all font-medium text-xs cursor-pointer"
+            >
+              <option value="All">-- (All Leaves)</option>
+              <option value="true">Paid Leave</option>
+              <option value="false">Unpaid Leave</option>
+            </select>
+          </div>
+
+          {/* 5. start_date: Start date (YYYY-MM-DD) via Standard Calendar component */}
+          <div className="relative" ref={startCalendarRef}>
+            <label className="block font-bold text-gray-600 uppercase tracking-wider text-[11px] mb-1.5">
+              Start Date (From)
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setShowStartCalendar(!showStartCalendar);
+                setShowEndCalendar(false);
+              }}
+              className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50/50 hover:bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+            >
+              <div className="flex items-center gap-2 truncate">
+                <IoCalendarOutline size={15} className="text-blue-600 shrink-0" />
+                <span className="truncate">
+                  {filters.start_date ? formatDateDisplay(filters.start_date) : 'Select Start Date'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-1">
+                {filters.start_date && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFilterChange('start_date', '');
+                    }}
+                    className="p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Clear date"
+                  >
+                    <IoCloseOutline size={14} />
+                  </span>
+                )}
+                <IoChevronDownOutline
+                  className={`text-gray-400 transition-transform duration-200 ${
+                    showStartCalendar ? 'rotate-180' : ''
+                  }`}
+                  size={13}
+                />
+              </div>
+            </button>
+
+            {showStartCalendar && (
+              <div className="absolute left-0 mt-1.5 z-40 animate-in fade-in zoom-in-95 duration-100">
+                <Calendar
+                  value={filters.start_date || new Date().toISOString().slice(0, 10)}
+                  onChange={(newDate) => {
+                    handleFilterChange('start_date', newDate);
+                    setShowStartCalendar(false);
+                  }}
+                  onClose={() => setShowStartCalendar(false)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 6. end_date: End date (YYYY-MM-DD) via Standard Calendar component */}
+          <div className="relative" ref={endCalendarRef}>
+            <label className="block font-bold text-gray-600 uppercase tracking-wider text-[11px] mb-1.5">
+              End Date (To)
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setShowEndCalendar(!showEndCalendar);
+                setShowStartCalendar(false);
+              }}
+              className="w-full flex items-center justify-between text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50/50 hover:bg-white text-gray-800 hover:border-blue-400 focus:outline-none transition-all font-medium shadow-2xs cursor-pointer"
+            >
+              <div className="flex items-center gap-2 truncate">
+                <IoCalendarOutline size={15} className="text-blue-600 shrink-0" />
+                <span className="truncate">
+                  {filters.end_date ? formatDateDisplay(filters.end_date) : 'Select End Date'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-1">
+                {filters.end_date && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFilterChange('end_date', '');
+                    }}
+                    className="p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Clear date"
+                  >
+                    <IoCloseOutline size={14} />
+                  </span>
+                )}
+                <IoChevronDownOutline
+                  className={`text-gray-400 transition-transform duration-200 ${
+                    showEndCalendar ? 'rotate-180' : ''
+                  }`}
+                  size={13}
+                />
+              </div>
+            </button>
+
+            {showEndCalendar && (
+              <div className="absolute left-0 sm:right-0 sm:left-auto mt-1.5 z-40 animate-in fade-in zoom-in-95 duration-100">
+                <Calendar
+                  value={filters.end_date || new Date().toISOString().slice(0, 10)}
+                  onChange={(newDate) => {
+                    handleFilterChange('end_date', newDate);
+                    setShowEndCalendar(false);
+                  }}
+                  onClose={() => setShowEndCalendar(false)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 7. month: Filter by month (1-12) */}
+          <div>
+            <label className="block font-bold text-gray-600 uppercase tracking-wider text-[11px] mb-1.5">
+              Month (1-12)
+            </label>
+            <select
+              value={filters.month}
+              onChange={(e) => handleFilterChange('month', e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50/50 hover:bg-white text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5E45]/20 focus:border-[#1E5E45] transition-all font-medium text-xs cursor-pointer"
+            >
+              <option value="All">All Months</option>
+              {MONTH_OPTIONS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 8. year: Filter by year */}
+          <div>
+            <label className="block font-bold text-gray-600 uppercase tracking-wider text-[11px] mb-1.5">
+              Year
+            </label>
+            <select
+              value={filters.year}
+              onChange={(e) => handleFilterChange('year', e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50/50 hover:bg-white text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5E45]/20 focus:border-[#1E5E45] transition-all font-medium text-xs cursor-pointer"
+            >
+              <option value="All">All Years</option>
+              {YEAR_OPTIONS.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
             </select>
           </div>
 
         </div>
+      </div>
 
-        {/* Requests Table */}
+      {/* Main Table Container */}
+      <div className="bg-white rounded-2xl border border-gray-200/90 shadow-xs overflow-hidden flex flex-col">
+
+        {/* Table Title Bar */}
+        <div className="p-4 sm:px-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-white">
+          <div>
+            <h3 className="font-bold text-gray-900 text-base">
+              Leave Records
+            </h3>
+            <p className="text-xs text-gray-500">
+              {loading ? 'Fetching records...' : `Showing ${displayLeaves.length} records matching current filter criteria.`}
+            </p>
+          </div>
+        </div>
+
+        {/* Leaves Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[950px]">
+          <table className="w-full text-left border-collapse min-w-[850px]">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-500 font-bold whitespace-nowrap">
-                <th className="p-3.5 pl-5">Request ID</th>
+                <th className="p-3.5 pl-6">ID</th>
                 <th className="p-3.5">Employee</th>
-                <th className="p-3.5">Leave Type</th>
-                <th className="p-3.5 text-center">Duration</th>
-                <th className="p-3.5">Date Period</th>
-                <th className="p-3.5 max-w-[200px]">Reason</th>
+                <th className="p-3.5">Leave Date</th>
+                <th className="p-3.5 text-center">Paid Status</th>
                 <th className="p-3.5 text-center">Status</th>
-                <th className="p-3.5 text-center pr-5">Actions & Routing</th>
+                <th className="p-3.5 max-w-[250px]">Remarks</th>
+                <th className="p-3.5">Recorded At</th>
+                <th className="p-3.5 text-center pr-6">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white text-xs">
-              {filteredLeaves.length > 0 ? (
-                filteredLeaves.map((leave) => {
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={`skel-${i}`} className="animate-pulse">
+                    <td className="p-4 pl-6"><div className="h-4 w-10 bg-gray-100 rounded"></div></td>
+                    <td className="p-4"><div className="h-4 w-36 bg-gray-100 rounded"></div></td>
+                    <td className="p-4"><div className="h-4 w-24 bg-gray-100 rounded"></div></td>
+                    <td className="p-4 text-center"><div className="h-5 w-20 bg-gray-100 rounded-full mx-auto"></div></td>
+                    <td className="p-4 text-center"><div className="h-5 w-16 bg-gray-100 rounded-full mx-auto"></div></td>
+                    <td className="p-4"><div className="h-4 w-40 bg-gray-100 rounded"></div></td>
+                    <td className="p-4"><div className="h-4 w-28 bg-gray-100 rounded"></div></td>
+                    <td className="p-4 pr-6 text-center"><div className="h-6 w-14 bg-gray-100 rounded mx-auto"></div></td>
+                  </tr>
+                ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <IoAlertCircleOutline size={36} className="text-red-400" />
+                      <p className="font-bold text-gray-800 text-sm">Failed to Load Leave Records</p>
+                      <p className="text-xs text-gray-500">{error}</p>
+                      <button
+                        onClick={fetchLeaves}
+                        className="mt-2 px-3.5 py-1.5 bg-[#1E5E45] text-white text-xs font-semibold rounded-lg hover:bg-[#154633] transition-colors cursor-pointer"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginatedLeaves.length > 0 ? (
+                paginatedLeaves.map((leave) => {
+                  const empName = leave.employee_name || `Employee #${leave.employee}`;
                   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    leave.employeeName
-                  )}&background=0D8ABC&color=fff`;
+                    empName
+                  )}&background=1E5E45&color=fff&size=64`;
 
                   return (
                     <tr key={leave.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="p-3.5 pl-5 font-mono font-bold text-gray-700 whitespace-nowrap">
+                      {/* ID */}
+                      <td className="p-3.5 pl-6 font-mono font-bold text-gray-700 whitespace-nowrap">
                         {leave.id}
                       </td>
 
-                      {/* Employee Column with Routing */}
+                      {/* Employee Info */}
                       <td className="p-3.5">
                         <div className="flex items-center gap-2.5">
                           <img
                             src={avatarUrl}
-                            alt="Avatar"
-                            className="w-8 h-8 rounded-full object-cover shadow-2xs shrink-0"
+                            alt={empName}
+                            className="w-8 h-8 rounded-full object-cover shrink-0 shadow-2xs"
                           />
                           <div className="min-w-0">
-                            <button
-                              type="button"
-                              onClick={() => navigate('/hr/employees')}
-                              className="font-bold text-gray-900 hover:text-blue-600 transition-colors text-left block truncate cursor-pointer"
-                              title="View Employee Profile"
-                            >
-                              {leave.employeeName}
-                            </button>
+                            <span className="font-bold text-gray-900 block truncate">
+                              {empName}
+                            </span>
                             <span className="text-[11px] text-gray-400 font-mono block">
-                              {leave.empId} • {leave.department}
+                              EMP-{String(leave.employee).padStart(3, '0')}
                             </span>
                           </div>
                         </div>
                       </td>
 
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-1.5 whitespace-nowrap">
-                          {getLeaveIcon(leave.type)}
-                          <span className="font-semibold text-gray-800">{leave.type}</span>
+                      {/* Date */}
+                      <td className="p-3.5 font-medium text-gray-800 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <IoCalendarOutline className="text-gray-400" size={14} />
+                          <span>{formatDateDisplay(leave.date)}</span>
                         </div>
                       </td>
 
-                      <td className="p-3.5 text-center font-bold text-gray-900 whitespace-nowrap">
-                        {leave.days} Days
-                      </td>
-
-                      <td className="p-3.5 text-gray-600 whitespace-nowrap">
-                        <span className="font-medium text-gray-800">
-                          {new Date(leave.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                        </span>
-                        <span className="text-gray-300 mx-1">→</span>
-                        <span className="font-medium text-gray-800">
-                          {new Date(leave.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </span>
-                      </td>
-
-                      <td className="p-3.5 text-gray-500 max-w-[200px] truncate" title={leave.reason}>
-                        {leave.reason}
-                      </td>
-
+                      {/* Paid Status */}
                       <td className="p-3.5 text-center whitespace-nowrap">
-                        <span
-                          className={`inline-flex px-2.5 py-1 text-[10px] font-bold rounded-full ${
-                            leave.status === 'Approved'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : leave.status === 'Pending'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}
-                        >
-                          {leave.status}
+                        {Boolean(leave.is_paid) ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <IoCheckmarkCircleOutline size={12} />
+                            Paid Leave
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                            <IoTimeOutline size={12} />
+                            Unpaid (LOP)
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td className="p-3.5 text-center whitespace-nowrap">
+                        <span className="inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider">
+                          {leave.status || 'LEAVE'}
                         </span>
                       </td>
 
-                      <td className="p-3.5 pr-5 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* View Details Button */}
+                      {/* Remarks */}
+                      <td className="p-3.5 text-gray-600 max-w-[250px] truncate" title={leave.remarks || 'No remarks'}>
+                        {leave.remarks ? leave.remarks : <span className="text-gray-400 italic">None</span>}
+                      </td>
+
+                      {/* Created At */}
+                      <td className="p-3.5 text-gray-500 whitespace-nowrap font-mono text-[11px]">
+                        {formatDateTimeDisplay(leave.created_at)}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="p-3.5 pr-6 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center">
                           <button
                             type="button"
                             onClick={() => setSelectedLeave(leave)}
                             className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="View Request Details"
+                            title="View Details"
                           >
                             <IoEyeOutline size={16} />
-                          </button>
-
-                          {/* Salary History Navigation */}
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/payroll/employee-salary-history?empId=${leave.empId}`)}
-                            className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                            title="View Employee Salary History"
-                          >
-                            <IoDocumentTextOutline size={16} />
-                          </button>
-
-                          {/* Quick Approve / Reject for Pending */}
-                          {leave.status === 'Pending' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleApprove(leave.id)}
-                                className="p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
-                                title="Approve Request"
-                              >
-                                <IoCheckmarkOutline size={16} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleReject(leave.id)}
-                                className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
-                                title="Reject Request"
-                              >
-                                <IoCloseOutline size={16} />
-                              </button>
-                            </>
-                          )}
-
-                          {/* Delete Action */}
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(leave.id)}
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            title="Delete Request"
-                          >
-                            <IoTrashOutline size={15} />
                           </button>
                         </div>
                       </td>
@@ -511,11 +731,23 @@ const LeaveVacation = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-gray-500">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <IoAlertCircleOutline size={32} className="text-gray-300" />
-                      <p className="font-semibold text-gray-700">No Leave Requests Found</p>
-                      <p className="text-xs text-gray-400">Try changing your search keywords or filter tab.</p>
+                  <td colSpan={8} className="p-10 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2 max-w-sm mx-auto">
+                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
+                        <IoCalendarOutline size={26} />
+                      </div>
+                      <p className="font-bold text-gray-800 text-sm mt-1">No Leave Records Found</p>
+                      <p className="text-xs text-gray-500">
+                        No leaves match the selected filters. Try clearing some filters or searching with a different term.
+                      </p>
+                      {hasActiveFilters && (
+                        <button
+                          onClick={handleResetFilters}
+                          className="mt-2 px-3 py-1.5 bg-[#1E5E45] text-white text-xs font-semibold rounded-lg hover:bg-[#154633] transition-colors cursor-pointer"
+                        >
+                          Clear Filters
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -524,136 +756,104 @@ const LeaveVacation = () => {
           </table>
         </div>
 
-      </div>
+        {/* Standard Project Pagination Footer */}
+        <div className="p-4 border-t border-gray-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium mt-auto">
+          <div>
+            Showing <span className="font-bold text-gray-800">{totalItems === 0 ? 0 : startIndex + 1}</span> to{' '}
+            <span className="font-bold text-gray-800">{endItem}</span> of{' '}
+            <span className="font-bold text-gray-800">{totalItems}</span> entries
+          </div>
 
-      {/* Modal: Request Leave */}
-      {showRequestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-              <h3 className="text-base font-bold text-gray-900">New Leave Request</h3>
-              <button
-                type="button"
-                onClick={() => setShowRequestModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg transition-colors cursor-pointer"
-              >
-                <IoCloseOutline size={20} />
-              </button>
-            </div>
+          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+            <button
+              type="button"
+              disabled={currentPage <= 1 || loading}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Previous Page"
+            >
+              <IoChevronBackOutline size={14} />
+            </button>
 
-            <form onSubmit={handleCreateSubmit} className="py-4 space-y-4 text-xs">
-              
-              {/* Employee Selection */}
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">Select Employee</label>
-                <select
-                  value={newLeave.empId}
-                  onChange={(e) => {
-                    const selectedEmp = [
-                      { id: 'EMP-0004', name: 'Test Employee cook KYLM', dept: 'Kitchen' },
-                      { id: 'EMP-0006', name: 'Manager Created Employee', dept: 'Management' },
-                      { id: 'EMP-0007', name: 'aby', dept: 'Service' },
-                      { id: 'EMP-0008', name: 'asif', dept: 'Accounts' }
-                    ].find((emp) => emp.id === e.target.value);
+            {totalPages <= 7 ? (
+              Array.from({ length: totalPages }).map((_, idx) => {
+                const pageNum = idx + 1;
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-xs transition-all cursor-pointer ${currentPage === pageNum
+                        ? 'bg-blue-600 text-white shadow-xs font-bold'
+                        : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })
+            ) : (
+              (() => {
+                let pages = [];
+                if (currentPage <= 4) {
+                  pages = [1, 2, 3, 4, 5, '...', totalPages];
+                } else if (currentPage >= totalPages - 3) {
+                  pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+                } else {
+                  pages = [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+                }
+                return pages.map((pageItem, idx) => {
+                  if (pageItem === '...') {
+                    return (
+                      <span
+                        key={`ellipsis-${idx}`}
+                        className="w-8 h-8 flex items-center justify-center text-gray-400 font-bold"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={pageItem}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => setCurrentPage(pageItem)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-xs transition-all cursor-pointer ${currentPage === pageItem
+                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                    >
+                      {pageItem}
+                    </button>
+                  );
+                });
+              })()
+            )}
 
-                    if (selectedEmp) {
-                      setNewLeave((prev) => ({
-                        ...prev,
-                        empId: selectedEmp.id,
-                        employeeName: selectedEmp.name,
-                        department: selectedEmp.dept
-                      }));
-                    }
-                  }}
-                  className="w-full border border-gray-200 rounded-xl p-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
-                >
-                  <option value="EMP-0004">EMP-0004 - Test Employee cook KYLM (Kitchen)</option>
-                  <option value="EMP-0006">EMP-0006 - Manager Created Employee (Management)</option>
-                  <option value="EMP-0007">EMP-0007 - aby (Service)</option>
-                  <option value="EMP-0008">EMP-0008 - asif (Accounts)</option>
-                </select>
-              </div>
-
-              {/* Leave Type */}
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">Leave Type</label>
-                <select
-                  value={newLeave.type}
-                  onChange={(e) => setNewLeave((prev) => ({ ...prev, type: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl p-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
-                >
-                  <option value="Annual Leave">Annual Leave</option>
-                  <option value="Sick Leave">Sick Leave</option>
-                  <option value="Emergency Leave">Emergency Leave</option>
-                  <option value="Unpaid Leave">Unpaid Leave</option>
-                </select>
-              </div>
-
-              {/* Date Range */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={newLeave.startDate}
-                    onChange={(e) => setNewLeave((prev) => ({ ...prev, startDate: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl p-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={newLeave.endDate}
-                    onChange={(e) => setNewLeave((prev) => ({ ...prev, endDate: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl p-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500 font-medium"
-                  />
-                </div>
-              </div>
-
-              {/* Reason */}
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">Reason / Notes</label>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="Explain reason for leave request..."
-                  value={newLeave.reason}
-                  onChange={(e) => setNewLeave((prev) => ({ ...prev, reason: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl p-2.5 bg-white text-gray-800 focus:outline-none focus:border-blue-500"
-                ></textarea>
-              </div>
-
-              <div className="flex items-center gap-3 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setShowRequestModal(false)}
-                  className="flex-1 py-2.5 px-4 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 px-4 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
-                >
-                  Submit Request
-                </button>
-              </div>
-            </form>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages || loading}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              title="Next Page"
+            >
+              <IoChevronForwardOutline size={14} />
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Modal: View Request Details */}
+      </div>
+
+      {/* Modal: View Leave Details */}
       {selectedLeave && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150 space-y-4 font-sans">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
-                <h3 className="text-base font-bold text-gray-900">Leave Request Details</h3>
-                <p className="text-xs text-gray-500 font-mono">{selectedLeave.id}</p>
+                <h3 className="text-base font-bold text-gray-900">Leave Record Details</h3>
+                <p className="text-xs text-gray-400 font-mono">Record ID: {selectedLeave.id}</p>
               </div>
               <button
                 type="button"
@@ -665,100 +865,69 @@ const LeaveVacation = () => {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Employee:</span>
-                  <span className="font-bold text-gray-900">{selectedLeave.employeeName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Employee Code:</span>
-                  <span className="font-mono text-gray-800">{selectedLeave.empId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Department:</span>
-                  <span className="font-semibold text-gray-800">{selectedLeave.department}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Leave Type:</span>
-                  <span className="font-bold text-blue-600">{selectedLeave.type}</span>
-                </div>
-              </div>
-
-              <div className="bg-blue-50/50 p-3.5 rounded-xl border border-blue-100 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Duration:</span>
-                  <span className="font-extrabold text-gray-900">{selectedLeave.days} Days</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Date Range:</span>
-                  <span className="font-medium text-gray-800">
-                    {selectedLeave.startDate} to {selectedLeave.endDate}
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Employee Name:</span>
+                  <span className="font-bold text-gray-900">
+                    {selectedLeave.employee_name || `Employee #${selectedLeave.employee}`}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Status:</span>
-                  <span className={`font-bold ${
-                    selectedLeave.status === 'Approved' ? 'text-emerald-600' :
-                    selectedLeave.status === 'Pending' ? 'text-amber-600' : 'text-rose-600'
-                  }`}>
-                    {selectedLeave.status}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Employee ID:</span>
+                  <span className="font-mono text-gray-800 font-bold">
+                    EMP-{String(selectedLeave.employee).padStart(3, '0')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Leave Date:</span>
+                  <span className="font-bold text-gray-900">
+                    {formatDateDisplay(selectedLeave.date)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Status:</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+                    {selectedLeave.status || 'LEAVE'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Compensation:</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${Boolean(selectedLeave.is_paid)
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}>
+                    {Boolean(selectedLeave.is_paid) ? 'Paid Leave' : 'Unpaid (LOP)'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 font-medium">Recorded At:</span>
+                  <span className="text-gray-700 font-mono text-[11px]">
+                    {formatDateTimeDisplay(selectedLeave.created_at)}
                   </span>
                 </div>
               </div>
 
               <div>
-                <p className="font-semibold text-gray-700 mb-1">Reason / Notes:</p>
-                <p className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-gray-700 italic">
-                  "{selectedLeave.reason}"
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Actions & Navigation Links */}
-            <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedLeave(null);
-                    navigate('/hr/employees');
-                  }}
-                  className="flex-1 py-2 px-3 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <IoPersonOutline size={15} /> Employee Profile
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedLeave(null);
-                    navigate(`/payroll/employee-salary-history?empId=${selectedLeave.empId}`);
-                  }}
-                  className="flex-1 py-2 px-3 bg-white border border-gray-200 text-blue-600 hover:bg-blue-50 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <IoDocumentTextOutline size={15} /> Salary History
-                </button>
-              </div>
-
-              {selectedLeave.status === 'Pending' && (
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => handleApprove(selectedLeave.id)}
-                    className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer shadow-2xs"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleReject(selectedLeave.id)}
-                    className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer shadow-2xs"
-                  >
-                    Reject
-                  </button>
+                <p className="font-bold text-gray-700 mb-1">Remarks / Note:</p>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-gray-700 min-h-[50px]">
+                  {selectedLeave.remarks ? (
+                    <span>"{selectedLeave.remarks}"</span>
+                  ) : (
+                    <span className="text-gray-400 italic">No remarks provided for this record.</span>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedLeave(null)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

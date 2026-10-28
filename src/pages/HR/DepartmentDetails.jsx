@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  IoArrowBackOutline, IoBusinessOutline, IoPeopleOutline, IoWalletOutline, 
+  IoArrowBackOutline, IoPeopleOutline, 
   IoStorefrontOutline, IoAlertCircleOutline, IoRefreshOutline 
 } from 'react-icons/io5';
 import { getDepartments } from '../../api/departments.api';
@@ -41,7 +41,6 @@ const DepartmentDetails = () => {
           name: deptStaff.length > 0 ? deptStaff[0].department_name : `Department #${id}`,
           head: 'Unassigned',
           employeeCount: deptStaff.length,
-          budget: '100,000',
           status: 'Active',
           branchName: deptStaff.length > 0 ? deptStaff[0].branch_name : 'Main Branch',
           description: `Handles operations for ${deptStaff.length > 0 ? deptStaff[0].department_name : 'this department'}.`
@@ -147,16 +146,6 @@ const DepartmentDetails = () => {
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Team Size</p>
                   <p className="font-bold text-gray-900">{staffList.length} Members</p>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-                  <IoWalletOutline size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Monthly Budget</p>
-                  <p className="font-bold text-gray-900">₹{deptDetails.budget}</p>
                 </div>
               </div>
             </div>

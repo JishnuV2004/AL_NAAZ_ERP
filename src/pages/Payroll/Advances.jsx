@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   IoSearchOutline,
   IoFilterOutline,
-  IoDownloadOutline,
   IoCalendarOutline,
   IoChevronDownOutline,
   IoAddOutline,
@@ -256,13 +255,6 @@ const Advances = () => {
         </div>
 
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => toast.success('Advance report exported to CSV')}
-            className="px-3.5 py-2 bg-white text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hover:bg-slate-50 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <IoDownloadOutline size={16} /> Export CSV
-          </button>
           <button
             type="button"
             onClick={() => setShowRequestModal(true)}

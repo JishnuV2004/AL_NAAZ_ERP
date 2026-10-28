@@ -45,9 +45,11 @@ export const financeService = {
     }
   },
 
-  fetchCategories: async (page = 1, pageSize = 10) => {
+  fetchCategories: async (page = 1, pageSize = 10, search = '') => {
     try {
-      const response = await axiosInstance.get(`/categories/?page=${page}&page_size=${pageSize}`);
+      const params = { page, page_size: pageSize };
+      if (search) params.search = search;
+      const response = await axiosInstance.get('/categories/', { params });
       return response.data;
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -67,7 +69,7 @@ export const financeService = {
 
   updateCategory: async (id, data) => {
     try {
-      const response = await axiosInstance.put(`/categories/${id}/`, data);
+      const response = await axiosInstance.patch(`/categories/${id}/`, data);
       return response.data;
     } catch (error) {
       console.error("Error updating category:", error);

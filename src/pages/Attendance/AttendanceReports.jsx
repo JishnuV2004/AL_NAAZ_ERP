@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   IoBarChartOutline,
   IoCalendarOutline,
-  IoDownloadOutline,
   IoTrendingUpOutline,
   IoWarningOutline,
   IoTimeOutline,
@@ -16,88 +15,36 @@ import {
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 
-const mockReportData = [
-  {
-    id: 1,
-    empCode: 'EMP-0004',
-    employeeName: 'Test Employee cook KYLM',
-    department: 'Kitchen',
-    workingDays: 30,
-    daysPresent: 28,
-    daysAbsent: 1,
-    leaveDays: 1,
-    lateArrivals: 2,
-    otHours: 12.5,
-    attendanceRate: 93.3
-  },
-  {
-    id: 2,
-    empCode: 'EMP-0006',
-    employeeName: 'Manager Created Employee',
-    department: 'Management',
-    workingDays: 30,
-    daysPresent: 29,
-    daysAbsent: 0,
-    leaveDays: 1,
-    lateArrivals: 0,
-    otHours: 8.0,
-    attendanceRate: 96.7
-  },
-  {
-    id: 3,
-    empCode: 'EMP-0007',
-    employeeName: 'aby',
-    department: 'Service',
-    workingDays: 26,
-    daysPresent: 24,
-    daysAbsent: 2,
-    leaveDays: 0,
-    lateArrivals: 4,
-    otHours: 5.5,
-    attendanceRate: 92.3
-  },
-  {
-    id: 4,
-    empCode: 'EMP-0008',
-    employeeName: 'asif',
-    department: 'Accounts',
-    workingDays: 30,
-    daysPresent: 30,
-    daysAbsent: 0,
-    leaveDays: 0,
-    lateArrivals: 1,
-    otHours: 14.0,
-    attendanceRate: 100.0
-  }
-];
-
 const AttendanceReports = () => {
   const navigate = useNavigate();
+  const [reportsData, setReportsData] = useState([]);
   const [dateRange, setDateRange] = useState('This Month');
   const [deptFilter, setDeptFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Dynamic Departments
+  const departments = ['All', ...new Set(reportsData.map((item) => item.department).filter(Boolean))];
+
   // Filter Data
-  const filteredData = mockReportData.filter((item) => {
+  const filteredData = reportsData.filter((item) => {
     if (deptFilter !== 'All' && item.department !== deptFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      const nameMatch = item.employeeName.toLowerCase().includes(q);
-      const codeMatch = item.empCode.toLowerCase().includes(q);
+      const nameMatch = (item.employeeName || '').toLowerCase().includes(q);
+      const codeMatch = (item.empCode || '').toLowerCase().includes(q);
       if (!nameMatch && !codeMatch) return false;
     }
     return true;
   });
 
   // Calculate Aggregated Metrics
-  const avgRate = (
-    filteredData.reduce((sum, item) => sum + item.attendanceRate, 0) /
-    (filteredData.length || 1)
-  ).toFixed(1);
+  const avgRate = filteredData.length > 0
+    ? (filteredData.reduce((sum, item) => sum + (item.attendanceRate || 0), 0) / filteredData.length).toFixed(1)
+    : '0.0';
 
-  const totalAbsences = filteredData.reduce((sum, item) => sum + item.daysAbsent, 0);
-  const totalLate = filteredData.reduce((sum, item) => sum + item.lateArrivals, 0);
-  const totalOT = filteredData.reduce((sum, item) => sum + item.otHours, 0);
+  const totalAbsences = filteredData.reduce((sum, item) => sum + (item.daysAbsent || 0), 0);
+  const totalLate = filteredData.reduce((sum, item) => sum + (item.lateArrivals || 0), 0);
+  const totalOT = filteredData.reduce((sum, item) => sum + (item.otHours || 0), 0);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-300 font-sans">
@@ -128,13 +75,6 @@ const AttendanceReports = () => {
             className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
           >
             <IoTimeOutline size={15} /> Overtime
-          </button>
-          <button
-            type="button"
-            onClick={() => toast.success(`Exporting ${dateRange} Attendance Report PDF...`)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-          >
-            <IoDownloadOutline size={16} /> Export PDF Report
           </button>
         </div>
       </div>
@@ -218,11 +158,11 @@ const AttendanceReports = () => {
               onChange={(e) => setDeptFilter(e.target.value)}
               className="w-full border border-gray-200 rounded-xl text-xs px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
-              <option value="All">All Departments</option>
-              <option value="Kitchen">Kitchen</option>
-              <option value="Management">Management</option>
-              <option value="Service">Service</option>
-              <option value="Accounts">Accounts</option>
+              {departments.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept === 'All' ? 'All Departments' : dept}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -263,7 +203,7 @@ const AttendanceReports = () => {
               {filteredData.length > 0 ? (
                 filteredData.map((row) => {
                   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    row.employeeName
+                    row.employeeName || 'Staff'
                   )}&background=0D8ABC&color=fff`;
 
                   return (
@@ -284,10 +224,10 @@ const AttendanceReports = () => {
                               className="font-bold text-gray-900 hover:text-blue-600 transition-colors text-left block truncate cursor-pointer"
                               title="View Employee Profile"
                             >
-                              {row.employeeName}
+                              {row.employeeName || 'Staff'}
                             </button>
                             <span className="text-[11px] text-gray-400 font-mono block">
-                              {row.empCode} • {row.department}
+                              {row.empCode || '-'} • {row.department || 'General'}
                             </span>
                           </div>
                         </div>
@@ -328,7 +268,7 @@ const AttendanceReports = () => {
                                   ? 'bg-blue-500'
                                   : 'bg-amber-500'
                               }`}
-                              style={{ width: `${row.attendanceRate}%` }}
+                              style={{ width: `${Math.min(100, Math.max(0, row.attendanceRate || 0))}%` }}
                             ></div>
                           </div>
                           <span className="font-extrabold text-gray-900 font-mono">
@@ -350,7 +290,7 @@ const AttendanceReports = () => {
                           <button
                             type="button"
                             onClick={() =>
-                              navigate(`/payroll/employee-salary-history?empId=${row.empCode}`)
+                              navigate(`/payroll/employee-salary-history?empId=${row.empCode || ''}`)
                             }
                             className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
                             title="View Employee Salary History"
@@ -364,7 +304,7 @@ const AttendanceReports = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-gray-500">
+                  <td colSpan={9} className="p-12 text-center text-gray-400">
                     No attendance report records found.
                   </td>
                 </tr>

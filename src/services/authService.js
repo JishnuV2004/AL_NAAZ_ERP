@@ -22,12 +22,12 @@ export const authService = {
       }
     } catch (error) {
       const responseData = error.response?.data;
-      const toastMessage = 
-        responseData?.message || 
-        responseData?.error || 
-        responseData?.detail || 
-        error.userMessage || 
-        error.message || 
+      const toastMessage =
+        responseData?.message ||
+        responseData?.error ||
+        responseData?.detail ||
+        error.userMessage ||
+        error.message ||
         'Login failed';
 
       toast.error(toastMessage);
@@ -45,6 +45,62 @@ export const authService = {
       // Even if backend fails, force local logout to clear broken state
       useAuthStore.getState().logout();
       toast.error('Logged out, but there was an issue clearing the server session.');
+    }
+  },
+
+  getProfile: async () => {
+    const response = await axiosInstance.get('/users/profile/');
+    if (response.data) {
+      useAuthStore.getState().updateUser(response.data);
+    }
+    return response.data;
+  },
+
+  updateProfile: async ({ username, email, phone }) => {
+    try {
+      const payload = {
+        username: username?.trim(),
+        email: email?.trim(),
+        phone: phone !== undefined ? String(phone).trim() : ''
+      };
+      const response = await axiosInstance.patch('/users/profile/', payload);
+      if (response.data) {
+        useAuthStore.getState().updateUser(response.data);
+      }
+      return response.data;
+    } catch (error) {
+      const responseData = error.response?.data;
+      const msg =
+        responseData?.username?.[0] ||
+        responseData?.email?.[0] ||
+        responseData?.phone?.[0] ||
+        responseData?.message ||
+        responseData?.detail ||
+        responseData?.error ||
+        error.message ||
+        'Failed to update profile';
+      throw new Error(msg);
+    }
+  },
+
+  changePassword: async ({ current_password, new_password }) => {
+    try {
+      const response = await axiosInstance.post('/users/change-password/', {
+        current_password,
+        new_password
+      });
+      return response.data;
+    } catch (error) {
+      const responseData = error.response?.data;
+      const msg =
+        responseData?.current_password?.[0] ||
+        responseData?.new_password?.[0] ||
+        responseData?.detail ||
+        responseData?.error ||
+        responseData?.message ||
+        error.message ||
+        'Failed to change password';
+      throw new Error(msg);
     }
   }
 };
