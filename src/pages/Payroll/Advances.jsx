@@ -15,7 +15,6 @@ import {
   IoDocumentTextOutline,
   IoAlertCircleOutline,
   IoCheckmarkDoneOutline,
-  IoPrintOutline,
   IoCloseCircleOutline,
   IoChevronBackOutline,
   IoChevronForwardOutline
@@ -857,13 +856,10 @@ const Advances = () => {
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => {
-                  toast.success(`Printing advance slip for #${selectedLedgerAdvance.id}...`);
-                  setSelectedLedgerAdvance(null);
-                }}
-                className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer"
+                onClick={() => setSelectedLedgerAdvance(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
               >
-                <IoPrintOutline size={16} /> Print Slip
+                Close
               </button>
             </div>
 

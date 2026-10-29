@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { IoArrowBackOutline, IoSearchOutline, IoWarningOutline } from 'react-icons/io5';
+import { useNavigate } from 'react-router-dom';
+import { IoSearchOutline, IoWarningOutline } from 'react-icons/io5';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { getEmployees } from '../../api/employees.api';
 import IdentityProofManager from '../../components/employees/EmployeeDocuments';
 
 const EmployeeDocumentsPage = () => {
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // State for view swapping
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
@@ -30,7 +33,7 @@ const EmployeeDocumentsPage = () => {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  const filteredEmployees = employees.filter(emp => 
+  const filteredEmployees = employees.filter(emp =>
     emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.designation.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -52,19 +55,34 @@ const EmployeeDocumentsPage = () => {
   // --- RENDER INLINE DETAIL VIEW ---
   if (selectedEmployee) {
     const emp = selectedEmployee;
+    const branchName = emp.branch ? (typeof emp.branch === 'object' ? emp.branch.name || emp.branch.branch_name : emp.branch) : '—';
     return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-        <div className="flex items-center gap-4 border-b border-[#E7E8EE] pb-4">
-          <button 
+      <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 font-sans">
+        {/* Back button matching reference image model */}
+        <div className="pt-1">
+          <button
+            type="button"
             onClick={() => setSelectedEmployee(null)}
-            className="p-2 bg-white border border-[#E7E8EE] rounded-xl text-[#6B7280] hover:bg-gray-50 transition-colors shadow-sm"
+            className="flex items-center gap-2 text-sm font-bold text-slate-700 hover:text-slate-900 transition-colors w-fit cursor-pointer"
           >
-            <IoArrowBackOutline size={20} />
+            <ArrowLeft size={18} />
+            <span>Back to Employee Documents</span>
           </button>
+        </div>
+
+        {/* Header with Title and Clearance Navigation Button */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#E7E8EE] pb-4">
           <div>
             <h1 className="font-serif text-2xl font-bold text-[#1C1F2A]">Employee Details</h1>
             <p className="text-[#6B7280] text-sm">Read-only profile information and identity documents.</p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate('/hr/clearance-items')}
+            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer shrink-0"
+          >
+            <ShieldCheck size={16} /> Clearances
+          </button>
         </div>
 
         <div className="bg-white rounded-2xl border border-[#E7E8EE] shadow-sm overflow-hidden">
@@ -76,15 +94,15 @@ const EmployeeDocumentsPage = () => {
               </div>
               <div className={`absolute bottom-1 right-1 h-5 w-5 rounded-full border-4 border-white ${emp.is_active ? 'bg-green-500' : 'bg-gray-400'}`}></div>
             </div>
-            
+
             <div className="text-center sm:text-left flex-1">
               <h2 className="text-2xl font-bold text-[#1C1F2A] mb-1">{emp.name}</h2>
               <p className="text-[#C9A227] font-medium text-lg mb-4">{emp.designation}</p>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm text-[#6B7280]">
                 <div>
                   <span className="block text-xs uppercase tracking-wider font-semibold mb-1">Branch</span>
-                  <span className="font-medium text-[#1C1F2A]">{emp.branch.name}</span>
+                  <span className="font-medium text-[#1C1F2A]">{branchName}</span>
                 </div>
                 <div>
                   <span className="block text-xs uppercase tracking-wider font-semibold mb-1">Phone</span>
@@ -99,19 +117,19 @@ const EmployeeDocumentsPage = () => {
                   <span className="font-medium text-[#1C1F2A] capitalize">{emp.salary_type.toLowerCase()}</span>
                 </div>
               </div>
-              
+
               <div className="mt-4 pt-4 border-t border-dashed border-[#E7E8EE]">
                 <span className="block text-xs uppercase tracking-wider font-semibold mb-1 text-[#6B7280]">Address</span>
                 <span className="font-medium text-[#1C1F2A]">{emp.address || 'Not provided'}</span>
               </div>
             </div>
           </div>
-          
+
           {/* Identity Proof Integration */}
           <div className="p-6 sm:p-8 bg-white">
             <h3 className="font-serif text-xl font-bold text-[#1C1F2A] mb-2 border-l-4 border-[#C9A227] pl-3">Identity Proofs</h3>
             <p className="text-sm text-[#6B7280] mb-6">Manage official identification documents. Personal details above are strictly read-only on this page.</p>
-            
+
             {/* The existing robust component */}
             <div className="-mt-8">
               <IdentityProofManager employeeId={emp.id} />
@@ -132,9 +150,9 @@ const EmployeeDocumentsPage = () => {
         </div>
         <div className="relative w-full sm:w-80">
           <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search employees..." 
+          <input
+            type="text"
+            placeholder="Search employees..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-white border border-[#E7E8EE] rounded-xl focus:outline-none focus:border-[#C9A227] focus:ring-1 focus:ring-[#C9A227] shadow-sm"
@@ -148,7 +166,7 @@ const EmployeeDocumentsPage = () => {
             <IoWarningOutline size={24} />
             <span className="font-medium">{apiError}</span>
           </div>
-          <button 
+          <button
             onClick={fetchEmployees}
             className="px-4 py-1.5 bg-white text-[#C1443A] font-semibold rounded-lg border border-[#C1443A]/20 hover:bg-[#C1443A]/5 transition-colors"
           >
@@ -173,8 +191,8 @@ const EmployeeDocumentsPage = () => {
       ) : filteredEmployees.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredEmployees.map((emp) => (
-            <div 
-              key={emp.id} 
+            <div
+              key={emp.id}
               className="bg-white rounded-2xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-[#E7E8EE] hover:shadow-lg transition-all flex items-center gap-5 group"
             >
               <div className="relative shrink-0">
@@ -184,11 +202,11 @@ const EmployeeDocumentsPage = () => {
                 {/* Status Dot */}
                 <div className={`absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white ${emp.is_active ? 'bg-[#3bdf6c]' : 'bg-gray-400'}`}></div>
               </div>
-              
+
               <div className="flex-1 overflow-hidden">
                 <h3 className="font-bold text-[#1C1F2A] truncate text-base">{emp.name}</h3>
                 <p className="text-[#9ca3af] text-xs truncate mb-2">{emp.designation}</p>
-                <button 
+                <button
                   onClick={() => setSelectedEmployee(emp)}
                   className="text-blue-600 text-sm font-semibold hover:text-blue-800 transition-colors inline-block"
                 >

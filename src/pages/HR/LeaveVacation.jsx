@@ -339,7 +339,7 @@ const LeaveVacation = () => {
               <IoFilterOutline size={18} />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Leave Query Filters</h2>
+              <h2 className="text-sm font-bold text-gray-900">Leave Filters</h2>
               <p className="text-[11px] text-gray-500">Filter leave records by branch, employee, date range, or paid status.</p>
             </div>
           </div>
@@ -462,9 +462,8 @@ const LeaveVacation = () => {
                   </span>
                 )}
                 <IoChevronDownOutline
-                  className={`text-gray-400 transition-transform duration-200 ${
-                    showStartCalendar ? 'rotate-180' : ''
-                  }`}
+                  className={`text-gray-400 transition-transform duration-200 ${showStartCalendar ? 'rotate-180' : ''
+                    }`}
                   size={13}
                 />
               </div>
@@ -517,9 +516,8 @@ const LeaveVacation = () => {
                   </span>
                 )}
                 <IoChevronDownOutline
-                  className={`text-gray-400 transition-transform duration-200 ${
-                    showEndCalendar ? 'rotate-180' : ''
-                  }`}
+                  className={`text-gray-400 transition-transform duration-200 ${showEndCalendar ? 'rotate-180' : ''
+                    }`}
                   size={13}
                 />
               </div>
@@ -785,8 +783,8 @@ const LeaveVacation = () => {
                     disabled={loading}
                     onClick={() => setCurrentPage(pageNum)}
                     className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-xs transition-all cursor-pointer ${currentPage === pageNum
-                        ? 'bg-blue-600 text-white shadow-xs font-bold'
-                        : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      ? 'bg-blue-600 text-white shadow-xs font-bold'
+                      : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
                       }`}
                   >
                     {pageNum}
@@ -821,8 +819,8 @@ const LeaveVacation = () => {
                       disabled={loading}
                       onClick={() => setCurrentPage(pageItem)}
                       className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-xs transition-all cursor-pointer ${currentPage === pageItem
-                          ? 'bg-blue-600 text-white shadow-xs font-bold'
-                          : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                        ? 'bg-blue-600 text-white shadow-xs font-bold'
+                        : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
                         }`}
                     >
                       {pageItem}
@@ -893,8 +891,8 @@ const LeaveVacation = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-500 font-medium">Compensation:</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${Boolean(selectedLeave.is_paid)
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
                     }`}>
                     {Boolean(selectedLeave.is_paid) ? 'Paid Leave' : 'Unpaid (LOP)'}
                   </span>

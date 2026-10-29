@@ -1,5 +1,5 @@
 import React from 'react';
-import { IoPencilOutline, IoEyeOutline, IoPowerOutline, IoBanOutline } from 'react-icons/io5';
+import { IoPencilOutline, IoPowerOutline, IoBanOutline } from 'react-icons/io5';
 
 const formatCurrency = (val) => {
   if (val === null || val === undefined || val === '') return '—';
@@ -153,14 +153,6 @@ const EmployeeTable = ({
                     {/* Actions */}
                     <td className="py-3.5 px-5 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => onAction('view', emp)}
-                          className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg border border-gray-200 transition-colors cursor-pointer"
-                          title="View Details"
-                        >
-                          <IoEyeOutline size={15} />
-                        </button>
                         <button
                           type="button"
                           onClick={() => onAction('edit', emp)}
