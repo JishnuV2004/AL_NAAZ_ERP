@@ -443,7 +443,14 @@ const SupplierPayables = () => {
       loadSupplierPayments(paymentsCurrentPage);
     } catch (err) {
       console.error('Failed to record supplier payment:', err);
-      const errMsg = err.response?.data?.detail || err.response?.data?.non_field_errors?.[0] || 'Failed to record supplier payment';
+      const errMsg =
+        err.response?.data?.message ||
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        err.response?.data?.non_field_errors?.[0] ||
+        err.userMessage ||
+        err.message ||
+        'Failed to record supplier payment';
       toast.error(errMsg);
     } finally {
       setIsSubmittingPayment(false);

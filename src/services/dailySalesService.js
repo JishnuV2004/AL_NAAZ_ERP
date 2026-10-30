@@ -15,6 +15,16 @@ export const dailySalesService = {
     }
   },
 
+  getDailySaleById: async (id) => {
+    try {
+      const response = await axiosInstance.get(`/daily-sales/${id}/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to fetch daily sale #${id}:`, error);
+      throw error;
+    }
+  },
+
   createDailySale: async (payload) => {
     try {
       const response = await axiosInstance.post('/daily-sales/', payload);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   IoAddOutline,
   IoSearchOutline,
@@ -308,10 +308,37 @@ const DailySales = () => {
     );
   };
 
+  const getPartnerName = (p) => {
+    if (!p) return '—';
+    if (p.delivery_partner_name) return p.delivery_partner_name;
+    const partnerId = p.delivery_partner || p.deliveryPartner;
+    if (partnerId) {
+      const partner = deliveryPartnersList.find(
+        (dp) => String(dp.id) === String(partnerId)
+      );
+      if (partner) return partner.name || partner.partner || partner.platform || `Partner #${partnerId}`;
+      return `Partner #${partnerId}`;
+    }
+    return p.platform || '—';
+  };
+
+  const handleViewSale = async (sale) => {
+    setViewingSale(sale);
+    try {
+      const detailed = await dailySalesService.getDailySaleById(sale.id);
+      if (detailed) {
+        setViewingSale(mapApiItemToRecord(detailed));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch detailed sale data:', err);
+    }
+  };
+
   const handleClearFilters = () => {
     setSelectedBranch('All');
     setSelectedDate('');
     setSelectedStatus('All');
+    setCurrentPage(1);
   };
 
   const filteredSales = salesList.filter((sale) => {
@@ -320,6 +347,37 @@ const DailySales = () => {
     if (selectedStatus !== 'All' && sale.status !== selectedStatus) return false;
     return true;
   });
+
+  const displaySales = useMemo(() => {
+    if (filteredSales.length > pageSize) {
+      const startIndex = (currentPage - 1) * pageSize;
+      return filteredSales.slice(startIndex, startIndex + pageSize);
+    }
+    return filteredSales;
+  }, [filteredSales, currentPage, pageSize]);
+
+  const totalPaginationItems = useMemo(() => {
+    if (totalCount > salesList.length && salesList.length <= pageSize) {
+      return totalCount;
+    }
+    return filteredSales.length;
+  }, [totalCount, salesList.length, pageSize, filteredSales.length]);
+
+  const totalPages = Math.max(1, Math.ceil(totalPaginationItems / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
+  const handlePageChange = (newPage) => {
+    const targetPage = Math.max(1, Math.min(newPage, totalPages));
+    setCurrentPage(targetPage);
+    if (totalCount > salesList.length && salesList.length <= pageSize) {
+      loadDailySales(targetPage);
+    }
+  };
 
   const handlePostSale = async (id) => {
     setPostingSale(true);
@@ -645,63 +703,119 @@ const DailySales = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
-                    {/* Cash */}
-                    <tr className="hover:bg-gray-50/70 transition-colors">
-                      <td className="py-3.5 px-5 font-bold text-gray-900">#1</td>
-                      <td className="py-3.5 px-5">
-                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Cash
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
-                        ₹{(viewingSale.amounts?.cash ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
-                    </tr>
+                    {Array.isArray(viewingSale.payments) && viewingSale.payments.length > 0 ? (
+                      viewingSale.payments.map((p, idx) => {
+                        const rawMethod = (p.payment_method || '').toUpperCase();
+                        const isCash = rawMethod === 'CASH';
+                        const isUpi = rawMethod === 'UPI';
+                        const isCard = rawMethod === 'CARD';
+                        const isFoodDelivery = rawMethod === 'FOOD_DELIVERY';
 
-                    {/* UPI */}
-                    <tr className="hover:bg-gray-50/70 transition-colors">
-                      <td className="py-3.5 px-5 font-bold text-gray-900">#2</td>
-                      <td className="py-3.5 px-5">
-                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-blue-50 text-blue-700 border border-blue-200">
-                          UPI
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
-                        ₹{(viewingSale.amounts?.upi ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
-                    </tr>
+                        const methodLabel = isCash
+                          ? 'Cash'
+                          : isUpi
+                          ? 'UPI'
+                          : isCard
+                          ? 'Card'
+                          : isFoodDelivery
+                          ? 'Food Delivery'
+                          : p.payment_method || 'Other';
 
-                    {/* Card */}
-                    <tr className="hover:bg-gray-50/70 transition-colors">
-                      <td className="py-3.5 px-5 font-bold text-gray-900">#3</td>
-                      <td className="py-3.5 px-5">
-                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-purple-50 text-purple-700 border border-purple-200">
-                          Card
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
-                        ₹{(viewingSale.amounts?.card ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
-                    </tr>
+                        const methodBadgeStyle = isCash
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : isUpi
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : isCard
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : isFoodDelivery
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-gray-50 text-gray-700 border-gray-200';
 
-                    {/* Food Delivery */}
-                    <tr className="hover:bg-gray-50/70 transition-colors">
-                      <td className="py-3.5 px-5 font-bold text-gray-900">#4</td>
-                      <td className="py-3.5 px-5">
-                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                          Food Delivery
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums">
-                        ₹{(viewingSale.amounts?.foodDelivery ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3.5 px-5 font-medium text-gray-700">
-                        {viewingSale.deliveryPartner || '—'}
-                      </td>
-                    </tr>
+                        const partnerName = isFoodDelivery ? getPartnerName(p) : '—';
+                        const paymentCode = p.id ? `#${p.id}` : `#${idx + 1}`;
+                        const amountNum = parseFloat(p.amount || 0);
+
+                        return (
+                          <tr key={p.id || idx} className="hover:bg-gray-50/70 transition-colors">
+                            <td className="py-3.5 px-5 font-bold text-gray-900 font-mono">
+                              {paymentCode}
+                            </td>
+                            <td className="py-3.5 px-5">
+                              <span className={`px-2.5 py-1 text-[11px] font-bold rounded-md border ${methodBadgeStyle}`}>
+                                {methodLabel}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums font-mono">
+                              ₹{amountNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3.5 px-5">
+                              {isFoodDelivery && partnerName !== '—' ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                  {partnerName}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 font-medium">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <>
+                        {/* Fallback if payments array is empty */}
+                        <tr className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-3.5 px-5 font-bold text-gray-900 font-mono">#1</td>
+                          <td className="py-3.5 px-5">
+                            <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Cash
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums font-mono">
+                            ₹{(viewingSale.amounts?.cash ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
+                        </tr>
+                        <tr className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-3.5 px-5 font-bold text-gray-900 font-mono">#2</td>
+                          <td className="py-3.5 px-5">
+                            <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                              UPI
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums font-mono">
+                            ₹{(viewingSale.amounts?.upi ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
+                        </tr>
+                        <tr className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-3.5 px-5 font-bold text-gray-900 font-mono">#3</td>
+                          <td className="py-3.5 px-5">
+                            <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-purple-50 text-purple-700 border border-purple-200">
+                              Card
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums font-mono">
+                            ₹{(viewingSale.amounts?.card ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-5 text-gray-400 font-medium">—</td>
+                        </tr>
+                        <tr className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-3.5 px-5 font-bold text-gray-900 font-mono">#4</td>
+                          <td className="py-3.5 px-5">
+                            <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                              Food Delivery
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 font-extrabold text-gray-900 tabular-nums font-mono">
+                            ₹{(viewingSale.amounts?.foodDelivery ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-5 font-medium text-gray-700">
+                            {viewingSale.deliveryPartner || '—'}
+                          </td>
+                        </tr>
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -719,28 +833,51 @@ const DailySales = () => {
               <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-200/80 space-y-3 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-gray-600 text-[11px]">CASH</span>
-                  <span className="font-extrabold text-emerald-600 tabular-nums">
+                  <span className="font-extrabold text-emerald-600 tabular-nums font-mono">
                     + ₹{(viewingSale.amounts?.cash ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-gray-600 text-[11px]">UPI</span>
-                  <span className="font-extrabold text-emerald-600 tabular-nums">
+                  <span className="font-extrabold text-emerald-600 tabular-nums font-mono">
                     + ₹{(viewingSale.amounts?.upi ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-gray-600 text-[11px]">CARD RECEIVABLE</span>
-                  <span className="font-extrabold text-emerald-600 tabular-nums">
+                  <span className="font-extrabold text-emerald-600 tabular-nums font-mono">
                     + ₹{(viewingSale.amounts?.card ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-gray-600 text-[11px]">FOOD DELIVERY RECEIVABLE</span>
-                  <span className="font-extrabold text-emerald-600 tabular-nums">
-                    + ₹{(viewingSale.amounts?.foodDelivery ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
+                {/* Food Delivery Partners Breakdown */}
+                {(() => {
+                  const fdPayments = (viewingSale.payments || []).filter(
+                    (p) => (p.payment_method || '').toUpperCase() === 'FOOD_DELIVERY'
+                  );
+                  if (fdPayments.length > 0) {
+                    return fdPayments.map((p, idx) => {
+                      const name = getPartnerName(p);
+                      return (
+                        <div key={p.id || idx} className="flex items-center justify-between">
+                          <span className="font-semibold text-gray-600 text-[11px] uppercase truncate max-w-[180px]">
+                            FOOD DELIVERY ({name !== '—' ? name : `PARTNER #${p.delivery_partner || idx + 1}`})
+                          </span>
+                          <span className="font-extrabold text-emerald-600 tabular-nums font-mono">
+                            + ₹{parseFloat(p.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      );
+                    });
+                  }
+                  return (
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-gray-600 text-[11px]">FOOD DELIVERY RECEIVABLE</span>
+                      <span className="font-extrabold text-emerald-600 tabular-nums font-mono">
+                        + ₹{(viewingSale.amounts?.foodDelivery ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -780,7 +917,10 @@ const DailySales = () => {
             <label className="block text-xs font-semibold text-gray-600 mb-1">Branch</label>
             <CustomSelect
               value={selectedBranch}
-              onChange={setSelectedBranch}
+              onChange={(val) => {
+                setSelectedBranch(val);
+                setCurrentPage(1);
+              }}
               options={['All', ...branchesList.map(b => b.name || b.branch_name || `Branch #${b.id}`)]}
             />
           </div>
@@ -812,6 +952,7 @@ const DailySales = () => {
                   value={selectedDate}
                   onChange={(newDate) => {
                     setSelectedDate(newDate);
+                    setCurrentPage(1);
                     setShowFilterCalendarPopover(false);
                   }}
                 />
@@ -823,7 +964,10 @@ const DailySales = () => {
             <label className="block text-xs font-semibold text-gray-600 mb-1">Status</label>
             <CustomSelect
               value={selectedStatus}
-              onChange={setSelectedStatus}
+              onChange={(val) => {
+                setSelectedStatus(val);
+                setCurrentPage(1);
+              }}
               options={['All', 'DRAFT', 'POSTED']}
             />
           </div>
@@ -871,8 +1015,8 @@ const DailySales = () => {
                     <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-200 rounded w-16 mx-auto"></div></td>
                   </tr>
                 ))
-              ) : filteredSales.length > 0 ? (
-                filteredSales.map((sale) => (
+              ) : displaySales.length > 0 ? (
+                displaySales.map((sale) => (
                   <tr key={sale.id} className="hover:bg-gray-50/70 transition-colors h-[52px]">
                     {/* Sale ID */}
                     <td className="py-3.5 px-4 font-bold text-gray-900">{sale.saleCode}</td>
@@ -932,7 +1076,7 @@ const DailySales = () => {
                       <div className="flex items-center justify-center">
                         <button
                           type="button"
-                          onClick={() => setViewingSale(sale)}
+                          onClick={() => handleViewSale(sale)}
                           className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
                           title="View Details"
                         >
@@ -955,24 +1099,22 @@ const DailySales = () => {
 
         {/* Pagination Controls */}
         {(() => {
-          const totalItems = totalCount || filteredSales.length;
-          const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-          const startItem = totalItems > 0 ? (currentPage - 1) * pageSize + 1 : 0;
-          const endItem = Math.min(currentPage * pageSize, totalItems);
+          const startItem = totalPaginationItems > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+          const endItem = Math.min(currentPage * pageSize, totalPaginationItems);
 
           return (
             <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-500 font-medium">
               <div>
                 Showing <span className="font-bold text-gray-800">{startItem}</span> to{' '}
                 <span className="font-bold text-gray-800">{endItem}</span> of{' '}
-                <span className="font-bold text-gray-800">{totalItems}</span> daily sales
+                <span className="font-bold text-gray-800">{totalPaginationItems}</span> daily sales
               </div>
 
               <div className="flex items-center gap-1.5 self-end sm:self-auto">
                 <button
                   type="button"
                   disabled={currentPage === 1 || loading}
-                  onClick={() => loadDailySales(currentPage - 1)}
+                  onClick={() => handlePageChange(currentPage - 1)}
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                 >
                   <IoChevronBackOutline size={14} />
@@ -985,7 +1127,7 @@ const DailySales = () => {
                       key={pageNum}
                       type="button"
                       disabled={loading}
-                      onClick={() => loadDailySales(pageNum)}
+                      onClick={() => handlePageChange(pageNum)}
                       className={`w-8 h-8 flex items-center justify-center rounded-lg font-medium text-xs transition-all cursor-pointer ${
                         currentPage === pageNum
                           ? 'bg-blue-600 text-white shadow-xs font-bold'
@@ -1000,7 +1142,7 @@ const DailySales = () => {
                 <button
                   type="button"
                   disabled={currentPage >= totalPages || loading}
-                  onClick={() => loadDailySales(currentPage + 1)}
+                  onClick={() => handlePageChange(currentPage + 1)}
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                 >
                   <IoChevronForwardOutline size={14} />

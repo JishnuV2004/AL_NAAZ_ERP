@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   IoSearchOutline,
@@ -92,8 +92,8 @@ const CustomSelect = ({ value, onChange, options, placeholder = 'Select...', dis
 };
 
 const defaultForm = {
-  payable: 1,
-  payment_account: 1,
+  payable: '',
+  payment_account: '',
   amount: '',
   reference: '',
   remarks: '',
@@ -154,30 +154,40 @@ const SupplierPayments = () => {
   }, [currentPage]);
 
   // Load Financial Accounts and Supplier Payables for Record Payment form
-  useEffect(() => {
-    const fetchAuxData = async () => {
-      try {
-        const [accRes, payRes] = await Promise.all([
-          accountService.fetchAccounts().catch(() => []),
-          supplierPayableService.fetchSupplierPayables().catch(() => [])
-        ]);
+  const fetchAuxData = async () => {
+    try {
+      const [accRes, payRes] = await Promise.all([
+        accountService.fetchAccounts().catch(() => []),
+        supplierPayableService.fetchSupplierPayables({ page_size: 100 }).catch(() => [])
+      ]);
 
-        const accs = Array.isArray(accRes) ? accRes : (accRes?.results || []);
-        setFinancialAccounts(accs);
+      const accs = Array.isArray(accRes) ? accRes : (accRes?.results || []);
+      setFinancialAccounts(accs);
 
-        const payables = Array.isArray(payRes) ? payRes : (payRes?.results || []);
-        setPayablesList(payables);
+      const payables = Array.isArray(payRes) ? payRes : (payRes?.results || []);
+      setPayablesList(payables);
 
-        if (accs.length > 0) {
-          setFormData(prev => ({ ...prev, payment_account: accs[0].id }));
-        }
-        if (payables.length > 0) {
-          setFormData(prev => ({ ...prev, payable: payables[0].id }));
-        }
-      } catch (err) {
-        console.error('Error fetching financial accounts/payables:', err);
+      const activePayables = payables.filter(p => {
+        const outstanding = parseFloat(p.outstanding_amount ?? p.balance ?? 0);
+        return outstanding > 0;
+      });
+
+      if (accs.length > 0) {
+        setFormData(prev => ({ ...prev, payment_account: prev.payment_account || accs[0].id }));
       }
-    };
+      if (activePayables.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          payable: prev.payable || activePayables[0].id,
+          amount: prev.amount || activePayables[0].outstanding_amount || activePayables[0].balance || ''
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching financial accounts/payables:', err);
+    }
+  };
+
+  useEffect(() => {
     fetchAuxData();
   }, []);
 
@@ -229,11 +239,7 @@ const SupplierPayments = () => {
       await supplierPayableService.createSupplierPayment(payload);
       toast.success('Supplier payment recorded successfully!');
       setIsModalOpen(false);
-      setFormData(prev => ({
-        ...defaultForm,
-        payment_account: financialAccounts.length > 0 ? financialAccounts[0].id : 1,
-        payable: payablesList.length > 0 ? payablesList[0].id : 1
-      }));
+      await fetchAuxData();
       loadPayments(currentPage);
     } catch (err) {
       console.error('Failed to create payment:', err);
@@ -254,15 +260,25 @@ const SupplierPayments = () => {
         { value: 2, label: 'Bank Account (ID: 2)' }
       ];
 
-  const payableOptions = payablesList.length > 0
-    ? payablesList.map(p => ({
+  const activePayables = useMemo(() => {
+    return payablesList.filter(p => {
+      const outstanding = parseFloat(p.outstanding_amount ?? p.balance ?? 0);
+      return outstanding > 0;
+    });
+  }, [payablesList]);
+
+  const payableOptions = useMemo(() => {
+    return activePayables.map(p => {
+      const invNum = p.purchase_invoice_number || p.invoice_number || (p.purchase ? `PO-${p.purchase}` : `INV-${p.id}`);
+      const outstanding = p.outstanding_amount !== undefined 
+        ? p.outstanding_amount 
+        : (p.balance !== undefined ? p.balance : '0.00');
+      return {
         value: p.id,
-        label: `#${p.id} - ${p.supplier_name || 'Supplier'} (${p.invoice_number || 'INV'}) - Bal: ₹${p.balance || p.total_amount || 0}`
-      }))
-    : [
-        { value: 6, label: 'Payable #6 - RRR (INV-2026-21)' },
-        { value: 7, label: 'Payable #7 - ABC traders (PURCHASE-25)' }
-      ];
+        label: `#${p.id} - ${p.supplier_name || 'Supplier'} (${invNum}) - Bal: ₹${outstanding}`
+      };
+    });
+  }, [activePayables]);
 
   return (
     <div className="space-y-6 pb-12 font-sans">
@@ -310,7 +326,18 @@ const SupplierPayments = () => {
           </button>
           <button
             type="button"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              fetchAuxData();
+              const active = payablesList.filter(p => parseFloat(p.outstanding_amount ?? p.balance ?? 0) > 0);
+              const firstPay = active.length > 0 ? active[0] : null;
+              setFormData({
+                ...defaultForm,
+                payment_account: financialAccounts.length > 0 ? financialAccounts[0].id : '',
+                payable: firstPay ? firstPay.id : '',
+                amount: firstPay ? (firstPay.outstanding_amount ?? firstPay.balance ?? '') : ''
+              });
+              setIsModalOpen(true);
+            }}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
           >
             <IoAddOutline size={16} /> Record Payment
@@ -557,11 +584,21 @@ const SupplierPayments = () => {
                 setFormData(prev => ({
                   ...prev,
                   payable: pId,
-                  amount: selPay ? (selPay.balance || selPay.total_amount || prev.amount) : prev.amount
+                  amount: selPay ? (selPay.outstanding_amount ?? selPay.balance ?? prev.amount) : prev.amount
                 }));
               }}
-              placeholder="Select Credit Payable..."
+              placeholder={activePayables.length === 0 ? "No outstanding payables available" : "Select Credit Payable..."}
             />
+            {(() => {
+              const sel = payablesList.find(p => String(p.id) === String(formData.payable));
+              if (!sel) return null;
+              return (
+                <div className="mt-1 flex items-center justify-between text-[11px] text-gray-500 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100">
+                  <span>Supplier: <strong className="text-gray-800">{sel.supplier_name || 'N/A'}</strong></span>
+                  <span>Outstanding: <strong className="text-emerald-700 font-mono">₹{sel.outstanding_amount ?? sel.balance ?? '0.00'}</strong></span>
+                </div>
+              );
+            })()}
           </div>
 
           <div>

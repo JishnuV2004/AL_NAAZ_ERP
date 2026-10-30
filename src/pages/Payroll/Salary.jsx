@@ -82,10 +82,11 @@ const Salary = () => {
   const [isPaying, setIsPaying] = useState(false);
   const [error, setError] = useState(null);
 
-  // Month & Year Filter State (0-indexed month: 8 = September)
-  const [selectedMonth, setSelectedMonth] = useState(8);
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [pickerYear, setPickerYear] = useState(2026);
+  // Month & Year Filter State (1-indexed month: 1 = Jan ... 10 = Oct, 12 = Dec)
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [pickerYear, setPickerYear] = useState(now.getFullYear());
   const [showCalendarPopover, setShowCalendarPopover] = useState(false);
 
   // Filters state
@@ -163,10 +164,10 @@ const Salary = () => {
   // Filter salaries
   const filteredSalaries = salaries.filter((row) => {
     // 1. Month & Year Filter
-    if (selectedMonth !== null && selectedMonth !== undefined) {
+    if (selectedMonth !== null && selectedMonth !== undefined && selectedMonth !== '') {
       const rowMonth = Number(row.month);
       const selMonth = Number(selectedMonth);
-      if (rowMonth !== selMonth && rowMonth !== selMonth + 1) {
+      if (rowMonth !== selMonth) {
         return false;
       }
     }
@@ -257,8 +258,10 @@ const Salary = () => {
   const emptyRowsCount = pageSize - paginatedList.length;
 
   const handleResetFilters = () => {
-    setSelectedMonth(8); // September
-    setSelectedYear(2026);
+    const curDate = new Date();
+    setSelectedMonth(curDate.getMonth() + 1);
+    setSelectedYear(curDate.getFullYear());
+    setPickerYear(curDate.getFullYear());
     setStatusFilter('All');
     setTypeFilter('All');
     setDeptFilter('All');
@@ -361,8 +364,8 @@ const Salary = () => {
   const handleGenerateSingle = async (emp) => {
     const empName = emp.name || emp.employee_name || 'Employee';
     const empIdNum = parseInt(emp.id, 10) || emp.id;
-    const monthNum = typeof selectedMonth === 'number' ? selectedMonth : parseInt(selectedMonth, 10);
-    const yearNum = typeof selectedYear === 'number' ? selectedYear : parseInt(selectedYear, 10);
+    const monthNum = Number(selectedMonth);
+    const yearNum = Number(selectedYear);
 
     const payload = {
       employee: empIdNum,
@@ -393,8 +396,8 @@ const Salary = () => {
       toast.error('Please select at least one employee to generate salary');
       return;
     }
-    const monthNum = typeof selectedMonth === 'number' ? selectedMonth : parseInt(selectedMonth, 10);
-    const yearNum = typeof selectedYear === 'number' ? selectedYear : parseInt(selectedYear, 10);
+    const monthNum = Number(selectedMonth);
+    const yearNum = Number(selectedYear);
 
     const toastId = toast.loading(`Generating salary for ${selectedEmpIds.length} employee(s)...`);
     let successCount = 0;
@@ -432,8 +435,8 @@ const Salary = () => {
     const allIds = listToGenerate.map((e) => e.id);
     setSelectedEmpIds(allIds);
 
-    const monthNum = typeof selectedMonth === 'number' ? selectedMonth : parseInt(selectedMonth, 10);
-    const yearNum = typeof selectedYear === 'number' ? selectedYear : parseInt(selectedYear, 10);
+    const monthNum = Number(selectedMonth);
+    const yearNum = Number(selectedYear);
     const toastId = toast.loading(`Generating salary for all ${allIds.length} employee(s)...`);
     let successCount = 0;
 
@@ -589,7 +592,9 @@ const Salary = () => {
             >
               <div className="flex items-center gap-2">
                 <IoCalendarOutline size={15} className="text-blue-600" />
-                <span className="font-bold">{MONTH_NAMES_FULL[selectedMonth]} {selectedYear}</span>
+                <span className="font-bold">
+                  {MONTH_NAMES_FULL[Number(selectedMonth) - 1] || 'Select Month'} {selectedYear}
+                </span>
               </div>
               <IoChevronDownOutline
                 className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${
@@ -623,13 +628,14 @@ const Salary = () => {
                 {/* Month Grid */}
                 <div className="grid grid-cols-3 gap-2">
                   {MONTH_NAMES_SHORT.map((mName, idx) => {
-                    const isSelected = selectedMonth === idx && selectedYear === pickerYear;
+                    const monthNumber = idx + 1;
+                    const isSelected = Number(selectedMonth) === monthNumber && Number(selectedYear) === Number(pickerYear);
                     return (
                       <button
                         key={mName}
                         type="button"
                         onClick={() => {
-                          setSelectedMonth(idx);
+                          setSelectedMonth(monthNumber);
                           setSelectedYear(pickerYear);
                           setShowCalendarPopover(false);
                           setCurrentPage(1);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   IoAddOutline,
@@ -12,11 +12,25 @@ import {
   IoTimeOutline,
   IoShieldCheckmarkOutline,
   IoReceiptOutline,
-  IoRefreshOutline
+  IoRefreshOutline,
+  IoCalendarOutline,
+  IoChevronDownOutline
 } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 import { clearanceService } from '../../services/clearanceService';
 import { getEmployees } from '../../api/employees.api';
+import { Calendar } from '../../components/ui/calendar';
+
+const formatDisplayDate = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const y = parts[0];
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+  return `${monthNamesShort[m]} ${d}, ${y}`;
+};
 
 const ClearanceItems = () => {
   const navigate = useNavigate();
@@ -35,6 +49,29 @@ const ClearanceItems = () => {
   const [employeesList, setEmployeesList] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [customEmpId, setCustomEmpId] = useState('');
+  const [showCalendarPopover, setShowCalendarPopover] = useState(false);
+  const [popoverPlacement, setPopoverPlacement] = useState('top');
+  const calendarRef = useRef(null);
+
+  const handleToggleCalendar = () => {
+    if (!showCalendarPopover) {
+      if (calendarRef.current) {
+        const rect = calendarRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        if (spaceBelow < 380) {
+          setPopoverPlacement('top');
+        } else {
+          setPopoverPlacement('bottom');
+        }
+      } else {
+        setPopoverPlacement('top');
+      }
+      setShowCalendarPopover(true);
+    } else {
+      setShowCalendarPopover(false);
+    }
+  };
+
   const [formData, setFormData] = useState({
     employee: '',
     item_name: '',
@@ -44,6 +81,20 @@ const ClearanceItems = () => {
     issued_date: new Date().toISOString().split('T')[0],
     notes: ''
   });
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (calendarRef.current && !calendarRef.current.contains(event.target)) {
+        setShowCalendarPopover(false);
+      }
+    };
+    if (showCalendarPopover) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCalendarPopover]);
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) {
@@ -184,6 +235,7 @@ const ClearanceItems = () => {
 
       toast.success('Clearance item issued successfully');
       setIsModalOpen(false);
+      setShowCalendarPopover(false);
       setFormData({
         employee: '',
         item_name: '',
@@ -603,9 +655,9 @@ const ClearanceItems = () => {
       {/* Issue New Item Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-2xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-visible relative shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-[#F8F9FA]">
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-[#F8F9FA] rounded-t-2xl">
               <div>
                 <h3 className="text-base font-extrabold text-gray-900">Issue Clearance Item</h3>
                 <p className="text-xs text-gray-500 mt-0.5">
@@ -614,7 +666,10 @@ const ClearanceItems = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setShowCalendarPopover(false);
+                }}
                 className="text-gray-400 hover:text-gray-700 transition-colors cursor-pointer p-1 rounded-lg hover:bg-gray-100"
               >
                 <IoCloseOutline size={20} />
@@ -734,17 +789,50 @@ const ClearanceItems = () => {
                 </div>
               </div>
 
-              <div>
+              {/* Issued Date with Custom Calendar Model */}
+              <div className="relative" ref={calendarRef}>
                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
                   Issued Date *
                 </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.issued_date}
-                  onChange={(e) => setFormData({ ...formData, issued_date: e.target.value })}
-                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl outline-none focus:border-blue-500 text-xs bg-white text-gray-800 font-medium"
-                />
+                <button
+                  type="button"
+                  onClick={handleToggleCalendar}
+                  className={`w-full flex items-center justify-between text-xs border rounded-xl px-3.5 py-2.5 bg-white text-gray-800 focus:outline-none transition-colors cursor-pointer ${
+                    showCalendarPopover
+                      ? 'border-blue-500 ring-1 ring-blue-500'
+                      : 'border-gray-200 hover:border-blue-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <IoCalendarOutline size={16} className="text-blue-600 shrink-0" />
+                    <span className="font-semibold text-gray-800">
+                      {formData.issued_date ? formatDisplayDate(formData.issued_date) : 'Select Date'}
+                    </span>
+                  </div>
+                  <IoChevronDownOutline
+                    className={`text-gray-400 transition-transform duration-200 shrink-0 ml-1 ${
+                      showCalendarPopover ? 'rotate-180 text-blue-600' : ''
+                    }`}
+                    size={14}
+                  />
+                </button>
+
+                {showCalendarPopover && (
+                  <div
+                    className={`absolute left-0 z-[100] shadow-2xl rounded-2xl bg-white border border-gray-100 p-1 animate-in fade-in zoom-in-95 duration-100 ${
+                      popoverPlacement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+                    }`}
+                  >
+                    <Calendar
+                      value={formData.issued_date || new Date().toISOString().split('T')[0]}
+                      onChange={(newDate) => {
+                        setFormData((prev) => ({ ...prev, issued_date: newDate }));
+                        setShowCalendarPopover(false);
+                      }}
+                      onClose={() => setShowCalendarPopover(false)}
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -761,7 +849,10 @@ const ClearanceItems = () => {
               <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setShowCalendarPopover(false);
+                  }}
                   disabled={submitting}
                   className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors cursor-pointer text-xs disabled:opacity-50"
                 >

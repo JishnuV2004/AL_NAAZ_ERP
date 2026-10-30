@@ -22,8 +22,11 @@ const ClearanceDetails = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
-  // Action / Approval loading state
-  const [actionLoading, setActionLoading] = useState(false);
+  // Granular Action / Approval loading states
+  const [approvingManager, setApprovingManager] = useState(false);
+  const [approvingAdmin, setApprovingAdmin] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   // Reject modal state
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
@@ -65,7 +68,7 @@ const ClearanceDetails = () => {
   }, [id]);
 
   const handleApproveManager = async () => {
-    setActionLoading(true);
+    setApprovingManager(true);
     try {
       const updated = await clearanceService.approveManager(item.id);
       if (updated) {
@@ -76,12 +79,12 @@ const ClearanceDetails = () => {
       console.error(e);
       toast.error(e.message || 'Failed to submit manager approval');
     } finally {
-      setActionLoading(false);
+      setApprovingManager(false);
     }
   };
 
   const handleApproveAdmin = async () => {
-    setActionLoading(true);
+    setApprovingAdmin(true);
     try {
       const updated = await clearanceService.approveAdmin(item.id);
       if (updated) {
@@ -92,7 +95,7 @@ const ClearanceDetails = () => {
       console.error(e);
       toast.error(e.message || 'Failed to submit admin approval');
     } finally {
-      setActionLoading(false);
+      setApprovingAdmin(false);
     }
   };
 
@@ -103,7 +106,7 @@ const ClearanceDetails = () => {
       toast.error('Please enter a rejection reason');
       return;
     }
-    setActionLoading(true);
+    setRejecting(true);
     try {
       const stage = item.approval_status === 'PENDING_ADMIN' ? 'ADMIN' : 'MANAGER';
       const updated = await clearanceService.rejectItem(item.id, rejectionReason.trim(), stage);
@@ -118,7 +121,7 @@ const ClearanceDetails = () => {
       console.error('Rejection error:', e);
       toast.error(e.message || 'Failed to reject clearance item');
     } finally {
-      setActionLoading(false);
+      setRejecting(false);
     }
   };
 
@@ -203,7 +206,7 @@ const ClearanceDetails = () => {
       return;
     }
 
-    setActionLoading(true);
+    setRecordingPayment(true);
     try {
       await clearanceService.recordPayment({
         issued_item: Number(item.id),
@@ -228,7 +231,7 @@ const ClearanceDetails = () => {
       console.error('Record payment error:', err);
       toast.error(err.message || 'Failed to record payment');
     } finally {
-      setActionLoading(false);
+      setRecordingPayment(false);
     }
   };
 
@@ -392,49 +395,22 @@ const ClearanceDetails = () => {
         <div className="flex items-center gap-2 flex-wrap">
           {item.approval_status === 'PENDING_MANAGER' && (
             <>
-              {/* When Manager is logged in, use Approve Manager API */}
-              {isManager && (
+              {(isManager || isAdmin) && (
                 <button
                   type="button"
-                  disabled={actionLoading}
+                  disabled={approvingManager || rejecting}
                   onClick={handleApproveManager}
                   className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   title="Approve as Manager (POST /approve-manager/)"
                 >
                   <CheckCircle2 size={16} />
-                  <span>{actionLoading ? 'Processing...' : 'Manager Approve'}</span>
+                  <span>{approvingManager ? 'Processing...' : 'Manager Approve'}</span>
                 </button>
-              )}
-
-              {/* When Admin is logged in, can approve as Manager or proceed directly */}
-              {isAdmin && !isManager && (
-                <>
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={handleApproveManager}
-                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                    title="POST /clearance/items/:id/approve-manager/"
-                  >
-                    <CheckCircle2 size={16} />
-                    <span>{actionLoading ? 'Processing...' : 'Manager Approve'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={handleApproveAdmin}
-                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                    title="POST /clearance/items/:id/approve-admin/"
-                  >
-                    <CheckCircle2 size={16} />
-                    <span>{actionLoading ? 'Processing...' : 'Admin Approve'}</span>
-                  </button>
-                </>
               )}
 
               <button
                 type="button"
-                disabled={actionLoading}
+                disabled={approvingManager || rejecting}
                 onClick={() => setIsRejectModalOpen(true)}
                 className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
@@ -450,19 +426,19 @@ const ClearanceDetails = () => {
               {isAdmin && (
                 <button
                   type="button"
-                  disabled={actionLoading}
+                  disabled={approvingAdmin || rejecting}
                   onClick={handleApproveAdmin}
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   title="Approve as Admin (POST /approve-admin/)"
                 >
                   <CheckCircle2 size={16} />
-                  <span>{actionLoading ? 'Processing...' : 'Admin Approve'}</span>
+                  <span>{approvingAdmin ? 'Processing...' : 'Admin Approve'}</span>
                 </button>
               )}
 
               <button
                 type="button"
-                disabled={actionLoading}
+                disabled={approvingAdmin || rejecting}
                 onClick={() => setIsRejectModalOpen(true)}
                 className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
@@ -534,26 +510,66 @@ const ClearanceDetails = () => {
                 <span className="text-gray-500 font-medium">Employee Payable</span>
                 <span className="font-mono font-bold text-blue-600">{formatCurrency(item.employee_payable)}</span>
               </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-gray-500 font-medium">Issued By</span>
-                <span className="text-gray-700">
-                  {item.issued_by_name} <span className="font-mono text-gray-400">(#{item.issued_by})</span>
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-gray-500 font-medium">Issued Date</span>
-                <span className="text-gray-700">{formatDate(item.issued_date)}</span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-gray-500 font-medium">Notes</span>
-                <span className="text-gray-700 max-w-[220px] truncate">{item.notes || '—'}</span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-gray-500 font-medium">Rejection Reason</span>
-                <span className={item.rejection_reason ? "font-semibold text-rose-600" : "text-gray-400"}>
-                  {item.rejection_reason || '—'}
-                </span>
-              </div>
+              {item.issued_by_name && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 font-medium">Issued By</span>
+                  <span className="text-gray-700 font-medium">
+                    {item.issued_by_name} {item.issued_by ? <span className="font-mono text-gray-400 font-normal">(#{item.issued_by})</span> : null}
+                  </span>
+                </div>
+              )}
+              {item.issued_date && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 font-medium">Issued Date</span>
+                  <span className="text-gray-700">{formatDate(item.issued_date)}</span>
+                </div>
+              )}
+              {item.notes && item.notes.trim() !== '' && item.notes !== '—' && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 font-medium">Notes</span>
+                  <span className="text-gray-700 max-w-[220px] truncate">{item.notes}</span>
+                </div>
+              )}
+              {(item.manager_approved_by_name || item.manager_approved_by) && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 font-medium">Manager Approved By</span>
+                  <span className="text-gray-700 font-semibold">
+                    {item.manager_approved_by_name || 'Manager'}
+                    {item.manager_approved_by ? (
+                      <span className="font-mono text-gray-400 font-normal"> (#{item.manager_approved_by})</span>
+                    ) : null}
+                  </span>
+                </div>
+              )}
+              {item.manager_approved_at && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 font-medium">Manager Approved At</span>
+                  <span className="text-gray-700">{formatDateTime(item.manager_approved_at)}</span>
+                </div>
+              )}
+              {(item.admin_approved_by_name || item.admin_approved_by) && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 font-medium">Admin Approved By</span>
+                  <span className="text-gray-700 font-semibold">
+                    {item.admin_approved_by_name || 'Admin'}
+                    {item.admin_approved_by ? (
+                      <span className="font-mono text-gray-400 font-normal"> (#{item.admin_approved_by})</span>
+                    ) : null}
+                  </span>
+                </div>
+              )}
+              {item.admin_approved_at && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 font-medium">Admin Approved At</span>
+                  <span className="text-gray-700">{formatDateTime(item.admin_approved_at)}</span>
+                </div>
+              )}
+              {item.rejection_reason && item.rejection_reason.trim() !== '' && item.rejection_reason !== '—' && (
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-500 font-medium">Rejection Reason</span>
+                  <span className="font-semibold text-rose-600">{item.rejection_reason}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="pt-3 border-t border-gray-100 mt-2 text-[11px] text-gray-400">
@@ -812,18 +828,18 @@ const ClearanceDetails = () => {
                 <button
                   type="button"
                   onClick={() => setIsPaymentModalOpen(false)}
-                  disabled={actionLoading}
+                  disabled={recordingPayment}
                   className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors cursor-pointer text-xs disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
+                  disabled={recordingPayment}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors cursor-pointer text-xs shadow-2xs disabled:opacity-60 flex items-center gap-1.5"
                 >
                   <Banknote size={15} />
-                  <span>{actionLoading ? 'Recording...' : 'Save Payment'}</span>
+                  <span>{recordingPayment ? 'Recording...' : 'Save Payment'}</span>
                 </button>
               </div>
             </form>
@@ -878,18 +894,18 @@ const ClearanceDetails = () => {
                 <button
                   type="button"
                   onClick={() => setIsRejectModalOpen(false)}
-                  disabled={actionLoading}
+                  disabled={rejecting}
                   className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors cursor-pointer text-xs disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
+                  disabled={rejecting}
                   className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-colors cursor-pointer text-xs shadow-2xs disabled:opacity-60 flex items-center gap-1.5"
                 >
                   <XCircle size={15} />
-                  <span>{actionLoading ? 'Rejecting...' : 'Confirm Reject'}</span>
+                  <span>{rejecting ? 'Rejecting...' : 'Confirm Reject'}</span>
                 </button>
               </div>
             </form>

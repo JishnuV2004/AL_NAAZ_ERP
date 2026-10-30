@@ -61,6 +61,8 @@ const Advances = () => {
   // Modals state
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedLedgerAdvance, setSelectedLedgerAdvance] = useState(null);
+  const [processingActions, setProcessingActions] = useState({}); // { [advId]: 'approve' | 'reject' }
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -165,27 +167,49 @@ const Advances = () => {
 
   // Handle Approve Action
   const handleApprove = async (advId) => {
+    if (processingActions[advId]) return;
+    setProcessingActions((prev) => ({ ...prev, [advId]: 'approve' }));
     const loadingToast = toast.loading(`Approving advance #${advId}...`);
     try {
       const res = await advanceService.approveAdvance(advId);
       toast.success(res?.message || `Advance #${advId} approved successfully!`, { id: loadingToast });
-      loadAdvances(currentPage);
+      if (selectedLedgerAdvance && selectedLedgerAdvance.id === advId) {
+        setSelectedLedgerAdvance(prev => prev ? ({ ...prev, status: 'APPROVED' }) : null);
+      }
+      await loadAdvances(currentPage);
     } catch (error) {
       const msg = error?.userMessage || error?.response?.data?.detail || `Failed to approve advance #${advId}`;
       toast.error(msg, { id: loadingToast });
+    } finally {
+      setProcessingActions((prev) => {
+        const next = { ...prev };
+        delete next[advId];
+        return next;
+      });
     }
   };
 
   // Handle Reject Action
   const handleReject = async (advId) => {
+    if (processingActions[advId]) return;
+    setProcessingActions((prev) => ({ ...prev, [advId]: 'reject' }));
     const loadingToast = toast.loading(`Rejecting advance #${advId}...`);
     try {
       const res = await advanceService.rejectAdvance(advId);
       toast.success(res?.message || `Advance #${advId} rejected successfully!`, { id: loadingToast });
-      loadAdvances(currentPage);
+      if (selectedLedgerAdvance && selectedLedgerAdvance.id === advId) {
+        setSelectedLedgerAdvance(prev => prev ? ({ ...prev, status: 'REJECTED' }) : null);
+      }
+      await loadAdvances(currentPage);
     } catch (error) {
       const msg = error?.userMessage || error?.response?.data?.detail || `Failed to reject advance #${advId}`;
       toast.error(msg, { id: loadingToast });
+    } finally {
+      setProcessingActions((prev) => {
+        const next = { ...prev };
+        delete next[advId];
+        return next;
+      });
     }
   };
 
@@ -209,6 +233,7 @@ const Advances = () => {
       remarks: formData.remarks || ''
     };
 
+    setIsSubmittingForm(true);
     const loadingToast = toast.loading('Submitting advance request...');
     try {
       await advanceService.addAdvance(payload);
@@ -221,10 +246,12 @@ const Advances = () => {
         reason: '',
         remarks: ''
       });
-      loadAdvances(currentPage);
+      await loadAdvances(currentPage);
     } catch (error) {
       const msg = error?.userMessage || error?.response?.data?.detail || 'Failed to submit advance request';
       toast.error(msg, { id: loadingToast });
+    } finally {
+      setIsSubmittingForm(false);
     }
   };
 
@@ -541,19 +568,29 @@ const Advances = () => {
                             <>
                               <button
                                 type="button"
+                                disabled={Boolean(processingActions[row.id])}
                                 onClick={() => handleApprove(row.id)}
-                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200 cursor-pointer"
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[28px] min-h-[28px]"
                                 title="Approve Advance"
                               >
-                                <IoCheckmarkDoneOutline size={16} />
+                                {processingActions[row.id] === 'approve' ? (
+                                  <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></span>
+                                ) : (
+                                  <IoCheckmarkDoneOutline size={16} />
+                                )}
                               </button>
                               <button
                                 type="button"
+                                disabled={Boolean(processingActions[row.id])}
                                 onClick={() => handleReject(row.id)}
-                                className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200 cursor-pointer"
+                                className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[28px] min-h-[28px]"
                                 title="Reject Request"
                               >
-                                <IoCloseCircleOutline size={16} />
+                                {processingActions[row.id] === 'reject' ? (
+                                  <span className="w-3.5 h-3.5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></span>
+                                ) : (
+                                  <IoCloseCircleOutline size={16} />
+                                )}
                               </button>
                             </>
                           )}
@@ -622,9 +659,9 @@ const Advances = () => {
 
       {/* 4. Request / Disburse Advance Modal */}
       {showRequestModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[92vh] flex flex-col p-6 shadow-2xl border border-slate-200 my-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
                   <IoAddOutline size={18} />
@@ -640,7 +677,7 @@ const Advances = () => {
               </button>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleFormSubmit} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1 custom-scrollbar pt-3">
               {/* Custom Themed Employee Selection Dropdown */}
               <div className="relative" ref={empDropdownRef}>
                 <label className="block font-bold text-slate-700 mb-1">Select Employee *</label>
@@ -769,20 +806,32 @@ const Advances = () => {
                 />
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              {/* Action Buttons sticky at bottom of modal */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 shrink-0 bg-white sticky bottom-0">
                 <button
                   type="button"
+                  disabled={isSubmittingForm}
                   onClick={() => setShowRequestModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                  disabled={isSubmittingForm}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  Submit Request
+                  {isSubmittingForm ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <IoCheckmarkCircleOutline size={16} />
+                      <span>Submit Request</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -853,7 +902,49 @@ const Advances = () => {
             </div>
 
             {/* Action Bar */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                {selectedLedgerAdvance.status === 'PENDING' && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={Boolean(processingActions[selectedLedgerAdvance.id])}
+                      onClick={() => handleApprove(selectedLedgerAdvance.id)}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {processingActions[selectedLedgerAdvance.id] === 'approve' ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          <span>Approving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <IoCheckmarkDoneOutline size={15} />
+                          <span>Approve</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(processingActions[selectedLedgerAdvance.id])}
+                      onClick={() => handleReject(selectedLedgerAdvance.id)}
+                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {processingActions[selectedLedgerAdvance.id] === 'reject' ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          <span>Rejecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <IoCloseCircleOutline size={15} />
+                          <span>Reject</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedLedgerAdvance(null)}
