@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
-  ArrowLeft, Edit3, Shield, MapPin, Mail, Phone, Calendar, Clock, 
+  ArrowLeft, Edit3, Shield, MapPin, Mail, Phone, Calendar, 
   Building2, UserCheck, UserX, Loader2
 } from 'lucide-react';
-import { getUserById, toggleUserStatus } from '../../api/users.api';
+import { getUserById, toggleUserStatus, getBranches } from '../../api/users.api';
 import toast from 'react-hot-toast';
 import EditUserModal from '../../components/modals/EditUserModal';
 
@@ -13,15 +13,21 @@ const UserDetails = () => {
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
+  const [allBranches, setAllBranches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const loadUserData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const uData = await getUserById(id);
+      const [uData, branchesData] = await Promise.all([
+        getUserById(id),
+        getBranches().catch(() => [])
+      ]);
       setUser(uData);
+      setAllBranches(Array.isArray(branchesData) ? branchesData : (branchesData?.results || []));
     } catch (err) {
       console.error('Failed to load user details:', err);
       toast.error('Failed to load user profile');
@@ -35,7 +41,8 @@ const UserDetails = () => {
   }, [id]);
 
   const handleStatusToggle = async () => {
-    if (!user) return;
+    if (!user || isTogglingStatus) return;
+    setIsTogglingStatus(true);
     try {
       await toggleUserStatus(user.id, user.is_active);
       const nextActive = !user.is_active;
@@ -44,8 +51,36 @@ const UserDetails = () => {
       toast.success(`User status changed to ${nextStatus}`);
     } catch (err) {
       toast.error('Failed to update status');
+    } finally {
+      setIsTogglingStatus(false);
     }
   };
+
+  // Derive real assigned branches from the organization branches API
+  const assignedBranchesList = React.useMemo(() => {
+    if (!user) return [];
+    const userId = Number(user.id);
+    
+    // 1. Primary check: actual branches where branch.users contains this userId
+    const fromApi = allBranches.filter(b => Array.isArray(b.users) && b.users.includes(userId));
+    if (fromApi.length > 0) return fromApi;
+
+    // 2. Secondary check: user's raw branches matched against allBranches
+    const rawBranches = user.raw?.branches || user.branches || [];
+    if (Array.isArray(rawBranches) && rawBranches.length > 0) {
+      const matched = allBranches.filter(b => 
+        rawBranches.some(rb => 
+          (typeof rb === 'object' && rb.id === b.id) ||
+          rb === b.id ||
+          rb === b.name ||
+          rb === b.code
+        )
+      );
+      if (matched.length > 0) return matched;
+    }
+
+    return [];
+  }, [user, allBranches]);
 
   if (loading) {
     return (
@@ -76,10 +111,6 @@ const UserDetails = () => {
             <div className="space-y-1">
               <div className="h-3 w-24 bg-gray-100 rounded-md"></div>
               <div className="h-5 w-32 bg-gray-200 rounded-md"></div>
-            </div>
-            <div className="space-y-1">
-              <div className="h-3 w-24 bg-gray-100 rounded-md"></div>
-              <div className="h-5 w-36 bg-gray-200 rounded-md"></div>
             </div>
           </div>
         </div>
@@ -151,14 +182,21 @@ const UserDetails = () => {
 
         <div className="flex items-center gap-3">
           <button
+            type="button"
+            disabled={isTogglingStatus}
             onClick={handleStatusToggle}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 border ${
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 border disabled:opacity-50 cursor-pointer ${
               user.is_active
                 ? 'border-red-200 text-red-600 hover:bg-red-50'
                 : 'border-green-200 text-green-600 hover:bg-green-50'
             }`}
           >
-            {user.is_active ? (
+            {isTogglingStatus ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>{user.is_active ? 'Suspending...' : 'Activating...'}</span>
+              </>
+            ) : user.is_active ? (
               <>
                 <UserX size={16} /> Suspend User
               </>
@@ -203,15 +241,9 @@ const UserDetails = () => {
 
         <div className="flex items-center gap-5 border-t md:border-t-0 md:border-l border-gray-100 pt-3 md:pt-0 md:pl-5">
           <div>
-            <span className="text-[11px] text-gray-400 font-medium block uppercase tracking-wider">Primary Branch</span>
+            <span className="text-[11px] text-gray-400 font-medium block uppercase tracking-wider">Assigned Branches</span>
             <span className="text-xs sm:text-sm font-bold text-gray-800 flex items-center gap-1 mt-0.5">
-              <Building2 size={14} className="text-gray-500" /> {user.branch}
-            </span>
-          </div>
-          <div>
-            <span className="text-[11px] text-gray-400 font-medium block uppercase tracking-wider">Last Activity</span>
-            <span className="text-xs sm:text-sm font-bold text-gray-800 flex items-center gap-1 mt-0.5">
-              <Clock size={14} className="text-gray-500" /> {user.lastLogin}
+              <Building2 size={14} className="text-gray-500" /> {assignedBranchesList.length} {assignedBranchesList.length === 1 ? 'Branch' : 'Branches'}
             </span>
           </div>
         </div>
@@ -230,6 +262,7 @@ const UserDetails = () => {
           Overview & Info
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('branches')}
           className={`pb-2.5 text-xs sm:text-sm font-bold border-b-2 transition-colors cursor-pointer ${
             activeTab === 'branches'
@@ -237,7 +270,7 @@ const UserDetails = () => {
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Branch Access ({user.assignedBranches?.length || 1})
+          Branch Access ({assignedBranchesList.length})
         </button>
       </div>
 
@@ -329,36 +362,42 @@ const UserDetails = () => {
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
             <div>
               <h3 className="text-lg font-bold text-gray-900">Assigned Branch Locations</h3>
-              <p className="text-xs text-gray-500">Branches that this user has authorization to access and view data for.</p>
+              <p className="text-xs text-gray-500">Real branch locations that this user has authorization to access and view data for.</p>
             </div>
             <Link
-              to="/administration/userbranchaccess"
+              to={`/administration/userbranchaccess?userId=${user.id}`}
               className="px-3 py-1.5 bg-gray-900 text-white text-xs font-bold rounded-lg hover:bg-gray-800 transition-colors"
             >
               Modify Access
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-            {(user.assignedBranches || [user.branch]).map((bName, idx) => (
-              <div key={idx} className="p-4 rounded-xl border border-gray-200 bg-gray-50/50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                    <Building2 size={20} />
+          {assignedBranchesList.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+              {assignedBranchesList.map((branch) => (
+                <div key={branch.id} className="p-4 rounded-xl border border-gray-200 bg-gray-50/50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                      <Building2 size={20} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">{branch.name}</h4>
+                      <p className="text-xs text-gray-500">Code: {branch.code || branch.name} {branch.location ? `• ${branch.location}` : ''}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-gray-900 text-sm">{bName}</h4>
-                    <p className="text-xs text-gray-500">{bName === user.branch ? 'Primary Branch' : 'Secondary Branch'}</p>
-                  </div>
-                </div>
-                {bName === user.branch && (
-                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 font-bold text-[10px] rounded-full uppercase">
-                    Primary
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px] rounded-full uppercase">
+                    Assigned
                   </span>
-                )}
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200 text-gray-500 text-sm">
+              <Building2 className="mx-auto text-gray-400 mb-2" size={32} />
+              <p className="font-semibold text-gray-700">No branches currently assigned</p>
+              <p className="text-xs text-gray-400 mt-1">Use the "Modify Access" button to assign this user to branch locations.</p>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { Search, Save, MapPin, User, Check, Building2, Loader2, ShieldCheck, RefreshCw } from 'lucide-react';
-import { getUsers, getBranches, assignUserToBranch, removeUserFromBranch, patchUser } from '../../api/users.api';
+import { getUsers, getBranches, assignUserToBranch, removeUserFromBranch } from '../../api/users.api';
 import toast from 'react-hot-toast';
 
 const UserBranchAccessSkeleton = () => {
@@ -68,7 +69,7 @@ const UserBranchAccessSkeleton = () => {
                     <div className="h-3 w-28 bg-gray-100 rounded"></div>
                   </div>
                 </div>
-                <div className="h-7 w-28 bg-gray-200 rounded-lg"></div>
+                <div className="h-6 w-24 bg-gray-200 rounded-full"></div>
               </div>
             ))}
           </div>
@@ -79,19 +80,24 @@ const UserBranchAccessSkeleton = () => {
 };
 
 const UserBranchAccess = () => {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const queryUserId = searchParams.get('userId') || searchParams.get('id') || location.state?.userId;
+
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUserId, setSelectedUserId] = useState(queryUserId ? Number(queryUserId) : null);
   const [searchUser, setSearchUser] = useState('');
   
   // Track assigned branch IDs per user ID in UI state
   const [assignedBranches, setAssignedBranches] = useState({});
   // Track original assigned branch IDs per user ID (loaded from backend)
   const [originalAssigned, setOriginalAssigned] = useState({});
-  // Track primary branch per user ID
-  const [primaryBranch, setPrimaryBranch] = useState({});
+
+  // Flag to track if user explicitly clicked/selected a user
+  const userSelectedRef = useRef(Boolean(queryUserId));
 
   const loadData = async () => {
     setLoading(true);
@@ -101,10 +107,15 @@ const UserBranchAccess = () => {
       setBranches(branchesData);
 
       if (usersData.length > 0) {
-        setSelectedUser(usersData[0]);
+        // Preserve currently selected user if already selected by the user, otherwise default to first user
+        setSelectedUserId(prevId => {
+          if (prevId && usersData.some(u => u.id === prevId)) {
+            return prevId;
+          }
+          return usersData[0].id;
+        });
 
         const initialAssigned = {};
-        const initialPrimary = {};
 
         usersData.forEach(u => {
           let mappedIds = [];
@@ -140,14 +151,11 @@ const UserBranchAccess = () => {
           }
 
           const uniqueIds = [...new Set(mappedIds)];
-          const defaultBranchId = branchesData.length > 0 ? branchesData[0].id : 1;
           initialAssigned[u.id] = uniqueIds;
-          initialPrimary[u.id] = uniqueIds.length > 0 ? uniqueIds[0] : defaultBranchId;
         });
 
         setAssignedBranches(initialAssigned);
         setOriginalAssigned(JSON.parse(JSON.stringify(initialAssigned)));
-        setPrimaryBranch(initialPrimary);
       }
     } catch (err) {
       console.error('Failed to load users or branches for branch access:', err);
@@ -167,9 +175,18 @@ const UserBranchAccess = () => {
     u.role?.toLowerCase().includes(searchUser.toLowerCase())
   );
 
+  const selectedUser = useMemo(() => {
+    if (!users || users.length === 0) return null;
+    return users.find(u => u.id === selectedUserId) || users[0] || null;
+  }, [users, selectedUserId]);
+
   const currentUserId = selectedUser?.id;
   const currentUserBranches = currentUserId ? assignedBranches[currentUserId] || [] : [];
-  const currentPrimary = currentUserId ? primaryBranch[currentUserId] || null : null;
+
+  const handleSelectUser = (user) => {
+    userSelectedRef.current = true;
+    setSelectedUserId(user.id);
+  };
 
   // Toggle Branch Access for Current User in UI local state (Only sent to backend on Save Assignments click)
   const toggleBranch = (branchId) => {
@@ -182,14 +199,6 @@ const UserBranchAccess = () => {
         : [...current, branchId];
       return { ...prev, [currentUserId]: updated };
     });
-  };
-
-  const setAsPrimary = (branchId) => {
-    if (!currentUserId) return;
-    if (currentUserBranches.includes(branchId)) {
-      setPrimaryBranch(prev => ({ ...prev, [currentUserId]: branchId }));
-      toast.success('Primary branch updated');
-    }
   };
 
   // Bulk Grant or Revoke All Branches for current user in UI local state
@@ -281,6 +290,7 @@ const UserBranchAccess = () => {
         </div>
         <div className="flex items-center gap-2">
           <button 
+            type="button"
             onClick={loadData}
             className="px-3 py-2 rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm font-medium shadow-2xs cursor-pointer"
             title="Refresh Users & Branches"
@@ -288,6 +298,7 @@ const UserBranchAccess = () => {
             <RefreshCw size={16} /> Refresh
           </button>
           <button 
+            type="button"
             onClick={handleSaveAssignments}
             disabled={saving}
             className="px-4 py-2 rounded-xl font-medium text-white bg-gray-900 hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-xs text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
@@ -317,23 +328,25 @@ const UserBranchAccess = () => {
           <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
             {filteredUsers.map(user => {
               const userAssignedCount = (assignedBranches[user.id] || []).length;
+              const isSelected = selectedUser?.id === user.id;
               return (
                 <button
+                  type="button"
                   key={user.id}
-                  onClick={() => setSelectedUser(user)}
+                  onClick={() => handleSelectUser(user)}
                   className={`w-full flex items-start gap-3 p-2.5 rounded-xl transition-all text-left cursor-pointer ${
-                    selectedUser?.id === user.id 
-                      ? 'bg-blue-50 border border-blue-100' 
+                    isSelected 
+                      ? 'bg-blue-50 border border-blue-100 ring-1 ring-blue-100' 
                       : 'hover:bg-gray-50 border border-transparent'
                   }`}
                 >
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                    selectedUser?.id === user.id ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white'
+                    isSelected ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white'
                   }`}>
                     {user.avatar}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs sm:text-sm font-bold truncate ${selectedUser?.id === user.id ? 'text-blue-900' : 'text-gray-900'}`}>{user.name}</p>
+                    <p className={`text-xs sm:text-sm font-bold truncate ${isSelected ? 'text-blue-900 font-extrabold' : 'text-gray-900'}`}>{user.name}</p>
                     <div className="flex items-center justify-between mt-0.5">
                       <p className="text-[11px] text-gray-500 truncate">{user.role}</p>
                       <span className="text-[10px] font-bold px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
@@ -370,6 +383,7 @@ const UserBranchAccess = () => {
 
                 <div className="flex items-center gap-2">
                   <button 
+                    type="button"
                     onClick={toggleAll}
                     disabled={saving}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
@@ -393,7 +407,6 @@ const UserBranchAccess = () => {
               <div className="grid gap-4">
                 {branches.map(branch => {
                   const hasAccess = currentUserBranches.includes(branch.id);
-                  const isPrimary = currentPrimary === branch.id;
 
                   return (
                     <div 
@@ -432,19 +445,13 @@ const UserBranchAccess = () => {
                         </div>
                       </div>
 
-                      {hasAccess && (
-                        <button 
-                          onClick={() => setAsPrimary(branch.id)}
-                          disabled={isPrimary}
-                          className={`sm:ml-auto px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                            isPrimary 
-                              ? 'bg-blue-100 text-blue-700 cursor-default' 
-                              : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer'
-                          }`}
-                        >
-                          {isPrimary ? 'Primary Branch' : 'Set as Primary'}
-                        </button>
-                      )}
+                      <div className="sm:ml-auto">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                          hasAccess ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {hasAccess ? 'Access Granted' : 'No Access'}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
